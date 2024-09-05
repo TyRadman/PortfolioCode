@@ -1,4 +1,7 @@
 ﻿using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+using System;
 
 public class Door : InteractionClass
 {
@@ -14,8 +17,7 @@ public class Door : InteractionClass
     private GameObject m_WalkingBlocker;
     private Animator m_Anim;
     private AudioSource m_AudioSource;
-    public delegate void OnObjectInteracted(Key.KeyType _type);
-    public event OnObjectInteracted OnObjectInteraction;
+    public Action<Key.KeyType> OnInteraction { get; set; }
     public string LockedMessage;
     private const string OPENED = "opened";
     private const string TRY_TO_OPEN_TRIGGER = "tryToOpen";
@@ -29,7 +31,7 @@ public class Door : InteractionClass
         set
         {
             m_IsActivated = value;
-            OnObjectInteraction?.Invoke(value ? UnlockingKey : Key.KeyType.none);
+            OnInteraction?.Invoke(value ? UnlockingKey : Key.KeyType.none);
         }
     }
 
@@ -58,7 +60,7 @@ public class Door : InteractionClass
             for (int i = 0; i < keysHeld.Length; i++)
             {
                 keysHeld[i].AddDoor(this);
-                OnObjectInteraction += keysHeld[i].CheckKeys;
+                OnInteraction += keysHeld[i].CheckKeys;
             }
         }
     }
@@ -87,8 +89,8 @@ public class Door : InteractionClass
     {
         IsLocked = false;
         InventoryKey.Doors.Remove(this);                                                        // remove this from the doors that new keys will subscribe to
-        OnObjectInteraction(Key.KeyType.none);                                                            // sets the requirement to open this door as none
-        System.Array.ForEach(FindObjectsOfType<InventoryKey>(), k => OnObjectInteraction -= k.CheckKeys); // unsubscribes all methods from this door
+        OnInteraction(Key.KeyType.none);                                                            // sets the requirement to open this door as none
+        System.Array.ForEach(FindObjectsOfType<InventoryKey>(), k => OnInteraction -= k.CheckKeys); // unsubscribes all methods from this door
         InventoryVars.m_InventoryUsage = false;                                                                         // no longer checks for activation
         InteractionEvent -= activationCheck;                                                              // unsubscribes function that toggles activation (the bool that allows the player to interact using the inventory)
         AudioManager.Instance.PlayAudio(AudioName[3], m_AudioSource, true);                               // plays the audio
@@ -125,7 +127,7 @@ public class Door : InteractionClass
         // if the hearing distance between the enemy and the destination was within the range then the enemy will hear and the condition will return true
         if (EnemiesManager.Instance.EnemiesExistInLevel())
         {
-            EnemiesManager.Instance.TriggerHearing(transform.position);
+            EnemiesManager.Instance.TriggerHearingForAllEnemies(transform.position);
         }
     }
  

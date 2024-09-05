@@ -40,7 +40,7 @@ public abstract class InteractionClass : MonoBehaviour, i_ObjectiveItem
 
     #region Interaction messages
     [System.Serializable]
-    class InteractionMessages
+    public class InteractionMessages
     {
         [Header("Messages")]
         public bool m_HasLookAtMessage = false;
@@ -50,7 +50,7 @@ public abstract class InteractionClass : MonoBehaviour, i_ObjectiveItem
     }
     [SerializeField]
     [Tooltip("The message/s displayed after the item is interacted with.")]
-    private InteractionMessages m_Messages;    // if there will be a message to display before interaction
+    protected InteractionMessages m_Messages;    // if there will be a message to display before interaction
     #endregion
 
     #region Initializers

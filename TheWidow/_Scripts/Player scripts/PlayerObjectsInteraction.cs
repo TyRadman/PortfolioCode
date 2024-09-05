@@ -52,25 +52,32 @@ public class PlayerObjectsInteraction : MonoBehaviour
     {
         while (Holding)
         {
-            if (!PauseMenuManager.IsPaused)
+            if (PauseMenuManager.IsPaused)
             {
-                m_CurrentObject.Rotate(new Vector3(-Input.GetAxisRaw("Mouse Y"), -Input.GetAxisRaw("Mouse X"), 0f));
+                continue;
+            }
 
-                if (Input.GetKeyDown(KeyCode.E) && Holding == true)            // the next interaction for the object currently observed
-                {
-                    Holding = false;
-                    var observed = m_CurrentObject.GetComponent<I_ObservedObject>();
-                    PlayerMovement.Instance.AllowMovement(true);
-                    InteractionClass.CanInteract = true;
-                    observed.ItemHeld = false;
-                    // StartCoroutine(switchVolume(false));     // should be replaced with modifications the existing post processing volume
-                    m_TextAnim.SetTrigger(HIDE_CLIP_NAME);
-                    observed.AfterObservationInteraction();
-                }
+            m_CurrentObject.Rotate(new Vector3(-Input.GetAxisRaw("Mouse Y"), -Input.GetAxisRaw("Mouse X"), 0f));
+
+            if (Input.GetKeyDown(KeyCode.E))// && Holding == true)            // the next interaction for the object currently observed
+            {
+                ReleaseObservedObject();
             }
 
             yield return null;
         }
+    }
+
+    private void ReleaseObservedObject()
+    {
+        Holding = false;
+        var observed = m_CurrentObject.GetComponent<I_ObservedObject>();
+        PlayerMovement.Instance.AllowMovement(true);
+        InteractionClass.CanInteract = true;
+        observed.ItemHeld = false;
+        // StartCoroutine(switchVolume(false));     // should be replaced with modifications the existing post processing volume
+        m_TextAnim.SetTrigger(HIDE_CLIP_NAME);
+        observed.AfterObservationInteraction();
     }
 
     public void ReleaseObject()

@@ -17,7 +17,7 @@ public class InventoryKey : InventoryInteractable
         }
 
         // we make the checkKeys function listen to any OnObjectInteraction event which is triggered when the player is close enough to the door
-        Doors.ForEach(d => d.OnObjectInteraction += CheckKeys);
+        Doors.ForEach(d => d.OnInteraction += CheckKeys);
         test = Doors;   // debugging purposes
     }
 
@@ -35,7 +35,7 @@ public class InventoryKey : InventoryInteractable
 
     public void Unsubscribe(Door _doorToRemove)
     {
-        Doors.ForEach(d => d.OnObjectInteraction -= CheckKeys);
+        Doors.ForEach(d => d.OnInteraction -= CheckKeys);
         Doors.Remove(_doorToRemove);
     }
 

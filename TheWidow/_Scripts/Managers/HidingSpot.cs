@@ -87,7 +87,7 @@ public class HidingSpot : MonoBehaviour
     }
 
     // if the enemy is chasing the player and eventually loses him because he's hidden, a counter for this particular hiding spot starts. After the player hides in the same spot a couple of times, the enemy will be able to see through the hiding spot making it unusable
-    public void SpottedHiding()
+    public void IncreaseSpottingTimes()
     {
         if (m_NumberOfTimesSpotted > 1)
         {

@@ -1,7 +1,8 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using UnityEngine;
 
-public class EntityAnimation : MonoBehaviour
+public class EntityAnimation : MonoBehaviour, IController
 {
     [SerializeField] protected Animator Anim;
     protected StatesEntity Entity;
@@ -20,5 +21,22 @@ public class EntityAnimation : MonoBehaviour
     public void DisableCulling()
     {
         Anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+    }
+
+    public virtual void SetUp(IComponent component)
+    {
+    }
+
+    internal void Animate(object stateTag)
+    {
+        throw new NotImplementedException();
+    }
+
+    public virtual void Activate()
+    {
+    }
+
+    public virtual void Dispose()
+    {
     }
 }

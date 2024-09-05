@@ -3,26 +3,29 @@ using UnityEngine;
 
 public class StateHearWidow : MachineState
 {
-    public override void StartActivity()
+    private float m_PatrolSpeed = 3f;
+
+    public override void StartState()
     {
         // set the speed of the entity
-        Entity.SetAgentSpeed(Entity.Speeds.PatrolSpeed);
-        Entity.SetAgentTarget(Entity.PlayerTransform.position);
+        m_PatrolSpeed = GameManager.Instance.Settings.CurrentDifficulty.ChasingSpeed;
+        m_StateMachine.SetAgentSpeed(m_PatrolSpeed);
+        m_StateMachine.SetAgentTarget(m_StateMachine.PlayerTransform.position);
 
-        base.StartActivity();
+        base.StartState();
     }
 
     public override void UpdateActivity()
     {
         base.UpdateActivity();
 
-        if ((Entity.EntityTransform.position - Entity.Target).sqrMagnitude > 3) // if the enemy is not close enough to the way point
+        if ((m_StateMachine.EntityTransform.position - m_StateMachine.Target).sqrMagnitude > 3) // if the enemy is not close enough to the way point
         {
-            Entity.SetAgentTarget(Entity.Target);
+            m_StateMachine.SetAgentTarget(m_StateMachine.Target);
         }
         else
         {
-            Entity.PerfromNextState(StateName.Stand);
+            m_StateMachine.SetNextState(StateName.Stand);
         }
     }
 

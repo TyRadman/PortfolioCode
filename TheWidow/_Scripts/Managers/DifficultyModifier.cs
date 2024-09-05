@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 // a scriptableObject class that has values that change depending on the difficulty of the game (more attributes are to be added)
 [CreateAssetMenu(fileName = "Value", menuName = "Difficulty values")]
@@ -13,17 +14,11 @@ public class DifficultyModifier : ScriptableObject
     public string Name;
     [Header("Hearing Distances:")]
     public HearingDistances TheHearingDistances;
-    public float CrouchingDistance;
-    public float WalkingDistance;
-    public float RunningDistance;
-    public float DoorOpeningDistance;
-    public float SmallInteractionsDistance;
     [Header("Other enemy stats:")]
-    public MovementSpeeds TheMovementSpeeds;
     public float SightDistance;
     public float LosingPlayerTime;
     public float WalkingSpeed;
-    public float RunningSpeed;
+    public float ChasingSpeed;
     [Header("Player stats:")]
     public float BatteryMaxLife;
     public float MaxStamina;
@@ -33,18 +28,15 @@ public class DifficultyModifier : ScriptableObject
 }
 
 [System.Serializable]
-public struct HearingDistances
+public class HearingDistance
 {
-    public float CrouchingDistance;
-    public float WalkingDistance;
-    public float RunningDistance;
-    public float DoorOpeningDistance;
-    public float SmallInteractionsDistance;
+    public PlayerMovement.States State;
+    public float Distance;
 }
+
 [System.Serializable]
-public struct MovementSpeeds
+public class HearingDistances
 {
-    public float PatrolSpeed;
-    public float CheckingSpeed; // related to hearing
-    public float ChasingSpeed;
+    public List<HearingDistance> Distances;
+    public float DoorHearingDistance = 10f;
 }

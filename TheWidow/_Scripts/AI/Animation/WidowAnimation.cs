@@ -31,6 +31,13 @@ public class WidowAnimation : EntityAnimation
                     Anim.SetFloat(WALKING_SPEED, Entity.Agent.speed);
                     break;
                 }
+            case MachineState.StateName.MoveToPoint:
+                {
+                    Anim.SetInteger(PATROL_NUMBER, Random.Range(0, 2));// the walking trigger is activated
+                    Anim.SetBool(STAND, false);
+                    Anim.SetFloat(WALKING_SPEED, Entity.Agent.speed);
+                    break;
+                }
             case MachineState.StateName.Stand:
                 {
                     Anim.SetBool(STAND, true);
@@ -45,7 +52,8 @@ public class WidowAnimation : EntityAnimation
                     // we trigger chasing
                     Anim.SetTrigger(IS_CHASING);
                     // we set the speed of the animation to match the speed of the enemy chasing speed
-                    Anim.SetFloat(RUNNING_SPEED, Entity.Speeds.ChasingSpeed);
+                    float runningSpeed = GameManager.Instance.Settings.CurrentDifficulty.ChasingSpeed;
+                    Anim.SetFloat(RUNNING_SPEED, runningSpeed);
                     break;
                 }
             case MachineState.StateName.Scream:

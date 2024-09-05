@@ -1,10 +1,12 @@
 ﻿using UnityEngine;
+using static MachineState;
 
 public class TheWidowAnimation : MonoBehaviour
 {
     public Animator Anim;
-    private EnemyAIDecisions m_Enemy;
+    //private EnemyAIDecisions m_Enemy;
     public static TheWidowAnimation Instance;
+    private EntityComponents m_Components;
 
     #region Constants
     private const string WALKING_SPEED = "walkingSpeed";
@@ -17,50 +19,45 @@ public class TheWidowAnimation : MonoBehaviour
     private const string IS_KILLING = "isKilling";
     #endregion
 
-    private void Awake()
+    public void SetUp(IController components)
     {
-        Instance = this;
-    }
-
-    public void Initialize()
-    {
-        m_Enemy = GetComponent<EnemyAIDecisions>();
+        m_Components = (EntityComponents)components;
     }
 
     // animates the enemy according to its state
-    public void Animate(EnemyAIDecisions.EnemyActions _action)
+    public void Animate(StateName state)
     {
         // to make the walking realistic, we adjust the animation speed in accordance to the enemy's speed
-        Anim.SetFloat(WALKING_SPEED, m_Enemy.Agent.speed);
+        Anim.SetFloat(WALKING_SPEED, m_Components.Entity.Agent.speed);
 
-        switch (_action)
+        switch (state)
         {
-            case EnemyAIDecisions.EnemyActions.patrol:
+            case StateName.Patrol:
                 {
                     Anim.SetInteger(PATROL_NUMBER, Random.Range(0, 2));// the walking trigger is activated
                     Anim.SetBool(STAND, false);
-                    Anim.SetFloat(WALKING_SPEED, m_Enemy.PatrolSpeed);
+                    Anim.SetFloat(WALKING_SPEED, m_Components.Difficulty.WalkingSpeed);
                     break;
                 }
-            case EnemyAIDecisions.EnemyActions.stand:
+            case StateName.Stand:
                 {
                     Anim.SetBool(STAND, true);
                     break;
                 }
-            case EnemyAIDecisions.EnemyActions.chase:
+            case StateName.Chase:
                 {
                     Anim.SetInteger(CHASE_NUMBER, Random.Range(0, 2));
                     Anim.SetBool(STAND, false);
                     Anim.SetTrigger(IS_CHASING);
-                    Anim.SetFloat(RUNNING_SPEED, m_Enemy.ChaseSpeed);
+                    Anim.SetFloat(RUNNING_SPEED, m_Components.Difficulty.ChasingSpeed);
                     break;
                 }
-            case EnemyAIDecisions.EnemyActions.scream:
+            case StateName.Scream:
                 {
                     Anim.SetTrigger(IS_SCREAMING);
                     break;
                 }
-            case EnemyAIDecisions.EnemyActions.kill:
+            case StateName.Kill:
                 {
                     Anim.SetTrigger(IS_KILLING);
                     break;

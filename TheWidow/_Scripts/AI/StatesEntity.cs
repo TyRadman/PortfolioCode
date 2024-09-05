@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.AI;
+using System;
 
-[RequireComponent(typeof(EntitySensing))]
-public class StatesEntity : MonoBehaviour
+public class StatesEntity : MonoBehaviour, IController
 {
     [HideInInspector] public NavMeshAgent Agent;
     [HideInInspector] public EntityAnimation Animation;
@@ -13,80 +13,66 @@ public class StatesEntity : MonoBehaviour
     [HideInInspector] public Transform EntityTransform;
     [HideInInspector] public List<Vector3> WayPoints = new List<Vector3>();
     [HideInInspector] public Vector3 Target;
-    [HideInInspector] public MachineState m_HearingEvent;
-    [HideInInspector] public MachineState m_SightEvent;
     [HideInInspector] public bool IsActive = true;
     [HideInInspector] public bool StateRunning = false;
-    [HideInInspector] public bool PlayerIsSeen = false;
-    [HideInInspector] public float PlayerLosingTime;
-    [HideInInspector] public EntitySensing Senses;
     [HideInInspector] public EyeIndicator Indicator;
     [SerializeField] private float m_RefreshRate = 20f;
-    private List<MachineState> m_States = new List<MachineState>();
+    [SerializeField] private List<MachineState> m_States = new List<MachineState>();
     private WaitForSeconds m_LoopWaitTime;
     [HideInInspector] public MachineState CurrentMachineState;
-    [HideInInspector] public MachineState NextMachineState;
-    public bool AffectsIndicator = false;
-    [Header("References")]
-    [SerializeField] private GameObject m_StatesParent;
-    [Header("Difficulty Values")]
-    public MovementSpeeds Speeds;
+
+    private MachineState m_NextMachineState;
     [SerializeField] private Text m_TestingText;
-    // difficulty values
+    private EntityComponents m_Components;
 
-    private void Awake()
+    public void SetUp(IComponent component)
     {
-        setUpAwakeReferences();
-        extractStates();
+        m_Components = (EntityComponents)component;
+        CacheValues();
+        SetUpStates();
     }
 
-    private void Start()
+    private void CacheValues()
     {
-        getDifficultyValues();
-        setUpStartReferences();
-        setExternalTriggers();
-        performState();
-        startEyeIndicator();
+        Agent = GetComponent<NavMeshAgent>();
+        Animation = GetComponent<EntityAnimation>();
+        Indicator = FindObjectOfType<EyeIndicator>();
+        PlayerTransform = PlayerStats.Instance.transform;
+        EntityTransform = transform;
+        System.Array.ForEach(GameObject.FindGameObjectsWithTag("WayPoint"), w => WayPoints.Add(w.transform.position));
+        m_RefreshRate = 1 / m_RefreshRate;
+        m_LoopWaitTime = new WaitForSeconds(m_RefreshRate);
     }
 
-    private void performState()
+    private void SetUpStates()
     {
-        m_TestingText.text = $"State: {CurrentMachineState.StateTag}";
-        StartCoroutine(entityLoop());
+        m_States.ForEach(s => s.SetUp(m_Components));
+        CurrentMachineState = m_States[0];
+        m_NextMachineState = CurrentMachineState;
     }
 
-    private IEnumerator entityLoop()
+    public void Activate()
     {
-        // to inform the states that the entity is performing a state
-        StateRunning = true;
-        // invoke the start function of the state
-        CurrentMachineState.StartActivity();
-
-        // keep invoking the update functinon of the state as long as the bool is true
-        while (StateRunning)
-        {
-            CurrentMachineState.UpdateActivity();
-            yield return m_LoopWaitTime;
-        }
-
-        // after we stop the update function we invoke the end 
-        CurrentMachineState.EndActivity();
-
-        // the state is switched to the next one
-        CurrentMachineState = NextMachineState; 
-
-        // the next state is performed
-        performState();
     }
 
-    public void PerfromNextState(MachineState.StateName _name)
+    public void StopState()
     {
-        StateRunning = false;
-        // fetch a state with a matching tag
-        NextMachineState = m_States.Find(s => s.StateTag == _name);
+    }
+
+    public void SetNextState(MachineState.StateName stateName)
+    {
+        m_NextMachineState = m_States.Find(s => s.StateTag == stateName);
+    }
+
+    public void PerfromNextState()
+    {
     }
 
     #region Agent Methods
+    /// <summary>
+    /// Sets a target position for the entity and moves it towards that target
+    /// </summary>
+    /// <param name="_target"></param>
     public void SetAgentTarget(Vector3 _target)
     {
         Target = _target;
@@ -95,6 +81,7 @@ public class StatesEntity : MonoBehaviour
 
     public void SetAgentSpeed(float _speed)
     {
+        //Debug.Log($"Speed {_speed}");
         Agent.speed = _speed;
     }
 
@@ -104,7 +91,7 @@ public class StatesEntity : MonoBehaviour
         Vector3 dir = (_target - transform.position).normalized;
 
         // if the entity is facing the object
-        if(dir.x == 0f && dir.z == 0f)
+        if (dir.x == 0f && dir.z == 0f)
         {
             return;
         }
@@ -125,41 +112,7 @@ public class StatesEntity : MonoBehaviour
     #endregion
 
     #region Senses Related Methods
-    private void setExternalTriggers()
-    {
-        // checks the states and assigns specific methods as listeners for the sight and hearing events
-        m_States.ForEach(s => s.AssignListeners());
-    }
-
-    public void TriggerSight()
-    {
-        // if the same state is not active and the condition of this state for not playing is not fulfilled then play it
-        if(m_SightEvent.SensesDealBreaker())
-        {
-            return;
-        }
-
-        Senses.CanHear = false;
-
-        if (AffectsIndicator)
-        {
-            Indicator.UpdateIdicator(EyeState.Noticing);
-        }
-
-        PerfromNextState(m_SightEvent.StateTag);
-    }
-
-    public void TriggerHearing()
-    {
-        if (m_HearingEvent.SensesDealBreaker())
-        {
-            return;
-        }
-
-        PerfromNextState(m_HearingEvent.StateTag);
-    }
-
-    public float DistanceToTarget(Vector3 _target)
+    public float GetDistanceToTarget(Vector3 _target)
     {
         // creates a new path
         NavMeshPath path = new NavMeshPath();
@@ -188,78 +141,11 @@ public class StatesEntity : MonoBehaviour
 
         return distanceFromPlayer;
     }
-
-    public void PlayerSeen(bool _seen)
-    {
-        PlayerIsSeen = _seen;
-        PlayerStats.Instance.IsSeen = _seen;
-
-        if (AffectsIndicator)
-        {
-            Indicator.UpdateIdicator(_seen ? EyeState.SeeingAndChasing : EyeState.LookingAndChasing);
-        }
-    }
-    #endregion
-
-    #region Initializers
-    private void extractStates()
-    {
-        int statesNum = m_StatesParent.GetComponents<MachineState>().Length;
-
-        for (int i = 0; i < statesNum; i++)
-        {
-            // add the state to the list
-            m_States.Add(m_StatesParent.GetComponents<MachineState>()[i]);
-            // set the mutual references to it
-            m_States[i].SetMutualReferences(this);
-        }
-
-        // set the first state as the current state 
-        CurrentMachineState = m_States[0];
-        NextMachineState = CurrentMachineState;
-    }
-
-    private void setUpStartReferences()
-    {
-        PlayerTransform = PlayerStats.Instance.transform;
-        EntityTransform = transform;
-        System.Array.ForEach(GameObject.FindGameObjectsWithTag("WayPoint"), w => WayPoints.Add(w.transform.position));
-        m_RefreshRate = 1 / m_RefreshRate;
-        m_LoopWaitTime = new WaitForSeconds(m_RefreshRate);
-    }
-
-    private void setUpAwakeReferences()
-    {
-        Agent = GetComponent<NavMeshAgent>();
-        Animation = GetComponent<EntityAnimation>();
-        Indicator = FindObjectOfType<EyeIndicator>();
-        Senses = GetComponent<EntitySensing>();
-        Senses.enabled = true;
-    }
-
-    private void getDifficultyValues()
-    {
-        // fetch a difficulty with the same tag as the entity's tag
-        DifficultyModifier dif = GameManager.Instance.CurrentDifficulty;
-        // set up values
-        PlayerLosingTime = dif.LosingPlayerTime;
-    }
-
-    private void startEyeIndicator()
-    {
-        if(Indicator == null)
-        {
-            print("Player is the problem");
-        }
-
-        Indicator.UpdateIdicator(EyeState.StartLooking);
-    }
     #endregion
 
     #region Helpers
-    public bool CheckCurrentState(MachineState.StateName _tag)
+    public void Dispose()
     {
-        return CurrentMachineState.StateTag == _tag;
     }
     #endregion
 }

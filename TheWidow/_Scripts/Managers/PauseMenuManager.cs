@@ -63,7 +63,7 @@ public class PauseMenuManager : MonoBehaviour
         m_ActivatedPanel = m_MainPauseMenuButtons;
         LoadStartSettings();
         // subscribtions
-        PlayerStats.Instance.AddListenerToMedicineCollection(IncreaseMedicine);
+        PlayerStats.Instance.OnMedicineCollected += IncreaseMedicine;
         // to instantiate values
         IncreaseMedicine();
     }
@@ -223,7 +223,7 @@ public class PauseMenuManager : MonoBehaviour
     {
         AudioManager.Instance.StartUpValues();                                                                      // loads default audio volumes
         GameManager.Instance.SetDifficulty(PlayerPrefs.GetInt(Keys.Settings_Difficulty));                           // loads selected or default difficulty
-        PlayerStats.Instance.SetDifficultyValues(GameManager.Instance.CurrentDifficulty);
+        PlayerStats.Instance.SetDifficultyValues(GameManager.Instance.Settings.CurrentDifficulty);
         try
         {
             if (PostProcessingProfile.TryGet(out Exposure effect))

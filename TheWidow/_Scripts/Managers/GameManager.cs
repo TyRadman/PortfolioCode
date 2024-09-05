@@ -23,9 +23,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject EndingDoor = null;
     [SerializeField] private GameObject m_EndingScreen;
     [SerializeField] private Animator m_EndingScreenAnim;
-    public DifficultyModifier[] DifficultyValues;
-    [HideInInspector] public DifficultyModifier CurrentDifficulty;
+    [field: SerializeField] public GameSettings Settings { get; private set; }
     [HideInInspector] public List<DifficultyModifier> CurrentDifficulties = new List<DifficultyModifier>();
+    [field: SerializeField] public UIDebugger Debugger;
 
 
     [System.Serializable]
@@ -39,14 +39,12 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
-
         if (Instance == null)
         {
             Instance = this;
         }
 
         changeCursorState(false, CursorLockMode.Locked);
-        SetDifficulty(PlayerPrefs.GetInt(Keys.Settings_Difficulty));
     }
 
     void Start()
@@ -123,6 +121,6 @@ public class GameManager : MonoBehaviour
 
     public void SetDifficulty(int _index)
     {
-        CurrentDifficulty = DifficultyValues[_index];
+        //CurrentDifficulty = DifficultyValues[_index];
     }
 }

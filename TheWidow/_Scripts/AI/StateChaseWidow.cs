@@ -2,94 +2,119 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+[CreateAssetMenu(fileName = "State_TheWidow_Chase", menuName = Constants.WIDOW_STATES_DIRECTORY + "Chase")]
 public class StateChaseWidow : MachineState
 {
-    [SerializeField] private float m_CatchingDistance;
+    [SerializeField] private float m_CatchingDistance = 2f;
     [SerializeField] private Coroutine m_TimerToLosePlayer;
-    
-    public override void StartActivity()
-    {
-        base.StartActivity();
+    private float m_ChasingSpeed = 3f;
+    private EntitySight m_Sight;
+    private float m_Timer = 0f;
+    private float m_PlayerLosingTime = 5f;
+    private EyeIndicator m_Indicator;
 
+    public override void SetUp(IComponent entityComponents)
+    {
+        base.SetUp(entityComponents);
+        m_Components = (EntityComponents)entityComponents;
+        m_Indicator = m_Components.Entity.Indicator;
+        m_Sight = m_Components.Sight;
+        m_ChasingSpeed = m_Components.Difficulty.ChasingSpeed;
+        m_PlayerLosingTime = m_Components.Difficulty.LosingPlayerTime;
+        m_CatchingDistance = 3f;
+    }
+
+    public override void StartState()
+    {
+        base.StartState();
+
+        m_Indicator.EnableIsChasing(true);
         // set the chasing speed
-        Entity.SetAgentSpeed(Entity.Speeds.ChasingSpeed);
+        m_StateMachine.SetAgentSpeed(m_ChasingSpeed);
         // turn on vision again 
-        Entity.Senses.CanSee = true;
+        m_Components.Sight.CanSee = true;
     }
 
     public override void UpdateActivity()
     {
         base.UpdateActivity();
+        m_Timer += Time.deltaTime;
 
-        #region If Player Is Seen
+        MoveTowardsPlayer();
+    }
+
+    private void MoveTowardsPlayer()
+    {
+        if (m_Timer < EntityComponents.REFRESH_RATE)
+        {
+            return;
+        }
+
+        m_Timer = 0f;
+
         if (!PlayerStats.Instance.IsHidden)
         {
-            if (Vector3.Distance(Entity.EntityTransform.position, Entity.PlayerTransform.position) > m_CatchingDistance)
+            if (Vector3.Distance(m_StateMachine.EntityTransform.position, m_StateMachine.PlayerTransform.position) > m_CatchingDistance)
             {
-                Entity.SetAgentTarget(Entity.PlayerTransform.position);
+                m_StateMachine.SetAgentTarget(m_StateMachine.PlayerTransform.position);
             }
             else
             {
-                Entity.PerfromNextState(StateName.Kill);
+                m_StateMachine.SetNextState(StateName.Kill);
+                m_StateMachine.StopState();
                 return;
             }
-        }
-        #endregion
 
-        #region If Player Went Hidden
-        // if the player is hidden then the enemy moves to the hiding spot
+            if (m_Sight.State == EntitySight.SightState.PlayerNotInSight)
+            {
+                m_Indicator.UpdateIdicator(EyeState.IsPlayerOutOfSight);
+
+                // makes sure this is the first time the player is seen since last time he wasn't seen
+                if (m_TimerToLosePlayer == null)
+                {
+                    m_TimerToLosePlayer = m_StateMachine.StartCoroutine(LosingPlayerProcess());
+                }
+            }
+            // if he was spotted again while being chased
+            else
+            {
+                m_Indicator.UpdateIdicator(EyeState.IsPlayerInSight);
+
+                if (m_TimerToLosePlayer != null)
+                {
+                    m_StateMachine.StopCoroutine(m_TimerToLosePlayer);
+                    m_TimerToLosePlayer = null;
+                }
+            }
+        }
         else if (PlayerStats.Instance.IsHidden)
         {
-            if (Vector3.Distance(Entity.EntityTransform.position, Entity.Target) > Entity.Agent.stoppingDistance)
+            if (Vector3.Distance(m_StateMachine.EntityTransform.position, m_StateMachine.Target) > m_CatchingDistance)
             {
-                Entity.SetAgentTarget(PlayerStats.Instance.HidingSpot.EnemyStandingPlace);
+                m_StateMachine.SetAgentTarget(PlayerStats.Instance.HidingSpot.EnemyStandingPlace);
             }
             else
             {
-                // once it reaches the hiding spot it increaases the number of time the player escaped using that spot
-                // increases the number of times and once the limit is exceeded the hiding spot will no longer hide the player
-                PlayerStats.Instance.HidingSpot.SpottedHiding();
+                PlayerStats.Instance.HidingSpot.IncreaseSpottingTimes();
 
                 // the enemy will stand only if the player is hidden
                 if (PlayerStats.Instance.IsHidden)
                 {
-                    Entity.PerfromNextState(StateName.Stand);
+                    m_StateMachine.SetNextState(StateName.Stand);
+                    m_StateMachine.StopState();
                     return;
                 }
             }
         }
-        #endregion
-
-        #region If Player Is Out Of Sight
-        // if the pllayer vanished from the enemy's sight
-        if (!Entity.PlayerIsSeen)
-        {
-            // makes sure this is the first time the player is seen since last time he wasn't seen
-            if (m_TimerToLosePlayer == null)
-            {
-                // changes the eye indicator mode to chasing
-                // m_Eye.PlayerInSight(true);
-                // starts a coroutine that starts a count down when the player is out of sight after which the enemy goes back to patroling
-                m_TimerToLosePlayer = StartCoroutine(losingPlayer());
-            }
-        }
-        // if he was spotted again while being chased
-        else
-        {
-            if (m_TimerToLosePlayer != null)
-            {
-                StopCoroutine(m_TimerToLosePlayer);
-                m_TimerToLosePlayer = null;
-            }
-        }
-        #endregion
     }
 
-    private IEnumerator losingPlayer()
+    private IEnumerator LosingPlayerProcess()
     {
-        yield return new WaitForSeconds(Entity.PlayerLosingTime);
-        Entity.Indicator.UpdateIdicator(EyeState.Lost);
-        Entity.Senses.CanHear = true;
-        Entity.PerfromNextState(StateName.Stand);
+        yield return new WaitForSeconds(m_PlayerLosingTime);
+        m_Indicator.UpdateIdicator(EyeState.OnPlayerLost);
+        m_Indicator.EnableIsChasing(false);
+        m_Components.Hearing.EnableHearing(true);
+        m_StateMachine.SetNextState(StateName.Stand);
+        m_StateMachine.StopState();
     }
 }

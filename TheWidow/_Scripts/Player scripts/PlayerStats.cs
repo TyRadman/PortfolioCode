@@ -1,5 +1,7 @@
 ﻿using System.Collections;
 using UnityEngine;
+using System;
+using UnityEngine.Events;
 
 // holds data about the player like stamina, batteries or health (in the future)
 public class PlayerStats : MonoBehaviour
@@ -11,10 +13,7 @@ public class PlayerStats : MonoBehaviour
     private PlayerMovement m_Fpc;
     #endregion
 
-    #region Delegates and events
-    public delegate void MedicineCollected();
-    private event MedicineCollected E_OnMedicineCollected = delegate { };
-    #endregion
+    public UnityAction OnMedicineCollected { get; set; }
 
     #region Variables
     private float m_MaxBatteryLife = 100f;
@@ -53,11 +52,11 @@ public class PlayerStats : MonoBehaviour
 
             if (value)
             {
-                EyeIndicator.Instance.UpdateIdicator(EyeState.Hiding, true);
+                m_EyeIndicator.UpdateIdicator(EyeState.OnPlayerHidden);
             }
             else
             {
-                EyeIndicator.Instance.UpdateIdicator(EyeState.OutOfHiding, true);
+                m_EyeIndicator.UpdateIdicator(EyeState.OnPlayerUnhidden);
             }
 
             m_IsHidden = value;
@@ -65,7 +64,7 @@ public class PlayerStats : MonoBehaviour
         }
     }
     public bool IsSeen = false;
-
+    [SerializeField] private EyeIndicator m_EyeIndicator;
     static public Coroutine BackToStand_CO;
     [HideInInspector] public bool IsDead = false;
     public bool StaminaIsFull = true;
@@ -109,7 +108,7 @@ public class PlayerStats : MonoBehaviour
     {
         MedicinesCollected++;
         PlayerStatsUI.Instance.UpdateMedicineText(MedicinesCollected + "/" + MaxNumberOfMedicine);
-        E_OnMedicineCollected();                                            // an event occurance, if any listeners exist, an action is expected
+        OnMedicineCollected.Invoke();                                            // an event occurance, if any listeners exist, an action is expected
     }
 
     #region Stamina
@@ -186,16 +185,6 @@ public class PlayerStats : MonoBehaviour
     public float GetMaxStamina()
     {
         return m_MaxStamina;
-    }
-
-    public void AddListenerToMedicineCollection(MedicineCollected _method)
-    {
-        E_OnMedicineCollected += _method;       // assigns whatever method we add as a listener
-    }
-
-    public void RemoveListenerFromMedicineCollection(MedicineCollected _method)
-    {
-        E_OnMedicineCollected -= _method;
     }
 
     public bool BatteryIsFull()

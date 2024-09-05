@@ -2,25 +2,31 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class MachineState : MonoBehaviour
+public abstract class MachineState : ScriptableObject
 {
     public enum StateName
     {
-        None, Stand, Patrol, Hear, Scream, Chase, Kill
-    }
-    public enum ExternalTriggers
-    {
-        None, Sight, Hearing
+        None = 0, Stand = 1, Patrol = 2, Hear = 3, Scream = 4,
+        Chase = 5, Kill = 6, MoveToPoint = 7
     }
 
     public StateName StateTag;
-    [SerializeField] private ExternalTriggers m_TriggeredBy;
-    protected StatesEntity Entity;
+    protected StatesEntity m_StateMachine;
+    protected EntityComponents m_Components;
+    protected EnemyAudio m_Audio;
+
+    public virtual void SetUp(IComponent entityComponents)
+    {
+        m_Components = (EntityComponents)entityComponents;
+        m_StateMachine = m_Components.Entity;
+        m_Audio = m_Components.Audio;
+    }
 
     #region Virtual Functions
-    public virtual void StartActivity()
+    public virtual void StartState()
     {
-        Entity.Animation.Animate(StateTag);
+        m_StateMachine.Animation.Animate(StateTag);
+        m_Audio.PlayAudio(StateTag);
         // print(SimpleFunctions.ColorText($"The start of the {StateTag} state", nameof(Color.green)));
     }
 
@@ -32,35 +38,6 @@ public class MachineState : MonoBehaviour
     public virtual void EndActivity()
     {
         // print(SimpleFunctions.ColorText($"The end of the {StateTag} state", nameof(Color.red)));
-    }
-
-    /// <summary>
-    /// Conditions that disables senses for this state
-    /// </summary>
-    /// <returns></returns>
-    public virtual bool SensesDealBreaker()
-    {
-        return false;
-    }
-    #endregion
-
-    #region Initializers
-    public void AssignListeners()
-    {
-        // we assign listeners to the main events
-        if(m_TriggeredBy == ExternalTriggers.Sight)
-        {
-            Entity.m_SightEvent = this;
-        }
-        else if(m_TriggeredBy == ExternalTriggers.Hearing)
-        {
-            Entity.m_HearingEvent = this;
-        }
-    }
-
-    public void SetMutualReferences(StatesEntity _statesEntity)
-    {
-        Entity = _statesEntity;
     }
     #endregion
 }

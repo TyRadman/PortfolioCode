@@ -14,7 +14,7 @@ public class EnemiesManager : MonoBehaviour
     [SerializeField] private int m_MaxJumpScaresNum = 1;
     private bool m_EnemiesSpawned = false;
     [Header("Enemies")]
-    [SerializeField] private List<StatesEntity> m_Enemies;
+    [SerializeField] private List<EntityComponents> m_Enemies;
 
     private void Awake()
     {
@@ -28,7 +28,7 @@ public class EnemiesManager : MonoBehaviour
     private void Start()
     {
         // to spawn the enemy after a number of medicine bottle has been picked up
-        PlayerStats.Instance.AddListenerToMedicineCollection(NumberOfBottlesUpdate);
+        PlayerStats.Instance.OnMedicineCollected += NumberOfBottlesUpdate;
         // TimeClass.PerformTask(ActivateSmartWidow, TimeClass.ConvertTimeToSeconds(m_WidowActivationTime));
     }
 
@@ -38,14 +38,14 @@ public class EnemiesManager : MonoBehaviour
         if (PlayerStats.Instance.MedicinesCollected == m_NumberOfBottlesToSpawn)
         {
             ActivateEnemy(DifficultyModifier.EnemyTag.TheWidow, getFurthestDistanceFromPosition(PlayerStats.Instance.transform.position));
-            PlayerStats.Instance.RemoveListenerFromMedicineCollection(NumberOfBottlesUpdate);
+            PlayerStats.Instance.OnMedicineCollected -= NumberOfBottlesUpdate;
         }
     }
 
     public void ActivateEnemy(DifficultyModifier.EnemyTag _tag, Vector3 _spawnPos)
     {
         // cache the enemy to activate
-        StatesEntity enemyToActivate = m_Enemies.Find(e => e.Senses.m_EnemyTag == _tag);
+        EntityComponents enemyToActivate = m_Enemies.Find(e => e.m_EnemyTag == _tag);
         // position the enemy
         enemyToActivate.gameObject.transform.position = _spawnPos;
         // enable the enemy
@@ -59,10 +59,15 @@ public class EnemiesManager : MonoBehaviour
         return m_EnemiesSpawned;
     }
 
-    public void TriggerHearing(Vector3 _target)
+    public void TriggerHearingForAllEnemies(Vector3 _target)
     {
         // triggers the hearing of every active enemies with their own different hearing distances
-        m_Enemies.ForEach(e => e.Senses.HearingProcess(e.Senses.HearingDistances.DoorOpeningDistance, _target));
+        for (int i = 0; i < m_Enemies.Count; i++)
+        {
+            EntityComponents enemy = m_Enemies[i];
+            float hearingDistance = enemy.Hearing.HearingDistances.DoorHearingDistance;
+            enemy.Hearing.PerformHearing(hearingDistance, _target);
+        }
     }
 
     private Vector3 getFurthestDistanceFromPosition(Vector3 _position)

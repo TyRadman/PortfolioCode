@@ -45,7 +45,7 @@ public class EnemyAIDecisions : MonoBehaviour
         {
             m_Action = value;
             StateChanged(value);            // sends an event with the new state
-            m_Animations.Animate(value);    // animates the widow accordingly
+            //m_Animations.Animate(value);    // animates the widow accordingly
         }
     }
     #endregion
@@ -88,7 +88,7 @@ public class EnemyAIDecisions : MonoBehaviour
         // gets the nav mesh agent component
         Agent = GetComponent<NavMeshAgent>();
         // gets the difficulty from the game manager and all values that the difficulty has
-        SetDetectingDistances(GameManager.Instance.CurrentDifficulty);
+        SetDetectingDistances(GameManager.Instance.Settings.CurrentDifficulty);
 
         // if the player is hidden when the enemy spawns
         if (PlayerStats.Instance.HidingSpot != null)    
@@ -269,7 +269,7 @@ public class EnemyAIDecisions : MonoBehaviour
             {
                 // once it reaches the hiding spot it increaases the number of time the player escaped into that spot
                 // increases the number of times and once the limit is exceeded then the player is no longer hidden
-                PlayerStats.Instance.HidingSpot.SpottedHiding();
+                PlayerStats.Instance.HidingSpot.IncreaseSpottingTimes();
 
                 // the enemy will stand only if the player is hidden
                 if (PlayerStats.Instance.IsHidden)                
@@ -364,7 +364,7 @@ public class EnemyAIDecisions : MonoBehaviour
         if (Action != EnemyActions.chase)
         {
             // if the game difficulty is hard then choose the closest waypoint to the player
-            if (GameManager.Instance.CurrentDifficulty.name == HARD)    
+            if (GameManager.Instance.Settings.CurrentDifficulty.name == HARD)    
             {
                 chooseCloseWayPoint();
             }
@@ -477,7 +477,7 @@ public class EnemyAIDecisions : MonoBehaviour
         // caches whether the distance calculated is greater than the distance we set as minimum
         var heard = DistanceFromPlayer <= _distance;
         // feeds this bool to the hearing icon so that it triggers it if the value is true
-        m_Eye.HearingIconAlert(heard);
+        //m_Eye.DisplayHearingIcon(heard);
         // finally returns the value
         return heard;                                           
     }
@@ -586,14 +586,14 @@ public class EnemyAIDecisions : MonoBehaviour
     // sets values based on selected difficulty
     public void SetDetectingDistances(DifficultyModifier _values)
     {
-        m_Crouching_hearingDistance = _values.CrouchingDistance;
-        m_Walking_hearingDistance = _values.WalkingDistance;
-        m_Running_hearingDistance = _values.RunningDistance;
-        NormalSightDistance = _values.SightDistance;
-        LosingPlayerTime = _values.LosingPlayerTime;
-        PatrolSpeed = _values.WalkingSpeed;
-        ChaseSpeed = _values.RunningSpeed;
-        DoorOpeningHearingDistance = _values.DoorOpeningDistance;
+        //m_Crouching_hearingDistance = _values.CrouchingDistance;
+        //m_Walking_hearingDistance = _values.WalkingDistance;
+        //m_Running_hearingDistance = _values.RunningDistance;
+        //NormalSightDistance = _values.SightDistance;
+        //LosingPlayerTime = _values.LosingPlayerTime;
+        //PatrolSpeed = _values.WalkingSpeed;
+        //ChaseSpeed = _values.ChasingSpeed;
+        //DoorOpeningHearingDistance = _values.DoorOpeningDistance;
 
         // gives the enemy extra sight if the flash light was on
         if (FindObjectOfType<PlayerActions>().FlashLight.gameObject.activeSelf)         
@@ -623,7 +623,7 @@ public class EnemyAIDecisions : MonoBehaviour
     // initializes other class that the enemy depends on
     public void initializeComponents()
     {
-        GetComponent<TheWidowAnimation>().Initialize();
-        GetComponent<EnemyAudio>().Initialize();
+        //GetComponent<TheWidowAnimation>().Initialize();
+        //GetComponent<EnemyAudio>().Initialize();
     }
 }

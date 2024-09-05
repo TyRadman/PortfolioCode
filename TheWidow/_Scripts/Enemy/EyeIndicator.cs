@@ -4,103 +4,36 @@ using UnityEngine.UI;
 // the real script
 public class EyeIndicator : MonoBehaviour
 {
-    public static EyeIndicator Instance;
+    //public static EyeIndicator Instance;
     [Header("References")]
     [SerializeField] private RectTransform m_EyeTransform;
-    [SerializeField] private Image[] m_HearingIcon;
+    [SerializeField] private GameObject m_HearingIcon;
     public Animator Anim_vectorEye;
     private Coroutine m_DisableHearingIcon;
     [SerializeField] private float m_MaxDistance, m_MinDistance;
     [SerializeField] private float m_MinSize;
     [SerializeField] private float m_MaxSize;
     private bool m_TakeInputs = true;
-
-    #region Constants
-    private const string START_EYE = "startVectorEye";
-    private const string NOTICING_PLAYER = "seenPlayer";
-    private const string PLAYER_IN_SIGHT_CHASING= "playerInSight";
-    private const string LOST_PLAYER= "playerLost";
-    private const string EYE_VANISH = "EyeVanish";
-    private const string EYE_APPEAR= "EyeAppear";
-    private const string HIDE= "Hide";
-    private const string UNHIDE = "Unhide";
-    #endregion
+    private const float HEARING_ICON_DISPLAY_DURATION = 1f;
+    private const float EYE_SCALING_SPEED = 0.3f;
 
     private void Awake()
     {
-        Instance = this;
+        m_HearingIcon.SetActive(false);
     }
 
-    //private void Update()
-    //{
-    //    print(PlayerStats.Instance.IsHidden + ", " + Time.time);
-    //}
-
-    public void UpdateIdicator(EyeState _action, bool _toggle = false)
+    #region Sight
+    public void UpdateIdicator(EyeState _action)
     {
-        if (!m_TakeInputs && !_toggle)
-        {
-            return;
-        }
+        int actionNumber = (int)_action;
 
-        if (_toggle)
+        if(actionNumber > 1)
         {
-            m_TakeInputs = !m_TakeInputs;
+            Anim_vectorEye.SetTrigger(_action.ToString());
         }
-
-        //if (m_TakeInputs)
-        //{
-        //    SetEyeIndicatorSize(_distanceToPlayer);
-        //}
-        
-        // playing different animations according to enemy state
-        switch (_action)
+        else
         {
-            case EyeState.StartLooking:
-                {
-                    Anim_vectorEye.SetTrigger(START_EYE);
-                    break;
-                }
-            case EyeState.Noticing:
-                {
-                    Anim_vectorEye.SetTrigger(NOTICING_PLAYER);
-                    break;
-                }
-            case EyeState.SeeingAndChasing:
-                {
-                    Anim_vectorEye.SetBool(PLAYER_IN_SIGHT_CHASING, false);
-                    break;
-                }
-            case EyeState.LookingAndChasing:
-                {
-                    Anim_vectorEye.SetBool(PLAYER_IN_SIGHT_CHASING, true);
-                    break;
-                }
-            case EyeState.Lost:
-                {
-                    Anim_vectorEye.SetTrigger(LOST_PLAYER);
-                    break;
-                }
-            case EyeState.Vanish:
-                {
-                    Anim_vectorEye.SetTrigger(EYE_VANISH);
-                    break;
-                }
-            case EyeState.Appear:
-                {
-                    Anim_vectorEye.SetTrigger(EYE_APPEAR);
-                    break;
-                }
-            case EyeState.Hiding:
-                {
-                    Anim_vectorEye.SetTrigger(HIDE);
-                    break;
-                }
-            case EyeState.OutOfHiding:
-                {
-                    Anim_vectorEye.SetTrigger(UNHIDE);
-                    break;
-                }
+            Anim_vectorEye.SetBool(EyeState.IsPlayerInSight.ToString(), actionNumber == 0);
         }
     }
 
@@ -111,47 +44,44 @@ public class EyeIndicator : MonoBehaviour
             return;
         }
 
-            print($"Last distance is {_distanceToPlayer}");
         float pct = Mathf.InverseLerp(m_MaxDistance, m_MinDistance, _distanceToPlayer);
-        m_EyeTransform.localScale = Vector3.one * Mathf.Lerp(m_MinSize, m_MaxSize, pct);
-        // m_EyeTransform.localScale = Vector3.Lerp(m_EyeTransform.localScale, newSize, 0.1f);
+        float size = Mathf.Lerp(m_MinSize, m_MaxSize, pct);
+        float newSize = Mathf.Lerp(m_EyeTransform.localScale.x, size, EYE_SCALING_SPEED);
+        m_EyeTransform.localScale = Vector3.one * newSize;
     }
+
+    public void EnableIsChasing(bool enable)
+    {
+        Anim_vectorEye.SetBool(EyeState.IsPlayerInSight.ToString(), enable);
+    }
+    #endregion
 
     #region Hearing 
-    public void HearingIconAlert(bool heard)
+    public void DisplayHearingIcon(bool display)
     {
-        if (heard)
+        if (display)
         {
-            if (m_DisableHearingIcon != null)
-            {
-                StopCoroutine(m_DisableHearingIcon);
-            }
-
-            enableHearingIcon(true); // display  the hearing icon
-                                     // removing the hearing icon afterwards when the player is no longer making a noise
-            m_DisableHearingIcon = StartCoroutine(disableHearingIcon());
+            CancelInvoke();
+            m_HearingIcon.SetActive(true);
+            Invoke(nameof(HideHearingIcon), HEARING_ICON_DISPLAY_DURATION);
         }
-        else if (m_DisableHearingIcon != null)
+        else
         {
-            m_DisableHearingIcon = null;
+            m_HearingIcon.SetActive(false);
         }
     }
 
-    IEnumerator disableHearingIcon()
+    private void HideHearingIcon()
     {
-        yield return new WaitForSecondsRealtime(2f);
-        enableHearingIcon(false);
+        DisplayHearingIcon(false);
     }
 
-    void enableHearingIcon(bool _enable)
-    {
-        m_HearingIcon[0].enabled = _enable;
-        m_HearingIcon[1].enabled = _enable;
-    }
     #endregion
 }
 
 public enum EyeState
 {
-    StartLooking, Noticing, SeeingAndChasing, LookingAndChasing, Vanish, Appear, Lost, Hiding, OutOfHiding
+    IsPlayerInSight = 0, IsPlayerOutOfSight = 1, OnPlayerSpotted = 2,
+    OnPlayerLost = 3, OnEyeDisabled = 4, OnEyeAppeared = 5, OnPlayerHidden = 6,
+    OnPlayerUnhidden = 7, OnEyeEnabled = 8
 }
