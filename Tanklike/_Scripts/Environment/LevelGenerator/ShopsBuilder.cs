@@ -10,6 +10,7 @@ namespace TankLike.Environment.LevelGeneration
         [SerializeField] private InteractableArea _workshop;
         [SerializeField] private bool _spawnShop = true;
         [SerializeField] private bool _spawnWorkshop = true;
+        [SerializeField] private bool _spawnWorkshopAnyways = true;
 
         public void BuildShops()
         {
@@ -27,8 +28,11 @@ namespace TankLike.Environment.LevelGeneration
                 shop.transform.eulerAngles = Vector3.zero;
                 shop.transform.position = shopPosition;
             }
+            
+            //TODO: temp, must remove the players count check
+            int playersCount = GameManager.Instance.PlayersTempInfoSaver.PlayersCount;
 
-            if (_spawnWorkshop)
+            if ((_spawnWorkshop && playersCount == 2) || _spawnWorkshopAnyways)
             {
                 InteractableArea workshop = Instantiate(_workshop, shopRoom.transform);
                 workshop.transform.eulerAngles = Vector3.zero;
@@ -36,11 +40,6 @@ namespace TankLike.Environment.LevelGeneration
                 workshop.transform.position = workshopPosition;
                 GameManager.Instance.ShopsManager.SetWorkShop(workshop.GetComponent<Workshop_InteractableArea>());
             }
-        }
-
-        public void SetSpawnWorkshop(bool spawn)
-        {
-            _spawnWorkshop = spawn;
         }
     }
 }

@@ -1,22 +1,26 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
-using TankLike.Utils;
-using TankLike.Environment;
-using TankLike.UI.Map;
 using UnityEngine.InputSystem;
 
 namespace TankLike.UI.Inventory
 {
+    using Signifiers;
+    using UI.Map;
+    using Utils;
+    using Environment;
+
     public class MapNavigatable : Navigatable, IInput
     {
+        [Header("References")]
         [SerializeField] private RectTransform _mapBody;
-        private Vector2 _movementDirection;
         [Header("Movement")]
         [SerializeField] private float _movementSpeed;
-        private const float MAP_LIMIT = 400f;
         [SerializeField] private LevelMapDisplayer _mapDisplayer;
+        
+        private Vector2 _movementDirection;
+        
+        private const float MAP_LIMIT = 400f;
 
         private void Start()
         {

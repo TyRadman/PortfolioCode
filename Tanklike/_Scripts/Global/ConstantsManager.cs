@@ -44,6 +44,8 @@ namespace TankLike
         public List<AnimationCurve> BounceCurves;
         public float EnemyPreShrinkTime = 3f;
         public float BossPreShrinkTime = 3f;
+        [field: SerializeField] public float DisplayDuration { get; private set; } = 5f;
+        [field: SerializeField] public float BounceTime { get; private set; } = 0.8f;
 
         public float GetPreShrinkTime(bool boss)
         {

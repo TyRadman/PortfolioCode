@@ -14,6 +14,9 @@ namespace TankLike.UI
         [SerializeField] private Image _amountPanel;
         [SerializeField] private Image _cooldownOverlay;
         [SerializeField] private TextMeshProUGUI _keyText;
+        [SerializeField] private ToolAmountBar _barReference;
+        [SerializeField] private HorizontalLayoutGroup _layoutGroup;
+        private List<ToolAmountBar> _bars = new List<ToolAmountBar>();
 
         public void SetUp(Tool tool)
         {
@@ -21,11 +24,26 @@ namespace TankLike.UI
             _iconImage.sprite = tool.GetIcon();
             _amountText.text = tool.GetAmount().ToString("0");
             _amountPanel.enabled = true;
+
+            // create the amount bars
+            for (int i = 0; i < tool.GetMaxAmount(); i++)
+            {
+                ToolAmountBar bar = Instantiate(_barReference, _layoutGroup.transform);
+                _bars.Add(bar);
+            }
+
+            Invoke(nameof(DisableBarsLayoutGroup), 1f);
         }
 
-        public void SetAmountText(string amount)
+        private void DisableBarsLayoutGroup()
         {
-            _amountText.text = amount;
+            _layoutGroup.enabled = false;
+        }
+
+        public void SetAmount(int amount)
+        {
+            //_amountText.text = amount;
+            _bars[amount].DisableImage();
         }
 
         public void ResetIcon(Sprite emptyIcon)

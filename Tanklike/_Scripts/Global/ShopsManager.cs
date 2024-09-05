@@ -7,26 +7,31 @@ using TankLike.Environment;
 
 namespace TankLike
 {
-    public class ShopsManager : MonoBehaviour
+    using UI.Workshop;
+
+    public class ShopsManager : MonoBehaviour, IManager
     {
         [SerializeField] private TabsManager _inventory;
         [SerializeField] private List<WorkShopTabsNavigatable> _workshops;
         [SerializeField] private ToolsNavigator _toolsShop;
+
         [field: SerializeField] public Workshop_InteractableArea WorkShopArea;
 
+        public bool IsActive { get; private set; }
+
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             if (_inventory != null)
             {
                 _inventory.SetUp();
             }
 
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            if (_workshops[0] != null)
             {
-                if (_workshops[i] != null)
-                {
-                    _workshops[i].SetUp();
-                }
+                _workshops[0].SetUp();
             }
 
             if (_toolsShop != null)
@@ -34,6 +39,12 @@ namespace TankLike
                 _toolsShop.SetUp();
             }
         }
+
+        public void Dispose()
+        {
+            IsActive = false;
+        }
+        #endregion
 
         public void SetWorkShop(Workshop_InteractableArea workshop)
         {

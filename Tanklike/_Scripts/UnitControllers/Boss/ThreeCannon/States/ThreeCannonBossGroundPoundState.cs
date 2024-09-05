@@ -17,11 +17,13 @@ namespace TankLike.UnitControllers.States
         private Transform _target;
         private Coroutine _attackCoroutine;
         private bool _groundPoundIsActive;
+        private Indicator _indicator;
 
         public override void SetUp(StateMachine<BossStateType> stateMachine, BossComponents bossComponents)
         {
             base.SetUp(stateMachine, bossComponents);
 
+            _groundPoundWeapon.SetUp(bossComponents);
             _groundPoundWeapon.SetTargetLayer(_groundPoundTargetLayers);
 
             _attackController.OnGroundPoundImpact += OnGroundPoundImpactHandler;
@@ -46,8 +48,14 @@ namespace TankLike.UnitControllers.States
         public override void OnExit()
         {
             _isActive = false;
+
             if (_attackCoroutine != null)
                 _attackController.StopCoroutine(_attackCoroutine);
+
+            if (_indicator != null)
+                _indicator.TurnOff();
+
+            ((ThreeCannonBossAnimations)_animations).Animator.speed = 1f;
         }
 
         public override void OnDispose()
@@ -77,19 +85,17 @@ namespace TankLike.UnitControllers.States
 
             ((ThreeCannonBossAnimations)_animations).Animator.speed = 1 / _groundPoundAttackDuration;
 
-            Indicator indicator = null;
-
             if (_groundPoundWeapon.IndicatorType != IndicatorEffects.IndicatorType.None)
             {
                 Vector3 indicatorSize = new Vector3(_groundPoundWeapon.ExplosionRadius * 2, 0f, _groundPoundWeapon.ExplosionRadius * 2);
-                indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_groundPoundWeapon.IndicatorType);
-                indicator.gameObject.SetActive(true);
+                _indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_groundPoundWeapon.IndicatorType);
+                _indicator.gameObject.SetActive(true);
                 var pos = _attackController.transform.position;
                 pos.y = 0.52f;
-                indicator.transform.position = pos;
-                indicator.transform.rotation = Quaternion.identity;
-                indicator.transform.localScale = indicatorSize;
-                indicator.Play();
+                _indicator.transform.position = pos;
+                _indicator.transform.rotation = Quaternion.identity;
+                _indicator.transform.localScale = indicatorSize;
+                _indicator.Play();
             }
 
             ((ThreeCannonBossAnimations)_animations).TriggerGroundPoundAnimation();
@@ -100,11 +106,11 @@ namespace TankLike.UnitControllers.States
             }
 
             _attackController.GroundPoundParticles.Play();
-            _groundPoundWeapon.OnShot(_components, _attackController.transform);
+            _groundPoundWeapon.OnShot(_attackController.transform);
 
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.GROUND_POUND);
-            if (indicator != null)
-                indicator.TurnOff();
+            if (_indicator != null)
+                _indicator.TurnOff();
 
             yield return new WaitForSeconds(_groundPoundWeapon.CoolDownTime);
 

@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "Shield", menuName = ASSET_MENU_ROOT + "Shiled")]
     public class ShieldTool : Tool
     {
         [Header("Special Values")]
@@ -31,7 +32,7 @@ namespace TankLike.Combat
         {
             base.UseTool();
             _createdShield.ActivateShield(true, _tankTransform);
-            Invoke(nameof(DeactivateShield), _duration);
+            _tank.Invoke(nameof(DeactivateShield), _duration);
         }
 
         private void DeactivateShield()

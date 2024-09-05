@@ -8,6 +8,7 @@ namespace TankLike.UnitControllers
     {
         [field: SerializeField] public Transform AnchorTransform { get; private set; }
         [SerializeField] private float _offsetRadius = 0.5f;
+
         public Vector3 Anchor
         {
             get
@@ -16,11 +17,6 @@ namespace TankLike.UnitControllers
                 Vector3 offset = new Vector3(circle.x, 0f, circle.y);
                 return AnchorTransform.position + offset;
             }
-        }
-
-        public void SetAnchor(Transform anchor)
-        {
-            AnchorTransform = anchor;
         }
     }
 }

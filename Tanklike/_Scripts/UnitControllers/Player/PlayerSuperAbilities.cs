@@ -2,12 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using TankLike.Utils;
-using TankLike.Misc;
-using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
+    using Misc;
+    using Combat;
+    using Combat.Abilities;
+    using TankLike.Utils;
+
     public class PlayerSuperAbilities : TankSuperAbilities, IInput, IDisplayedInput
     {
         [SerializeField] private PlayerSuperAbilityRecharger _abilityRecharger;
@@ -20,11 +22,22 @@ namespace TankLike.UnitControllers
         [SerializeField] private SuperAbilityHolder _superAbilityPrefab;
         [SerializeField] private ParticleSystem _superReadyEffect;
         private PlayerComponents _playerComponents;
+        private bool _consumesChargeOnSuperUse = true;
+        private BaseIndicator _currentIndicator;
 
         public void SetUp(PlayerComponents components)
         {
             _playerComponents = components;
-            AddSkill(_superAbilityPrefab);
+
+            if (_playerComponents.AbilityData != null)
+            {
+                AddSuperAbility(_playerComponents.AbilityData.GetSuperAbility());
+            }
+            else
+            {
+                AddSuperAbility(_superAbilityPrefab);
+            }
+
             GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].SetSuperAbilityChargeAmount(1f, 0);
             base.Start();
         }
@@ -48,24 +61,13 @@ namespace TankLike.UnitControllers
             playerMap.FindAction(c.Player.Shoot.name).performed -= ShootSuper;
         }
 
-        public void UpdateInput(int playerIndex)
+        public void UpdateInputDisplay(int playerIndex)
         {
-            // set the key for the ability input on the HUD
-            string key = GameManager.Instance.InputManager.GetButtonBindingKey(
-                InputManager.Controls.Player.Special.name, _playerComponents.PlayerIndex);
-            GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].SetSuperAbilityInfo(_tankSuperAbility.Ability.GetIcon(), key);
+            int superActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.Player.Special.name, playerIndex);
+
+            GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetSuperAbilityInfo(_tankSuperAbility.GetIcon(), Helper.GetInputIcon(superActionIconIndex));
         }
         #endregion
-
-        private void PlayVFX()
-        {
-            ParticleSystemHandler vfx = GameManager.Instance.VisualEffectsManager.Buffs.SuperAbility;
-            vfx.transform.parent = transform;
-            vfx.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 0f, 0f));
-            vfx.gameObject.SetActive(true);
-            vfx.Play();
-            _superReadyEffect.Stop(true);
-        }
 
         #region Hold Inputs
         private void OnHoldDown(InputAction.CallbackContext _)
@@ -80,6 +82,8 @@ namespace TankLike.UnitControllers
                 StopCoroutine(_holdCoroutine);
             }
 
+            _playerComponents.Constraints.ApplyConstraints(true, _tankSuperAbility.OnAimConstraints);
+            _currentIndicator.StartIndicator();
             // check for constraints and apply them
             _tankSuperAbility.Ability.OnAbilityHoldStart();
             _holdCoroutine = StartCoroutine(HoldRoutine());
@@ -93,6 +97,7 @@ namespace TankLike.UnitControllers
             // while the player is holding the button down and the super hasn't been fully charged for more than the cancel duration
             while (_isHolding)
             {
+                _currentIndicator.UpdateIndicator();
                 _tankSuperAbility.Ability.OnAbilityHoldUpdate();
                 yield return null;
             }
@@ -110,9 +115,11 @@ namespace TankLike.UnitControllers
                 StopCoroutine(_holdCoroutine);
             }
 
+            _playerComponents.Constraints.ApplyConstraints(false, _tankSuperAbility.OnAimConstraints);
+
+            _currentIndicator.EndIndicator();
             _isHolding = false;
             _components.Shooter.EnableShooting(true);
-            _tankSuperAbility.Ability.OnAbilityCancelled();
         }
 
         public void ShootSuper(InputAction.CallbackContext _)
@@ -130,19 +137,8 @@ namespace TankLike.UnitControllers
             }
 
             UseAbility();
-            _components.Shooter.EnableShooting(true);
         }
         #endregion
-
-        public override void AddSkill(SuperAbilityHolder ability)
-        {
-            base.AddSkill(ability);
-            UpdateInput(_playerComponents.PlayerIndex);
-            _abilityUsageDuration = ability.Ability.GetDuration();
-            _isAbilityReady = false;
-            // set up ability recharging methods
-            _abilityRecharger.SetUpRechargeMethods(ability.RechargeInfo);
-        }
 
         public override void UseAbility()
         {
@@ -151,14 +147,34 @@ namespace TankLike.UnitControllers
                 return;
             }
 
-            // disable the ability so that it can't be used until the cooldown time runs out
+            _playerComponents.Constraints.ApplyConstraints(false, _tankSuperAbility.OnAimConstraints);
+            _playerComponents.Constraints.ApplyConstraints(true, _tankSuperAbility.OnPerformConstraints);
+
             _isAbilityReady = false;
-            // activate the ability
+
             base.UseAbility();
+
+            _currentIndicator.EndIndicator();
+
             // start cooldown counter
             StartCoroutine(AbilityPerformanceTimer());
+
             PlayVFX();
-            OnSuperPerformed?.Invoke();
+
+            if (!_consumesChargeOnSuperUse)
+            {
+                EnableAbilityUsage();
+            }
+        }
+
+        private void PlayVFX()
+        {
+            ParticleSystemHandler vfx = GameManager.Instance.VisualEffectsManager.Buffs.SuperAbility;
+            vfx.transform.parent = transform;
+            vfx.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 0f, 0f));
+            vfx.gameObject.SetActive(true);
+            vfx.Play();
+            _superReadyEffect.Stop(true);
         }
 
         /// <summary>
@@ -176,8 +192,27 @@ namespace TankLike.UnitControllers
                 yield return null;
             }
 
+            //_playerComponents.Crosshair.EnableCrosshair(true);
+            _components.Shooter.EnableShooting(true);
+            _playerComponents.Constraints.ApplyConstraints(false, _tankSuperAbility.OnPerformConstraints);
             // enable recharging
             _abilityRecharger.EnableRecharging();
+        }
+
+        public override void AddSuperAbility(SuperAbilityHolder ability)
+        {
+            base.AddSuperAbility(ability);
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
+            _abilityUsageDuration = ability.Ability.GetDuration();
+            _isAbilityReady = false;
+            // set up ability recharging methods
+            _abilityRecharger.SetUpRechargeMethods(ability.RechargeInfo);
+            // set up the indicator for the ability
+            _currentIndicator = Instantiate(ability.IndicatorPrefab);
+            ability.Ability.SetUpIndicatorSpecialValues(_currentIndicator);
+
+            _currentIndicator.SetUp(_playerComponents);
+            _currentIndicator.Disable();
         }
 
         public void EnableAbilityUsage()
@@ -197,6 +232,11 @@ namespace TankLike.UnitControllers
             List<Ability> list = new List<Ability>();
             _superAbilities.ForEach(a => list.Add(a.Ability));
             return list;
+        }
+
+        public void EnableChargeConsumption(bool enable)
+        {
+            _consumesChargeOnSuperUse = enable;
         }
 
         #region IController

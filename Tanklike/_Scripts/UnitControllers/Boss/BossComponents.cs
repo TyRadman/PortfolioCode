@@ -14,12 +14,6 @@ namespace TankLike.UnitControllers
         public Vector3 RoomCenter { get; private set; }
         public Vector3 RoomSize { get; private set; }
 
-        
-        //private void Awake()
-        //{
-        //    SetUp();
-        //}
-
         public override void GetComponents()
         {
             base.GetComponents();
@@ -32,25 +26,36 @@ namespace TankLike.UnitControllers
             RoomCenter = ((BossRoom)GameManager.Instance.RoomsManager.CurrentRoom).GetSpawnPoint().position;
             RoomSize = ((BossRoom)GameManager.Instance.RoomsManager.CurrentRoom).RoomSize;
             // Setups for all components
-            TankBodyParts.SetUp();
+            TankBodyParts.SetUp(Stats);
             Movement.SetUp(this);
             Shooter.SetUp(this);
             Health.SetUp(this);
             Visuals.Setup(this);
             AIController.SetUp(this);
             AttackController.SetUp(this);
+            Health.OnDeath += OnDeathHandler;
+
+            TankBodyParts.InstantiateBodyParts();
         }
 
-        public override void OnDeath()
+        public override void OnDeathHandler(TankComponents components)
         {
-            GameManager.Instance.ScreenFreezer.FreezeScreen(GameManager.Instance.Constants.EnemyDeathFreezeData);
-            OnTankDeath?.Invoke();
+            base.OnDeathHandler(components);
+            Restart();
         }
 
         public override void Activate()
         {
             Health.Activate();
             Visuals.Activate();
+        }
+
+        public override void Restart()
+        {
+            AIController.Restart();
+            Movement.Restart();
+            AttackController.Restart();
+            Health.Restart();
         }
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+
 namespace TankLike.UnitControllers
 {
     public class PlayerInputHandler : MonoBehaviour
@@ -11,14 +12,16 @@ namespace TankLike.UnitControllers
         private bool _confirmed = false;
         [SerializeField] private PlayerTempInfoSaver _playersInfoSaver;
         private InputActionMap _lobbyActionMap;
+        private bool _isSetUp = false;
 
         public void SetUp()
         {
+            _isSetUp = true;
             Controls = new PlayerInputActions();
 
             _lobbyActionMap = Playerinputs.actions.FindActionMap(Controls.Lobby.Get().name);
-            _lobbyActionMap.FindAction(Controls.Lobby.Join.name).performed += ConfirmSelection;
-            _lobbyActionMap.FindAction(Controls.Lobby.Return.name).performed += ReturnButton;
+            _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed += ConfirmSelection;
+            _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed += ReturnButton;
             MaxConfirmationNumber++;
 
             if (MaxConfirmationNumber == 2)
@@ -62,8 +65,6 @@ namespace TankLike.UnitControllers
 
         public void ConfirmSelection(InputAction.CallbackContext _)
         {
-            print($"Confirmed at {Time.time}");
-
             if (_confirmed)
             {
                 return;
@@ -81,20 +82,15 @@ namespace TankLike.UnitControllers
             }
         }
 
-        public void Join()
-        {
-            print($"Joined at {Time.time}");
-        }
-
         private void OnDestroy()
         {
-            if(_lobbyActionMap == null)
+            if(_lobbyActionMap == null || !_isSetUp)
             {
                 return;
             }
 
-            _lobbyActionMap.FindAction("Join").performed -= ConfirmSelection;
-            _lobbyActionMap.FindAction("Return").performed -= ReturnButton;
+            _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed -= ConfirmSelection;
+            _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed -= ReturnButton;
         }
     }
 }

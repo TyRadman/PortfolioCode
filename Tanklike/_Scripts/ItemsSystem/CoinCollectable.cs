@@ -13,7 +13,9 @@ namespace TankLike.ItemsSystem
 
         public override void OnCollected(PlayerComponents player)
         {
-            GameManager.Instance.PlayersManager.AddCoins(_amount);
+            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, _amount, player.PlayerIndex);
+
+            GameManager.Instance.PlayersManager.Coins.AddCoins(_amount);
             base.OnCollected(player);
         }
 

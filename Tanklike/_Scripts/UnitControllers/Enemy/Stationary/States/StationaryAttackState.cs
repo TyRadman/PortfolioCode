@@ -2,6 +2,7 @@ using TankLike.Utils;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static TankLike.PlayersManager;
 
 namespace TankLike.UnitControllers.States
 {
@@ -10,7 +11,9 @@ namespace TankLike.UnitControllers.States
     {
         private EnemyMovement _movement;
         private Transform _target;
-        private bool _isTelegraphing;
+        [SerializeField] private bool _isImageTarget;
+        [SerializeField] private float _predictionDistance = 0;
+        private PlayerTransforms _targetTransform;
 
         private Coroutine _attackCoroutine;
 
@@ -28,20 +31,22 @@ namespace TankLike.UnitControllers.States
         public override void OnEnter()
         {
             _isActive = true;
-            _target = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
+            _target = _isImageTarget ? _shooter.GetCurrentTarget().PlayerTransform : _shooter.GetCurrentTarget().ImageTransform;
+            _targetTransform = _shooter.GetCurrentTarget();
 
             _shooter.TelegraphAttack();
-            _isTelegraphing = true;
         }
 
         public override void OnUpdate()
         {
-            _turretController.HandleTurretRotation(_target);
+            //_turretController.HandleTurretRotation(_target);
+            _turretController.HandleTurretRotation(_targetTransform.GetImageAtDistance(_predictionDistance));
         }
 
         public override void OnExit()
         {
             _isActive = false;
+            _shooter.UnsetCurrentTarget();
         }
 
         public override void OnDispose()
@@ -53,16 +58,19 @@ namespace TankLike.UnitControllers.States
         private void OnTelegraphFinishedHandler()
         {
             if (!_isActive)
+            {
                 return;
+            }
 
-            _isTelegraphing = false;
             _shooter.StartAttackRoutine(_attacksAmountRange.RandomValue(), _breakBetweenAttacks);
         }
 
         private void OnAttackFinishedHandler()
         {
             if (!_isActive)
+            {
                 return;
+            }
 
             _stateMachine.ChangeState(EnemyStateType.AIM);
         }

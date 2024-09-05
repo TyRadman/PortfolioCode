@@ -1,10 +1,11 @@
 using System.Collections;
-using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using UnitControllers;
+
+    [CreateAssetMenu(fileName = NAME_PREFIX + "Summon", menuName = ASSET_MENU_ROOT + "Summon")]
     public class SummonTool : Tool
     {
         [Header("Special Values")]
@@ -50,7 +51,7 @@ namespace TankLike.Combat
 
             _summon.gameObject.SetActive(true);
 
-            _spawnSummonCoroutine =  StartCoroutine(SpawnSummonRoutine());
+            _spawnSummonCoroutine =  _tank.StartCoroutine(SpawnSummonRoutine());
         }
 
         private IEnumerator SpawnSummonRoutine()

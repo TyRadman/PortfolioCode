@@ -10,10 +10,12 @@ namespace TankLike.UI.HUD
     {
         [SerializeField] private List<OffScreenIndicatorProfile> _players;
         [SerializeField] private List<OffScreenIcon> _indicatorIcons;
+        [SerializeField] private Transform _indicatorsParent;
         private Camera _camera;
         [SerializeField] private float _offset = 10f;
         [SerializeField] private float _lerpSpeed = 5f;
         private bool _isActive = false;
+        private List<OffScreenIndicatorProfile> _targets = new List<OffScreenIndicatorProfile>();
 
         private void Awake()
         {
@@ -22,61 +24,58 @@ namespace TankLike.UI.HUD
 
         public void SetUp()
         {
-            // enable the off-screen detection only if there are multiple players
-            if (PlayersManager.PlayersCount > 1)
+        }
+
+        /// <summary>
+        /// Adds a new target for the off screen indicator manager to keep track of.
+        /// </summary>
+        /// <param name="profile"></param>
+        public void AddTarget(OffScreenIndicatorProfile profile)
+        {
+            _targets.Add(profile);
+
+            if(profile.Icon == null)
             {
-                _isActive = true;
-                _players = new List<OffScreenIndicatorProfile>();
-
-                for (int i = 0; i < PlayersManager.PlayersCount; i++)
-                {
-                    Transform playerTransform = GameManager.Instance.PlayersManager.GetPlayer(i).transform;
-                    
-                    _players.Add(new OffScreenIndicatorProfile()
-                    {
-                        PlayerTransform = playerTransform,
-                        FollowPlayer = true,
-                        Icon = _indicatorIcons[i]
-                    });
-
-                    _players[i].Icon.SetColor(GameManager.Instance.PlayersManager.GetPlayerColor(i));
-                }
+                profile.Icon = Instantiate(profile.IconPrefab, _indicatorsParent);
             }
         }
 
+        public void RemoveTarget(OffScreenIndicatorProfile profile)
+        {
+            _targets.Remove(profile);
+        }
+
+        // TODO: run it manually if there are two players. Remove the update function
         private void Update()
         {
-            if (!_isActive)
+            for (int i = 0; i < _targets.Count; i++)
             {
-                return;
-            }
-
-            for (int i = 0; i < 2; i++)
-            {
-                DetectPlayer(i);
+                DetectTarget(_targets[i]);
             }
         }
 
-        private void DetectPlayer(int playerIndex)
+        private void DetectTarget(OffScreenIndicatorProfile targetProfile)
         {
-            if (!_players[playerIndex].FollowPlayer)
+            if (!targetProfile.FollowTarget)
             {
                 return;
             }
 
-            OffScreenIndicatorProfile player = _players[playerIndex];
-            Vector3 screenPosition = _camera.WorldToScreenPoint(player.PlayerTransform.position);
+            // get the target's screen position
+            Vector3 screenPosition = _camera.WorldToScreenPoint(targetProfile.TargetTransform.position);
 
             if (screenPosition.z > 0 && !IsInCameraView(screenPosition))
             {
-                Transform icon = player.Icon.transform;
+                Transform icon = targetProfile.Icon.transform;
 
-                if (!player.IsShown)
+                if (!targetProfile.IsShown)
                 {
-                    player.IsShown = true;
-                    player.Icon.ShowIcon();
-                    // snap it to the desired position so that the players don't see it moving from across the screen with the lerp
+                    targetProfile.IsShown = true;
+
+                    targetProfile.Icon.ShowIcon();
+
                     icon.position = ClampToScreen(screenPosition);
+
                     return;
                 }
 
@@ -88,20 +87,30 @@ namespace TankLike.UI.HUD
             }
             else
             {
-                if (player.IsShown)
+                if (targetProfile.IsShown)
                 {
-                    player.IsShown = false;
-                    player.Icon.HideIcon();
+                    targetProfile.IsShown = false;
+                    targetProfile.Icon.HideIcon();
                 }
             }
         }
 
+        /// <summary>
+        /// Checks if an object's screen position is within the screen
+        /// </summary>
+        /// <param name="position"></param>
+        /// <returns></returns>
         private bool IsInCameraView(Vector3 position)
         {
             return position.x > 0 && position.x < Screen.width &&
                 position.y > 0 && position.y < Screen.height;
         }
 
+        /// <summary>
+        /// Ensures a position value is within the screen with a given offset
+        /// </summary>
+        /// <param name="position"></param>
+        /// <returns></returns>
         private Vector3 ClampToScreen(Vector3 position)
         {
             position.x = Mathf.Clamp(position.x, _offset, Screen.width - _offset);
@@ -123,11 +132,35 @@ namespace TankLike.UI.HUD
                 return;
             }
 
-            _players[playerIndex].FollowPlayer = enableOffScreenIndicator;
+            _players[playerIndex].FollowTarget = enableOffScreenIndicator;
 
             if(!enableOffScreenIndicator && _players[playerIndex].IsShown)
             {
                 _players[playerIndex].Icon.HideIcon();
+            }
+        }
+
+        public void Enable(bool enable)
+        {
+            _isActive = enable;
+
+            if(!_isActive)
+            {
+                ForceHideIcons();
+            }
+        }
+
+        private void ForceHideIcons()
+        {
+            for (int i = 0; i < _players.Count; i++)
+            {
+                OffScreenIndicatorProfile player = _players[i];
+
+                if(player.IsShown)
+                {
+                    player.IsShown = false;
+                    player.Icon.HideIcon(2f);
+                }
             }
         }
     }

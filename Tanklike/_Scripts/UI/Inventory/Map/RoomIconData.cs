@@ -26,5 +26,10 @@ namespace TankLike.UI.Map
             GateIcons.ForEach(i => i.SetActive(true));
             RoomIcon.SetActive(true);
         }
+
+        public Vector3 GetRoomIconLocalPosition()
+        {
+            return RoomIcon.GetComponent<RectTransform>().localPosition;
+        }
     }
 }

@@ -27,16 +27,24 @@ namespace TankLike.UnitControllers
         [SerializeField] private ParticleSystem _holdChargeEffect;
         [SerializeField] private ParticleSystem _holdReadyEffect;
         [SerializeField] private ParticleSystem _holdReleaseEffect;
-        private HoldAbilityHolder _Ability;
-        [SerializeField] protected bool _isActive;
+        private HoldAbilityHolder _currentAbilityHolder;
 
         public bool IsActive { get; private set; }
 
         public void SetUp()
         {
             SetUpInput(_components.PlayerIndex);
-            _isActive = false;
-            AddHoldDownSkill(_holdSkillPrefab);
+            IsActive = false;
+
+            if (_components.AbilityData != null)
+            {
+                AddHoldDownSkill(_components.AbilityData.GetHoldAbility());
+            }
+            else
+            {
+                AddHoldDownSkill(_holdSkillPrefab);
+            }
+
             _bar.SetUp();
             _bar.SetTotalAmount(0f);
         }
@@ -58,18 +66,19 @@ namespace TankLike.UnitControllers
             playerMap.FindAction(c.Player.Hold.name).canceled -= OnHoldUp;
         }
 
-        public void UpdateInput(int playerIndex)
+        public void UpdateInputDisplay(int playerIndex)
         {
             // set the input key for the hold action
-            string key = GameManager.Instance.InputManager.GetButtonBindingKey(
-                InputManager.Controls.Player.Hold.name, _components.PlayerIndex);
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownInfo(_Ability.Ability.GetIcon(), key);
+            int holdActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.Player.Hold.name, playerIndex);
+
+            // TODO: Skill tree fixes
+            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownInfo(_currentAbilityHolder.GetIcon(), Helper.GetInputIcon(holdActionIconIndex));
         }
         #endregion
 
         private void OnHoldDown(InputAction.CallbackContext context)
         {
-            if (!_isActive)
+            if (!IsActive)
             {
                 return;
             }
@@ -84,12 +93,17 @@ namespace TankLike.UnitControllers
 
         private void OnHoldUp(InputAction.CallbackContext context)
         {
+            if (!IsActive)
+            {
+                return;
+            }
+
             _holdChargeEffect.Stop();
 
             if (_successfulHold)
             {
-                _currentOnHoldAbility.OnActivateAbility();
-                _overHeat.AddShotBars(-1);
+                _currentOnHoldAbility.PerformAbility();
+                _overHeat.ReduceAmmoBarByOne();
                 _holdReadyEffect.Stop();
                 _holdReleaseEffect.Play();
             }
@@ -150,17 +164,18 @@ namespace TankLike.UnitControllers
 
         public void AddHoldDownSkill(HoldAbilityHolder ability)
         {
-            _Ability = ability;
-            _currentOnHoldAbility = Instantiate(ability.Ability);
-            UpdateInput(_components.PlayerIndex);
-            _onHoldDownSkills.Add(_currentOnHoldAbility);
-            _currentOnHoldAbility.SetUp(transform);
-            _holdDuration = ability.HoldDownDuration;
-
-            if (_currentOnHoldAbility != null)
+            if(ability == null || ability.Ability == null)
             {
-                _isActive = true;
+                Debug.LogError($"No ability passed");
+                return;
             }
+
+            _currentAbilityHolder = Instantiate(ability);
+            _currentOnHoldAbility = Instantiate(_currentAbilityHolder.Ability);
+            UpdateInputDisplay(_components.PlayerIndex);
+            _onHoldDownSkills.Add(_currentOnHoldAbility);
+            _currentOnHoldAbility.SetUp(_components);
+            _holdDuration = ability.HoldDownDuration;
         }
 
         public Ability GetHoldDownSkill()
@@ -200,9 +215,9 @@ namespace TankLike.UnitControllers
 
         public void Enable(bool enable)
         {
-            _isActive = enable;
+            IsActive = enable;
 
-            if (!_isActive)
+            if (!IsActive)
             {
                 ForceStopHoldAction();
             }

@@ -8,13 +8,13 @@ using System.Linq;
 
 namespace TankLike
 {
-    public class EnemiesManager : MonoBehaviour
+    public class EnemiesManager : MonoBehaviour, IManager
     {
         [Header("Settings")]
         [SerializeField] private Vector2Int _wavesRange;
         [SerializeField] private bool _spawnEnemies = true;
         private Dictionary<EnemyType, Pool<EnemyAIController>> _enemiesPools = new Dictionary<EnemyType, Pool<EnemyAIController>>();
-        [SerializeField] private List<EnemyAIController> _spawnedEnemies = new List<EnemyAIController>();
+        [SerializeField] private List<Transform> _spawnedEnemies = new List<Transform>();
         [SerializeField] private WaveData[] _tutorialWaves;
         [SerializeField] private List<WaveData> _wavesToSpawn = new List<WaveData>();
         [SerializeField] private Vector2Int _roomsWithEnemiesNumberRange;
@@ -22,30 +22,50 @@ namespace TankLike
         [SerializeField] private AnimationCurve _progressionCurve;
         [SerializeField] private int _currentMinProgression = 0;
         [SerializeField] private int _currentWaveIndex = 0;
+
         [field: SerializeField, Range(0f, 1f)] public float Difficulty { get; private set; }
+        public bool IsActive { get; private set; }
 
         private EnemiesDatabase _enemiesDatabase;
         [SerializeField] private List<WaveData> _waves;
 
-        private Dictionary<EnemyType, Pool<EnemyParts>> _enemyPartsPools = new Dictionary<EnemyType, Pool<EnemyParts>>();
+        private Dictionary<EnemyType, Pool<UnitParts>> _enemyPartsPools = new Dictionary<EnemyType, Pool<UnitParts>>();
 
-        public void SetUp(EnemiesDatabase enemiesDatabase)
+        private bool _fightActivated;
+
+        public void SetReferences(EnemiesDatabase enemiesDatabase)
         {
             _enemiesDatabase = enemiesDatabase;
+        }
+
+        #region IManager
+        public void SetUp()
+        {
+            IsActive = true;
+
+            _waves = GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().Waves;
+            _wavesCapacityRange = new Vector2Int(_waves.OrderBy(w => w.Capacity).First().Capacity,
+                _waves.OrderByDescending(w => w.Capacity).First().Capacity);
+
+            InitPools();
 
             if (!_spawnEnemies)
             {
                 return;
             }
 
-            _waves = GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().Waves;
-            _wavesCapacityRange = new Vector2Int(_waves.OrderBy(w => w.Capacity).First().Capacity,
-                _waves.OrderByDescending(w => w.Capacity).First().Capacity);
-            InitPools();
             CreateWaves();
         }
 
-        private void CreateWaves()
+        public void Dispose()
+        {
+            IsActive = false;
+
+            DisposePools();
+        }
+        #endregion
+
+        public void CreateWaves()
         {
             int numberOfWaves = GameManager.Instance.RoomsManager.Rooms.Count(r => r.RoomType == RoomType.Normal);
 
@@ -78,6 +98,8 @@ namespace TankLike
             
             // ones the waves (as data, not as spawned enemies) is created, add the key holders to it
             GameManager.Instance.BossKeysManager.DistributeKeysAcrossRemainingRooms(_wavesToSpawn);
+            // set the game difficulty
+            SetDifficulty(GameManager.Instance.PlayersTempInfoSaver.GameDifficulty);
         }
 
         /// <summary>
@@ -132,6 +154,22 @@ namespace TankLike
             }
         }
 
+        private void DisposePools()
+        {
+            foreach (KeyValuePair<EnemyType, Pool<EnemyAIController>> enemy in _enemiesPools)
+            {
+                enemy.Value.Clear();
+            }
+
+            foreach (KeyValuePair<EnemyType, Pool<UnitParts>> enemyParts in _enemyPartsPools)
+            {     
+                 enemyParts.Value.Clear();
+            }
+
+            _enemiesPools.Clear();
+            _enemyPartsPools.Clear();
+        }
+
         private Pool<EnemyAIController> CreateEnemyPool(EnemyData enemyData)
         {
             var pool = new Pool<EnemyAIController>(
@@ -149,57 +187,51 @@ namespace TankLike
             return pool;
         }
 
-        private Pool<EnemyParts> CreateEnemyPartsPool(EnemyData enemyData)
+        private Pool<UnitParts> CreateEnemyPartsPool(EnemyData enemyData)
         {
-            var pool = new Pool<EnemyParts>(
+            var pool = new Pool<UnitParts>(
                 () =>
                 {
                     var obj = Instantiate(enemyData.PartsPrefab);
                     GameManager.Instance.SetParentToSpawnables(obj.gameObject);
-                    return obj.GetComponent<EnemyParts>();
+                    return obj.GetComponent<UnitParts>();
                 },
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().OnRequest(),
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().OnRelease(),
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().Clear(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().OnRequest(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().OnRelease(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().Clear(),
                 0
             );
             return pool;
         }
         #endregion
 
-        public EnemyParts GetEnemyPartsByType(EnemyType type)
+        public UnitParts GetEnemyPartsByType(EnemyType type)
         {
-            EnemyParts parts = _enemyPartsPools[type].RequestObject(Vector3.zero, Quaternion.identity);
+            UnitParts parts = _enemyPartsPools[type].RequestObject(Vector3.zero, Quaternion.identity);
             return parts;
         }
 
         public EnemyAIController SpawnEnemyAtPoint(EnemyType type, Vector3 point)
         {
-            EnemyData data = null;
-
-            foreach (var stat in _enemiesDatabase.GetAllEnemies())
-            {
-                if(stat.EnemyType == type)
-                {
-                    data = stat;
-                    break;
-                }
-            }
-
-            Vector3 pos = point;
-            pos.y = data.SpawnYOffset;
             EnemyAIController enemy = _enemiesPools[type].RequestObject(Vector3.zero, Quaternion.identity);
-            enemy.transform.position = pos;
+
+            enemy.transform.position = point;
+
             enemy.gameObject.SetActive(true);
 
-            _spawnedEnemies.Add(enemy);
+            _spawnedEnemies.Add(enemy.transform);
 
             return enemy;
         }
 
-        public void RemoveEnemy(EnemyAIController enemy)
+        public void AddEnemy(TankComponents enemy)
         {
-            _spawnedEnemies.Remove(enemy);
+            _spawnedEnemies.Add(enemy.transform);
+        }
+
+        public void RemoveEnemy(TankComponents enemy)
+        {
+            _spawnedEnemies.Remove(enemy.transform);
         }
 
         public List<Transform> GetSpawnedEnemies()
@@ -213,7 +245,7 @@ namespace TankLike
         {
             for (int i = _spawnedEnemies.Count - 1; i >= 0; i--)
             {
-                ((EnemyHealth)_spawnedEnemies[i].Components.Health).Die();
+                _spawnedEnemies[i].GetComponent<TankComponents>().Health.Die();
             }
         }
 
@@ -235,6 +267,16 @@ namespace TankLike
         public bool SpawnEnemies()
         {
             return _spawnEnemies;
+        }
+
+        public void SetFightActivated(bool value)
+        {
+            _fightActivated = value;
+        }
+
+        public bool IsFightActivated()
+        {
+            return _fightActivated;
         }
     }
 }

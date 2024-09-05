@@ -7,105 +7,101 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    public abstract class Ability : Skill
+    public abstract class Ability : ScriptableObject
     {
         /// <summary>
         /// The prefix of the asset
         /// </summary>
         public const string PREFIX = "Ability_";
 
-
-        [field: SerializeField] public AbilityConstraint Constraints { get; private set; }
         [Header("Values")]
-        public SkillTag SkillTag;
         [SerializeField][Range(0.5f, 20)] protected float _duration = 0.5f;
         [SerializeField] protected float _coolDown = 3f;
         [SerializeField] private bool _canHoldAbility;
         [SerializeField] private ScreenFreezeData _freezeData;
+
         protected Transform _tank;
         protected TankComponents _components;
 
-        public override void SetUp(Transform tankTransform)
+        public virtual void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
-
-            _tank = tankTransform;
-            _components = tankTransform.GetComponent<TankComponents>();
-            TankComponents tank = tankTransform.GetComponent<TankComponents>();
-            // set the ability's constraints to the tank
-            tank.SuperAbility.SetConstraints(Constraints);
-        }
-
-        public virtual void SetUpAbility(float holdAmount)
-        {
-
+            _tank = components.transform;
+            _components = components;
         }
 
         /// <summary>
-        /// Starts the skill
+        /// Starts the ability
         /// </summary>
-        public virtual void OnActivateAbility()
+        public virtual void PerformAbility()
         {
+            // TODO: Remove from base class and implement it on each derivitive
             if (_freezeData != null)
             {
                 GameManager.Instance.ScreenFreezer.FreezeScreen(_freezeData);
             }
         }
         
+        /// <summary>
+        /// Called when the ability hold-down starts
+        /// </summary>
         public virtual void OnAbilityHoldStart()
         {
 
         }
 
         /// <summary>
-        /// Called during the coroutine of the super ability hold down
+        /// Called during the coroutine of the super ability hold down.
         /// </summary>
         public virtual void OnAbilityHoldUpdate()
         {
 
         }
 
+        /// <summary>
+        /// Called when the ability finishes performing.
+        /// </summary>
         public virtual void OnAbilityFinished()
         {
 
         }
 
-        public virtual void OnAbilityCancelled()
+        /// <summary>
+        /// Called when the ability is interrupted.
+        /// </summary>
+        public virtual void OnAbilityInterrupted()
         {
 
         }
 
         /// <summary>
-        /// Called once the skill has finished 
+        /// Returns the duration of the ability.
         /// </summary>
-        public virtual void DeactivateAbility()
-        {
-
-        }
-
-        public float GetCoolDownTime()
-        {
-            return _coolDown;
-        }
-
-        public float GetDuration()
+        /// <returns></returns>
+        public virtual float GetDuration()
         {
             return _duration;
         }
 
-        public virtual void SetDuration()
+        /// <summary>
+        /// Sets up the indicator by setting values that the ability has.
+        /// </summary>
+        /// <param name="indicator"></param>
+        public virtual void SetUpIndicatorSpecialValues(BaseIndicator indicator)
         {
 
         }
 
-        public void ApplyConstraints(bool apply)
+        /// <summary>
+        /// Disposes the ability and all its dependencies.
+        /// </summary>
+        public virtual void Dispose()
         {
-            _components.Constraints.ApplyConstraints(apply, Constraints);
+
+        }
+
+        private void OnDestroy()
+        {
+            Dispose();
         }
     }
-}
-
-public enum SkillTag
-{
-    ShotGun = 0, Brock = 1, CustomShot = 2
 }

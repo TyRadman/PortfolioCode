@@ -12,13 +12,31 @@ namespace TankLike.UnitControllers
         private ThreeCannonBossAnimations _animations;
 
         private Coroutine _deathEffectCoroutine;
+        public System.Action<int, int> OnTakeDamage;
+        private BossComponents _bossComponents;
+        // TODO: should be the parameter passed for OnDeath
+        public System.Action<BossComponents> OnBossDeath;
 
         public override void SetUp(TankComponents components)
         {
             base.SetUp(components);
+            _bossComponents = (BossComponents)components;
             _animations = (ThreeCannonBossAnimations)((BossComponents)components).Animations;
 
             GameManager.Instance.HUDController.BossHUD.SetupHealthBar(_maxHealth);
+
+            SetUpSubscriptions();
+        }
+
+        private void SetUpSubscriptions()
+        {
+            OnTakeDamage = GameManager.Instance.HUDController.BossHUD.UpdateHealthBar;
+
+            OnBossDeath += GameManager.Instance.ReportManager.ReportBossKill;
+            OnBossDeath += GameManager.Instance.BossesManager.RemoveBoss;
+            OnBossDeath += GameManager.Instance.EnemiesManager.RemoveEnemy;
+            OnBossDeath += a => GameManager.Instance.HUDController.BossHUD.Enable(false);
+            OnDeath += GameManager.Instance.ResultsUIController.DisplayVictoryScreen;
         }
 
         public override void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
@@ -29,19 +47,26 @@ namespace TankLike.UnitControllers
             }
 
             base.TakeDamage(damage, direction, shooter, bulletPosition);
-            GameManager.Instance.HUDController.BossHUD.UpdateHealthBar(_currentHealth, _maxHealth);
-            //GameManager.Instance.CameraManager.ShakeCamera(CameraShakeType.HIT);
-            // recharge ability if there's an event subscribed
+
+            OnTakeDamage?.Invoke(_currentHealth, _maxHealth);
         }
 
         public override void Die()
         {
             _canTakeDamage = false;
             _animations.TriggerDeathAnimation();
-            GameManager.Instance.ReportManager.ReportBossKill((BossData)_stats, _playerIndex);
-            GameManager.Instance.BossesManager.RemoveBoss((BossComponents)_components);
-            GameManager.Instance.HUDController.BossHUD.Enable(false);
-            OnDeath?.Invoke();
+            OnDeath?.Invoke(_components);
+
+            OnBossDeath?.Invoke(_bossComponents);
+            
+            RemoveSubscriptions();
+        }
+
+        private void RemoveSubscriptions()
+        {
+            OnBossDeath = null;
+            OnTakeDamage = null;
+            OnDeath = null;
         }
 
         public void ExplodeParts()
@@ -49,30 +74,11 @@ namespace TankLike.UnitControllers
             // Return to pool if we're using pooling
             Destroy(gameObject);
 
-            if (_explodeOnDeath)
-            {
-                var parts = GameManager.Instance.BossesManager.GetBossPartsByType(((BossData)_stats).BossType);
-                parts.transform.position = transform.position;
-                parts.transform.rotation = transform.rotation;
-                parts.gameObject.SetActive(true);
-                parts.StartExplosion(_explosionForce, _explosionRadius, _upwardsModifier, _turret.rotation, _body.rotation, bossPreShrink: true);
-            }
+            _components.TankBodyParts.HandlePartsExplosion((BossData)_stats);
+            _components.VisualEffects.PlayDeathEffects();
 
-            // explosion and camera effects (MUTUAL)
-            var explosion = GameManager.Instance.VisualEffectsManager.Explosions.DeathExplosion;
-            explosion.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
-            explosion.transform.localScale *= 3f;
-            explosion.gameObject.SetActive(true);
-            explosion.Play();
-            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.EXPLOSION);
-
-            var decal = GameManager.Instance.VisualEffectsManager.Explosions.ExplosionDecal;
-            float randomAngle = Random.Range(0f, 360f);
-            Quaternion randomRotation = Quaternion.Euler(0f, randomAngle, 0f);
-            decal.transform.SetPositionAndRotation(transform.position + Vector3.up * _explosionDecalheight, randomRotation);
-            decal.transform.localScale = _explosionDecalSize;
-            decal.gameObject.SetActive(true);
-            decal.Play();
-        }   
+            // Switch back to the level BG music
+            GameManager.Instance.BossesManager.SwitchBackBGMusic();
+        }
     }
 }

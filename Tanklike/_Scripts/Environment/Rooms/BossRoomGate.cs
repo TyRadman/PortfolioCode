@@ -25,19 +25,8 @@ namespace TankLike.Environment
         private const string OPEN_DOOR_ANIMATION_NAME = "Open";
         private const float BREAK_BETWEEN_ANIMATION_STATES= 0.2f;
 
-        public void PlaceKeys(int playerIndex)
-        {
-            if (GameManager.Instance.BossKeysManager.HasEnoughKeys())
-            {
-                _interactableArea.StopInteraction();
-                _interactableArea.EnableInteraction(false);
-                StartCoroutine(SnapKeysRoutine(playerIndex));
-            }
-            else
-            {
-                GameManager.Instance.InteractableAreasManager.SetFeedbackText(NOT_ENOUGH_KEYS_MESSAGE, playerIndex);
-            }
-        }
+        private BossKeysManager _keysManager;
+
 
         public override void Setup(bool roomHasEnemies, Room parentRoom)
         {
@@ -50,7 +39,17 @@ namespace TankLike.Environment
             _parentRoom = parentRoom;
             InstantiateKeys();
             _interactableArea.EnableInteraction(true);
-            GameManager.Instance.BossKeysManager.SetBossRoomGate(this);
+
+            _keysManager = GameManager.Instance.BossKeysManager;
+
+            if(_keysManager == null)
+            {
+                Debug.LogError("No boss keys manager in the game manager.");
+                return;
+            }
+
+            _keysManager.SetBossRoomGate(this);
+
             _openGateAnimationEvent.OnEventFired += OnGateOpenedHandler;
         }
 
@@ -68,9 +67,32 @@ namespace TankLike.Environment
             }
         }
 
+        public void PlaceKeys(int playerIndex)
+        {
+            if (_keysManager == null)
+            {
+                Debug.LogError("No boss keys manager in the game manager.");
+                return;
+            }
+
+            if (GameManager.Instance.BossKeysManager.HasEnoughKeys())
+            {
+                _interactableArea.StopInteraction();
+                _interactableArea.EnableInteraction(false);
+                StartCoroutine(SnapKeysRoutine(playerIndex));
+            }
+            else
+            {
+                int collectedKeysCount = _keysManager.GetCollectedKeysCount();
+                int requiredKeysCount = _keysManager.GetRequiredKeysCount();
+                string message = NOT_ENOUGH_KEYS_MESSAGE + $" ({collectedKeysCount}/{requiredKeysCount})";
+                GameManager.Instance.InteractableAreasManager.SetFeedbackText(message, playerIndex);
+            }
+        }
+
         private void OnGateOpenedHandler()
         {
-            foreach (var mesh in _gateMeshes)
+            foreach (GameObject mesh in _gateMeshes)
             {
                 mesh.SetActive(false);
             }

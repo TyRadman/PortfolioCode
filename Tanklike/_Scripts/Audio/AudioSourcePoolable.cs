@@ -8,7 +8,7 @@ namespace TankLike.Sound
     public class AudioSourcePoolable : MonoBehaviour, IPoolable
     {
         [SerializeField] private AudioSource _source;
-        private Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
 
         private void ResetAudioSource()
         {
@@ -30,7 +30,7 @@ namespace TankLike.Sound
         #region Pool
         public void Clear()
         {
-            throw new NotImplementedException();
+            Destroy(gameObject);
         }
 
         public void Init(Action<IPoolable> onRelease)
@@ -45,7 +45,6 @@ namespace TankLike.Sound
 
         public void OnRequest()
         {
-            throw new NotImplementedException();
         }
 
         public void TurnOff()

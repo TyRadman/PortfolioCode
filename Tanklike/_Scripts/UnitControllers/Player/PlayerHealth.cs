@@ -11,6 +11,11 @@ namespace TankLike.UnitControllers
         {
             base.SetUp(components);
             GameManager.Instance.HUDController.PlayerHUDs[((PlayerComponents)_components).PlayerIndex].SetupHealthBar(_maxHealth);
+
+            if (GameManager.Instance.PlayersManager != null)
+            {
+                OnDeath += GameManager.Instance.PlayersManager.ReportPlayerDeath;
+            }
         }
 
         public override void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
@@ -30,7 +35,7 @@ namespace TankLike.UnitControllers
         {
             base.Die();
             gameObject.SetActive(false);
-            GameManager.Instance.PlayersManager.ReportPlayerDeath(((PlayerComponents)_components).PlayerIndex);
+            _components.TankBodyParts.HandlePartsExplosion((PlayerData)_stats);
         }
 
         public override void Heal(int amount)

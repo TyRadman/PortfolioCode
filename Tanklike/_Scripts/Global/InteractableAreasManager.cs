@@ -1,58 +1,119 @@
-using TankLike.UI.SkillTree;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Environment;
-using TankLike.UI;
-using TankLike.UI.Inventory;
 
 namespace TankLike
 {
-    public class InteractableAreasManager : MonoBehaviour
+    using Environment;
+    using UI;
+    using UI.Workshop;
+    using UI.InGame;
+    using TankLike.Utils;
+
+    public class InteractableAreasManager : MonoBehaviour, IManager
     {
         [Header("Areas Screens")]
         [SerializeField] private WorkShopTabsNavigatable _workshop;
         [SerializeField] private ToolsNavigator _toolsShop;
         [SerializeField] private InteractableTextBox _textBoxPrefab;
-        private List<InteractableTextBox> _boxes = new List<InteractableTextBox>();
+        [SerializeField] private InteractableMenuNavigatable _interactableMenuPrefab;
 
+        public bool IsActive { get; private set; }
+
+        private InteractableTextBox _textBox;
+        private InteractableMenuNavigatable _interactableMenu;
+
+        #region IManager
         public void SetUp()
         {
-            // create text boxes
-            for (int i = 0; i < GameManager.Instance.PlayersManager.GetPlayersCount(); i++)
-            {
-                InteractableTextBox box = Instantiate(_textBoxPrefab, transform);
-                box.gameObject.SetActive(false);
-                _boxes.Add(box);
-            }
+            IsActive = true;
+
+            InteractableTextBox box = Instantiate(_textBoxPrefab, transform);
+            box.gameObject.SetActive(false);
+            _textBox = box;
+
+            _interactableMenu = Instantiate(_interactableMenuPrefab);
+            _interactableMenu.gameObject.SetActive(false);
         }
 
-        public void ActivateTextBox(Transform buttonDisplayPosition, string interactionText, int playerIndex)
+        public void Dispose()
         {
-            _boxes[playerIndex].gameObject.SetActive(true);
-            _boxes[playerIndex].SetInteractionText(interactionText);
-            _boxes[playerIndex].SetPosition(buttonDisplayPosition);
-            _boxes[playerIndex].PlayOpenAnimation(true);
+            IsActive = false;
+
+            Destroy(_textBox.gameObject);
+            Destroy(_interactableMenu.gameObject);
+
+            _textBox = null;
+            _interactableMenu = null;
+        }
+        #endregion
+
+        public void ActivateTextBox(Transform buttonDisplayPosition, string interactionText)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            _textBox.gameObject.SetActive(true);
+            _textBox.SetInteractionText(interactionText);
+            _textBox.SetPosition(buttonDisplayPosition);
+            _textBox.PlayOpenAnimation(true);
         }
 
         public void SetFeedbackText(string text, int playerIndex)
         {
-            _boxes[playerIndex].SetFeedbackText(text);
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            _textBox.SetFeedbackText(text);
         }
 
-        public void DeactivateTextBox(int playerIndex)
+        public void DeactivateTextBox(int playerIndex = 0)
         {
-            _boxes[playerIndex].PlayOpenAnimation(false);
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            _textBox.PlayOpenAnimation(false);
         }
 
         public void OpenShop(int playerIndex)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             _toolsShop.Open(playerIndex);
         }
 
         public void OpenWorkshop(int playerIndex)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             _workshop.Open(playerIndex);
+        }
+
+        public InteractableMenuNavigatable GetInteractableMenu()
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return null;
+            }
+
+            return _interactableMenu;
         }
     }
 }

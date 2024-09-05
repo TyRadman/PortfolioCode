@@ -5,17 +5,28 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.UI.PauseMenu
 {
-    public class PauseMenuManager : MonoBehaviour
+    using TankLike.Sound;
+    using TankLike.Utils;
+    using UI.Signifiers;
+    using UnityEngine.SceneManagement;
+
+    public class PauseMenuManager : MonoBehaviour, ISignifiersDisplayer
     {
         [SerializeField] private GameObject _content;
         [SerializeField] private List<GameObject> _panels;
         [SerializeField] private MenuSelectable _firstSelectedItem;
         [Header("Panels")]
         [SerializeField] private PauseMenuSettings _settingsPanel;
+        [SerializeField] private UIActionSignifiersController _menuActionSignifiersController;
         private float _lastTimeScale;
         private MenuSelectable _currentSelectable;
         private bool _isPaused = false;
         private int _currentPlayerIndex = -1;
+
+        public ISignifierController SignifierController { get; set; }
+
+        private const string RETURN_ACTION_TEXT = "Return";
+        private const string SUBMIT_ACTION_TEXT = "Select";
 
         private void Awake()
         {
@@ -26,9 +37,8 @@ namespace TankLike.UI.PauseMenu
 
         public void SetUp()
         {
-
+            SignifierController = _menuActionSignifiersController;
         }
-
 
         public void Select()
         {
@@ -47,6 +57,10 @@ namespace TankLike.UI.PauseMenu
                 return;
             }
 
+            // Play navigate menu audio
+            AudioManager audioManager = GameManager.Instance.AudioManager;
+            audioManager.Play(audioManager.UIAudio.NavigateMenuAudio);
+
             _currentSelectable.InvokeAction(direction);
         }
 
@@ -56,6 +70,10 @@ namespace TankLike.UI.PauseMenu
         }
 
         #region Button Methods
+        /// <summary>
+        /// Button method: dehighlights the current button and highlight the button passed.
+        /// </summary>
+        /// <param name="cell"></param>
         public void HighLightSelectable(MenuSelectable cell)
         {
             // dehighlight the previous cell
@@ -65,6 +83,10 @@ namespace TankLike.UI.PauseMenu
             cell.Highlight(true);
         }
 
+        /// <summary>
+        /// Hides the HUD, displays the pause menu, and freezes time.
+        /// </summary>
+        /// <param name="playerIndex"></param>
         public void PauseGame(int playerIndex)
         {
             if (_isPaused)
@@ -76,7 +98,8 @@ namespace TankLike.UI.PauseMenu
             GameManager.Instance.PlayersManager.EnablePauseInputForSecondPlayer(playerIndex, false);
             // set the current player index to all the panels
             SetPlayerIndex(playerIndex);
-            // display the first panel by default (resume, settings, exit)
+            SetUpActionSignifiers(SignifierController);
+
             EnableFirstPanel();
             // stop time
             GameManager.Instance.ScreenFreezer.PauseFreeze();
@@ -84,16 +107,11 @@ namespace TankLike.UI.PauseMenu
             Time.timeScale = 0f;
             // show the pause menu
             _content.SetActive(true);
+
             // hide HUD
-            //FIX UI handling
             GameManager.Instance.HUDController.EnableHUD(false);
-            // show the pause menu content 
-            _content.SetActive(true);
             // disable player input and enable UI input
-            GameManager.Instance.InputManager.EnableUIInput(true);
-            // highlight the first button in the list (the resume button)
-            _currentSelectable = _firstSelectedItem;
-            _currentSelectable.Highlight(true);
+            GameManager.Instance.InputManager.EnableUIInput();
             _isPaused = true;
         }
 
@@ -104,8 +122,6 @@ namespace TankLike.UI.PauseMenu
                 return;
             }
 
-            // enable the other player's input
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
             // resume the time scale the way it was before 
             Time.timeScale = _lastTimeScale;
             GameManager.Instance.ScreenFreezer.ResumeFreeze();
@@ -117,22 +133,87 @@ namespace TankLike.UI.PauseMenu
             // hide the pause menu content
             _content.SetActive(false);
             // enable the player input and disable the UI input
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
+            GameManager.Instance.InputManager.EnablePlayerInput();
             _isPaused = false;
+            _menuActionSignifiersController.ClearAllSignifiers();
         }
+
+        public void GoToMainMenu()
+        {
+            GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnablePauseMenuController(false);
+            GameManager.Instance.ConfirmPanel.Init(_currentPlayerIndex, LoadFirstScene, OnConfirmPanelClose, "Go to main menu?");
+        }
+
+        public void OnConfirmPanelClose()
+        {
+            GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnablePauseMenuController(true);
+        }
+
+        public void LoadFirstScene()
+        {
+            Time.timeScale = _lastTimeScale;
+            GameManager.Instance.ScreenFreezer.ResumeFreeze();
+
+            StartCoroutine(LoadFirstSceneRoutine());
+        }
+
+        private IEnumerator LoadFirstSceneRoutine()
+        {
+            GameManager.Instance.FadeUIController.StartFadeIn();
+            yield return new WaitForSeconds(GameManager.Instance.FadeUIController.FadeInDuration);
+
+            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            {
+                GameManager.Instance.PlayersManager.GetPlayer(i).Restart();
+            }
+
+            if (DontDestroy.i != null)
+            {
+                DontDestroy.i.ResetInputParent();
+            }
+
+            SceneManager.LoadScene(1);
+
+            GameManager.Instance.ChangeGameState(GameStateType.MainMenu);
+        }
+
         #endregion
 
-        private void EnableFirstPanel()
+            /// <summary>
+            /// Displays the first panel by default (resume, settings, exit)
+            /// </summary>
+            private void EnableFirstPanel()
         {
             _panels.ForEach(p => p.SetActive(false));
             _panels[0].SetActive(true);
+
+            if (_currentSelectable != null)
+            {
+                _currentSelectable.Highlight(false);
+            }
+
             _currentSelectable = _firstSelectedItem;
+            _currentSelectable.Highlight(true);
         }
 
         private void SetPlayerIndex(int playerIndex)
         {
             _settingsPanel.SetPlayerIndex(playerIndex);
             _currentPlayerIndex = playerIndex;
+        }
+
+        public void SetUpActionSignifiers(ISignifierController signifierController)
+        {
+            PlayerInputActions c = InputManager.Controls;
+
+            // add the actions that are mutual between windows to the signifiers controller
+            int submitActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Submit.name, _currentPlayerIndex);
+            int returnActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Cancel.name, _currentPlayerIndex);
+            string submitActionKey = Helper.GetInputIcon(submitActionIconIndex);
+            string returnActionKey = Helper.GetInputIcon(returnActionIconIndex);
+
+            _menuActionSignifiersController.DisplaySignifier(SUBMIT_ACTION_TEXT, submitActionKey);
+            _menuActionSignifiersController.DisplaySignifier(RETURN_ACTION_TEXT, returnActionKey);
         }
     }
 }

@@ -41,8 +41,8 @@ namespace TankLike.UnitControllers.States
 
         private void ChooseAttack()
         {
-            float chance = Random.value * _attackStatesChances.OrderByDescending(s => s.Chance).FirstOrDefault().Chance;
-            List<StateChance> selectedStates = _attackStatesChances.FindAll(s => s.Chance >= chance);
+            float chance = Random.value * _attackStatesChances.FindAll(s => s.UseAttack).OrderByDescending(s => s.Chance).FirstOrDefault().Chance;
+            List<StateChance> selectedStates = _attackStatesChances.FindAll(s => s.Chance >= chance && s.UseAttack);
             StateChance selectedState = selectedStates.RandomItem();
             
             if(selectedState != _lastSelectedState)

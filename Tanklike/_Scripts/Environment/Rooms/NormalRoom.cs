@@ -57,7 +57,8 @@ namespace TankLike.Environment
             Spawner.ActivateSpawnedEnemies();
             GameManager.Instance.AudioManager.Play(_closeGateAudios);
             GameManager.Instance.CameraManager.Zoom.SetToFightZoom();
-            GameManager.Instance.RoomsManager.SetCurrentRoom(this);
+            GameManager.Instance.EnemiesManager.SetFightActivated(true);
+            //GameManager.Instance.RoomsManager.SetCurrentRoom(this);
 
         }
 

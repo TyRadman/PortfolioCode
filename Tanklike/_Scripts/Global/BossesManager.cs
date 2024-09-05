@@ -14,15 +14,18 @@ namespace TankLike
 
         private List<BossComponents> _bosses = new List<BossComponents>();
         private BossesDatabase _bossesDatabase;
-        private Dictionary<BossType, Pool<EnemyParts>> _bossPartsPools = new Dictionary<BossType, Pool<EnemyParts>>();
+        private Dictionary<BossType, Pool<UnitParts>> _bossPartsPools = new Dictionary<BossType, Pool<UnitParts>>();
 
         public Transform BossRoomCenter => _bossRoomCenter;
-        public Vector3 BossRoomSize => _bossRoomSize; 
+        public Vector3 BossRoomSize => _bossRoomSize;
 
-        public void SetUp(BossesDatabase bossesDatabase)
+        public void SetReferences(BossesDatabase bossesDatabase)
         {
             _bossesDatabase = bossesDatabase;
+        }
 
+        public void SetUp()
+        {
             InitPools();
         }
 
@@ -37,9 +40,9 @@ namespace TankLike
             boss.SetUp();
         }
 
-        public void RemoveBoss(BossComponents boss)
+        public void RemoveBoss(TankComponents boss)
         {
-            _bosses.Remove(boss);
+            _bosses.Remove((BossComponents)boss);
         }
 
         public BossComponents GetBoss(int index)
@@ -47,10 +50,24 @@ namespace TankLike
             return _bosses[index];
         }
 
-        public EnemyParts GetBossPartsByType(BossType type)
+        public UnitParts GetBossPartsByType(BossType type)
         {
-            EnemyParts parts = _bossPartsPools[type].RequestObject(Vector3.zero, Quaternion.identity);
+            UnitParts parts = _bossPartsPools[type].RequestObject(Vector3.zero, Quaternion.identity);
             return parts;
+        }
+
+        public void SwitchBackBGMusic()
+        {
+            StartCoroutine(SwitchBackBGMusicRoutine());
+        }
+
+        public IEnumerator SwitchBackBGMusicRoutine()
+        {
+            GameManager.Instance.AudioManager.FadeOutBGMusic();
+            yield return new WaitForSeconds(1f);
+            GameManager.Instance.AudioManager.SwitchBGMusic(GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().LevelMusic);
+            yield return new WaitForSeconds(0.5f);
+            GameManager.Instance.AudioManager.FadeInBGMusic();
         }
 
         //private void OnDrawGizmosSelected()
@@ -68,18 +85,18 @@ namespace TankLike
             }
         }
 
-        private Pool<EnemyParts> CreateBossPartsPool(BossData bossData)
+        private Pool<UnitParts> CreateBossPartsPool(BossData bossData)
         {
-            var pool = new Pool<EnemyParts>(
+            var pool = new Pool<UnitParts>(
                 () =>
                 {
                     var obj = Instantiate(bossData.PartsPrefab);
                     GameManager.Instance.SetParentToSpawnables(obj.gameObject);
-                    return obj.GetComponent<EnemyParts>();
+                    return obj.GetComponent<UnitParts>();
                 },
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().OnRequest(),
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().OnRelease(),
-                (EnemyParts obj) => obj.GetComponent<IPoolable>().Clear(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().OnRequest(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().OnRelease(),
+                (UnitParts obj) => obj.GetComponent<IPoolable>().Clear(),
                 0
             );
             return pool;

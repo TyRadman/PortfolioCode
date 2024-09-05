@@ -5,17 +5,20 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "W_AOE_Default", menuName = "TankLike/Skills/Weapons/AOE")]
+    [CreateAssetMenu(fileName = "W_AOE_Default", menuName = DIRECTORY + "Area Of Effect")]
     public class AOEWeapon : Weapon
     {
         [field: SerializeField] public float ExplosionRadius;
-        public override void OnShot(TankComponents shooter = null, Transform shootingPoint = null, float angle = 0)
+        public override void OnShot(Transform shootingPoint = null, float angle = 0)
         {
-            base.OnShot(shooter);
+            base.OnShot();
 
-            Vector3 explosionCenter = shooter.transform.position;
+            Vector3 explosionCenter = _components.transform.position;
+
             if (shootingPoint != null)
+            {
                 explosionCenter = shootingPoint.position;
+            }
 
             Collider[] targets = Physics.OverlapSphere(explosionCenter, ExplosionRadius, _targetLayerMask);
             HashSet<GameObject> damaged = new HashSet<GameObject>();
@@ -28,7 +31,7 @@ namespace TankLike.Combat
 
                     if (t.TryGetComponent(out IDamageable damagable))
                     {
-                        damagable.TakeDamage(Damage, Vector3.zero, shooter, shooter.transform.position);
+                        damagable.TakeDamage(Damage, Vector3.zero, _components, _components.transform.position);
                     }
                 }
             }
@@ -39,9 +42,9 @@ namespace TankLike.Combat
             base.OnShot(spawnBulletAction, shootingPoint, angle);
         }
 
-        public override void SetUp(Transform tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
         }
 
         public void SetExplosionRadius(float radius)

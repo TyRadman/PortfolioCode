@@ -7,12 +7,14 @@ namespace TankLike.Environment
 {
     public class InteractableTextBox : MonoBehaviour
     {
-        private Transform _cam;
         [SerializeField] private TextMeshPro _interactionText;
         [SerializeField] private TextMeshPro _feedbackText;
         [SerializeField] private Animation _anim;
         [SerializeField] private AnimationClip _openAnimation;
         [SerializeField] private AnimationClip _closeAnimation;
+        
+        private Transform _cam;
+        private bool _isOpened = false;
 
         private void Start()
         {
@@ -39,7 +41,18 @@ namespace TankLike.Environment
 
         public void PlayOpenAnimation(bool open)
         {
-            if (_anim.isPlaying) _anim.Stop();
+            // if the box is opened, then there's no need to open it again. If it's closed, then there is no need to close it again
+            if(_isOpened == open)
+            {
+                return;
+            }
+
+            _isOpened = open;
+
+            if (_anim.isPlaying)
+            {
+                _anim.Stop();
+            }
 
             _anim.clip = open ? _openAnimation : _closeAnimation;
             _anim.Play();

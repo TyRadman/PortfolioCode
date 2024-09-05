@@ -6,20 +6,19 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "IceShot", menuName = ASSET_MENU_ROOT + "Ice Shot")]
     public class IceShotTool : Tool
     {
         [Header("Special Values")]
         [SerializeField] private Weapon _shot;
         private PlayerShooter _playerShooter;
 
-        public override void SetUp(TankComponents tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
-            //// create bullet
-            //_shot = Instantiate(_bulletPrefab, null);
-            //_shot.gameObject.SetActive(false);
+            base.SetUp(components);
 
-            _playerShooter = tankTransform.GetComponent<PlayerShooter>();
+            _playerShooter = components.Shooter as PlayerShooter;
+            _shot.SetUp(components);
         }
 
         public override void UseTool()

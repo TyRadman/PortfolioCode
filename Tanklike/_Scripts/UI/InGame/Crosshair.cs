@@ -11,10 +11,17 @@ namespace TankLike.UI.InGame
         [SerializeField] private Transform _cursorChild;
         [field: SerializeField] public bool IsActive { set; get; }
 
-
         private void Awake()
         {
             _camera = Camera.main.transform;
+        }
+
+        public void SetUp()
+        {
+            gameObject.SetActive(false);
+            transform.parent = null;
+
+            Visuals.SetUp();
         }
 
         public void Enable(bool enable)
@@ -35,7 +42,11 @@ namespace TankLike.UI.InGame
         {
             while (true)
             {
-                _cursorChild.LookAt(_camera);
+                // Get the forward direction of the camera
+                Vector3 cameraForward = _camera.transform.forward;
+
+                // Rotate the object to face the camera's forward direction
+                _cursorChild.rotation = Quaternion.LookRotation(-cameraForward, Vector3.up);
                 yield return null;
             }
         }

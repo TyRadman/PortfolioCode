@@ -13,38 +13,39 @@ namespace TankLike.UnitControllers
     public class PlayerCrosshairController : MonoBehaviour, IController, IInput
     {
         public bool IsActive { get; private set; }
+
         [Header("Crosshair")]
-        [SerializeField] private float _crosshairSpeed = 100f;
         [SerializeField] private Vector2 _crosshairRadiusRange;
-        private Vector2 _originalRadiusRange;
-        [Range(0f, 100f)] [SerializeField] private float _crosshairSnapSpeed = 4f;
+        [SerializeField] private float _crosshairSpeed = 100f;
+        [Range(0f, 100f)] 
+        [SerializeField] private float _crosshairSnapSpeed = 4f;
+
         [Header("Turret")]
         private Vector3 _offset;
+
         [Header("References")]
-        [SerializeField] private Crosshair _crossHair;
         [SerializeField] private PlayerTurretController _turretController;
+        [SerializeField] private Crosshair _crossHair;
         [SerializeField] private Transform _turret;
-        public const float MIN_AIM_SENSITIVITY = 2f;
-        public const float MAX_AIM_SENSITIVITY = 40f;
+
         [Header("Aim assist")]
-        [SerializeField] private bool _aimAssistActive = true;
         [SerializeField] private float _aimAssistAngle = 45f;
+        [SerializeField] private bool _aimAssistActive = true;
+
         [Tooltip("How strongly the aim assist influences the crosshair controls")]
+        [SerializeField] private PlayerMovement _movement;
+        [SerializeField] private PlayerComponents _components;
         [SerializeField] private float _aimInfluence = 5f;
         [SerializeField] private float _detectionRange = 15f;
-        [SerializeField] private LayerMask _layersToDetect;
-        [SerializeField] private LayerMask _targetLayer;
-        private Transform _tank;
-        private float _angleRad;
-        private Vector3 _aimAssistPosition;
-        [SerializeField] private float _crosshairSpeedMultiplier = 1f;
-        private bool _isAiming = false;
-        private float _aimAssistTimer = 0f;
         [SerializeField] private float _timeBeforeAimAssist = 1f;
-        private bool _isActive = true;
-        [SerializeField] private PlayerMovement _movement;
-        private bool _aimAssistEnabled = true;
-        [SerializeField] private PlayerComponents _components;
+        [SerializeField] private float _crosshairSpeedMultiplier = 1f;
+
+        private Transform _tank;
+        private Vector2 _originalRadiusRange;
+        private bool _isAiming = false;
+
+        public const float MIN_AIM_SENSITIVITY = 2f;
+        public const float MAX_AIM_SENSITIVITY = 40f;
 
         #region Input
         private Vector3 _input;
@@ -53,18 +54,12 @@ namespace TankLike.UnitControllers
         private void Awake()
         {
             _tank = transform;
-            _isActive = true;
         }
 
         public void SetUp()
         {
-            Activate();
-
             _originalRadiusRange = _crosshairRadiusRange;
-            _crossHair.transform.parent = null;
-
-            // aim assist
-            _angleRad = Mathf.Cos((_aimAssistAngle / 2) * Mathf.Deg2Rad);
+            _crossHair.SetUp();
         }
 
         #region Input
@@ -92,111 +87,20 @@ namespace TankLike.UnitControllers
         }
 
         #region Aim Assist Process
-        /// <summary>
-        /// Returns true if there is an enemy within the aim assist range
-        /// </summary>
-        /// <returns></returns>
-        private void AimAssistProcess()
+        public void EnableIsAiming()
         {
-            if (!_aimAssistActive || !_aimAssistEnabled)
-            {
-                return;
-            }
-
-            // find all the enemies within sight
-            Transform enemy = GetClosestEnemyWithinRange();
-
-            if (enemy == null)
-            {
-                _isAiming = false;
-                return;
-            }
-
             _isAiming = true;
-            Vector3 direction = (enemy.position - _tank.position).normalized;
-            _aimAssistPosition =  direction * _crosshairRadiusRange.y;
         }
 
-
-        private Transform GetClosestEnemyWithinRange()
+        public void DisableIsAiming()
         {
-            List<Transform> targets = GameManager.Instance.EnemiesManager.GetSpawnedEnemies();
-            targets.AddRange(GameManager.Instance.RoomsManager.CurrentRoom.GetDroppers());
+            _isAiming = false;
+        }
 
-            if (targets.Count == 0)
-            {
-                return null;
-            }
-
-            // filter out far enemies
-            targets = targets.FindAll(e => Vector2.Distance(
-                new Vector2(e.position.x, e.position.z),
-                new Vector2(_tank.position.x, _tank.position.z)) <= _detectionRange);
-
-            if (targets.Count == 0)
-            {
-                return null;
-            }
-
-            targets = targets.OrderBy(e => (e.position - _tank.position).sqrMagnitude).ToList();
-
-            Transform enemyToLockTo = null;
-
-            for (int i = 0; i < targets.Count; i++)
-            {
-                Vector3 direcitonToEnemy = (targets[i].position - _tank.position).normalized;
-                Vector3 tankForward = _turret.forward;
-
-                if (Physics.Raycast(_tank.position, direcitonToEnemy, out RaycastHit hit, _detectionRange, _layersToDetect))
-                {
-                    // FUTURE REMINDER
-                    //  hit.collider.gameObject.layer = 10 // assuming it's an enemy
-                    // 1 << 10 = 00000000 00000000 00000100 00000000 // turning the int value into an index in a 32 binary map sort of thing
-                    // _targetLayer.value = 00000000 00000000 00000101 00000000 // indices of the wall and enemy layer in a 32 binary map
-                    // & = AND in binary
-                    // 00000000 00000000 00000100 00000000 AND 00000000 00000000 00000101 00000000
-                    // = 00000000 00000000 00000100 00000000
-                    // if it equals 0 then there are no mutual layers
-                    if ((_targetLayer.value & (1 << hit.collider.gameObject.layer)) == 0)
-                    {
-                        Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.red);
-                        continue;
-                    }
-                    else
-                    {
-                        Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.yellow);
-                    }
-                }
-
-                float dotProduct = Vector3.Dot(tankForward, direcitonToEnemy);
-
-                if (dotProduct >= _angleRad)
-                {
-                    Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.green);
-                    enemyToLockTo = targets[i];
-                    break;
-                }
-            }
-
-
-            Vector3 direction = _crossHair.transform.position - _tank.position;
-            direction.y = 0f;
-            direction.Normalize(); // Normalize to get the direction unit vector
-
-            // Calculate perpendicular vectors to the direction for left and right spread
-            Vector3 perpendicular = new Vector3(-direction.z, 0, direction.x); // This creates a perpendicular vector on the XZ plane
-            perpendicular.Normalize(); // Normalize the perpendicular vector
-
-            // Calculate the left and right direction vectors using the aim assist angle
-            float angleRadians = _aimAssistAngle / 2; // Convert angle from degrees to radians
-            Vector3 leftDirection = Quaternion.Euler(0, -angleRadians, 0) * direction;
-            Vector3 rightDirection = Quaternion.Euler(0, angleRadians, 0) * direction;
-
-            // Draw rays from the tank's position in the left and right directions
-            Debug.DrawRay(_tank.position, leftDirection * _detectionRange, Color.blue);
-            Debug.DrawRay(_tank.position, rightDirection * _detectionRange, Color.blue);
-
-            return enemyToLockTo;
+        private Vector3 _aimPosition;
+        public void SetAimingPosition(Vector3 position)
+        {
+            _aimPosition = position;
         }
         #endregion
 
@@ -212,27 +116,9 @@ namespace TankLike.UnitControllers
 
         private void MoveCrosshair()
         {
-            if (!_isActive)
+            if (!IsActive)
             {
                 return;
-            }
-
-
-            if (_input.magnitude == 0f && !_movement.IsMoving)
-            {
-                if (_aimAssistTimer >= _timeBeforeAimAssist)
-                {
-                    AimAssistProcess();
-                }
-                else
-                {
-                    _aimAssistTimer += Time.deltaTime;
-                }
-            }
-            else
-            {
-                _aimAssistTimer = 0f;
-                _isAiming = false;
             }
 
             // convert the input into a vector3
@@ -275,20 +161,28 @@ namespace TankLike.UnitControllers
         {
             if (_isAiming)
             {
-                _offset = Vector3.Lerp(_offset, _aimAssistPosition, _aimInfluence * Time.deltaTime);
+                _crossHair.transform.position = Vector3.Lerp(_crossHair.transform.position, _aimPosition, _crosshairSnapSpeed * Time.deltaTime);
+            }
+            else
+            {
+                // move the cursor
+                Vector3 newPosition = _tank.position + _offset;
+                // apply movement to the crosshair
+                _crossHair.transform.position = Vector3.Lerp(_crossHair.transform.position, newPosition, _crosshairSnapSpeed * Time.deltaTime);
+                // apply rotation to the turret 
             }
 
-            // move the cursor
-            Vector3 newPosition = _tank.position + _offset;
-            // apply movement to the crosshair
-            _crossHair.transform.position = Vector3.Lerp(_crossHair.transform.position, newPosition, _crosshairSnapSpeed * Time.deltaTime);
-            // apply rotation to the turret 
             _turretController.HandleTurretRotation(_crossHair.transform);
         }
 
-        public Transform GetCrosshair()
+        public Transform GetCrosshairTransform()
         {
             return _crossHair.transform;
+        }
+
+        public Crosshair GetCrosshair()
+        {
+            return _crossHair;
         }
 
         public void SetAimRange(Vector2 radiusRange)
@@ -321,15 +215,9 @@ namespace TankLike.UnitControllers
             _crosshairSpeed = sensitivity;
         }
 
-        public void EnableAimAssist(bool enable)
-        {
-            _aimAssistActive = enable;
-            _isAiming = enable;
-        }
-
         public void Enable(bool enable)
         {
-            _isActive = enable;
+            IsActive = enable;
         }
 
         public void SetColor(Color color)
@@ -352,6 +240,7 @@ namespace TankLike.UnitControllers
         {
             IsActive = true;
             SetUpInput(_components.PlayerIndex);
+            _crossHair.gameObject.SetActive(true);
             EnableCrosshair(true);
         }
 
@@ -370,6 +259,7 @@ namespace TankLike.UnitControllers
 
         public void Dispose()
         {
+
         }
         #endregion
     }

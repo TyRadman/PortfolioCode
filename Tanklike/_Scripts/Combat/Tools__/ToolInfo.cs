@@ -6,7 +6,7 @@ using System;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Shop Item Info", menuName = "TankLike/Tools/Tool Info")]
+    [CreateAssetMenu(fileName = "TH_", menuName = Directories.TOOLS_SETTINGS + "Tool Holder")]
     public class ToolInfo : ScriptableObject
     {
         [Header("Metadata")]
@@ -16,6 +16,7 @@ namespace TankLike.Combat
         [TextArea(2, 20)] public string Description;
         [Header("Values")]
         public int Cost;
+        [field: SerializeField] public float UsageEnergyCost { get; private set; } = 5f;
         //public int Nodes;
         [Header("References")]
         public Sprite IconImage;

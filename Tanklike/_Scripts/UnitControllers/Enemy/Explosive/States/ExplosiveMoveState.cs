@@ -9,11 +9,8 @@ namespace TankLike.UnitControllers.States
     [CreateAssetMenu(fileName = "State_Explosive_Move", menuName = MENU_PATH + "Explosive/Move State")]
     public class ExplosiveMoveState : MoveState
     {
-        private Vector3 _targetPoint;
         private float _pathUpdateTime = 0.5f;
         private float _pathUpdateTimer;
-
-        private Transform _target;
 
         public override void SetUp(StateMachine<EnemyStateType> stateMachine, EnemyComponents enemyComponents)
         {
@@ -49,7 +46,7 @@ namespace TankLike.UnitControllers.States
             _movement.OnTargetReached -= OnTargetReachedHandler;
         }
 
-        private bool MoveToTarget(Vector3 target)
+        protected override void MoveToTarget(Vector3 target)
         {
             NavMeshHit hit;
 
@@ -57,10 +54,7 @@ namespace TankLike.UnitControllers.States
             {
                 _targetPoint = hit.position;
                 _movement.SetTargetPosition(_targetPoint);
-                return true;
             }
-
-            return false;
         }
 
         private void OnTargetReachedHandler()

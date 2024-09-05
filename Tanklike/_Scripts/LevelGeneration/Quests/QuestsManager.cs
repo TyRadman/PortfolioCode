@@ -7,22 +7,36 @@ using static TankLike.UI.Notifications.QuestNotificationBar;
 
 namespace TankLike
 {
-    public class QuestsManager : MonoBehaviour
+    public class QuestsManager : MonoBehaviour, IManager
     {
-        [SerializeField] private LevelQuestSettings _settings;
-        [SerializeField] private List<Quest_SO> _questTypes;
-        [SerializeField] private List<Quest_SO> _activeQuests;
-        [SerializeField] private int _questsCount = 3;
         public System.Action<Quest_SO> OnQuestAdded;
         public System.Action<Quest_SO> OnQuestCompleted;
         public System.Action<Quest_SO> OnQuestProgressed;
 
+        [SerializeField] private LevelQuestSettings _settings;
+        [SerializeField] private List<Quest_SO> _questTypes;
+        [SerializeField] private List<Quest_SO> _activeQuests;
+        [SerializeField] private int _questsCount = 3;
+
+        public bool IsActive { get; private set; }
+
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             Invoke(nameof(CreateQuests), 1f);
         }
+        public void Dispose()
+        {
+            IsActive = false;
 
-        public void CreateQuests()
+            _activeQuests.Clear();
+            _activeQuests = null;
+        }
+        #endregion
+
+        private void CreateQuests()
         {
             for (int i = 0; i < _questTypes.Count; i++)
             {
@@ -46,11 +60,23 @@ namespace TankLike
 
         public void ReportProgress(Quest_SO quest)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             OnQuestProgressed(quest);
         }
 
         public void MarkQuestAsCompleted(Quest_SO quest)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             quest.IsActive = false;
             // display the completion notificaiton
             GameManager.Instance.NotificationsManager.PushQuestNotification(quest.GetQuestString(), QuestState.Finished);

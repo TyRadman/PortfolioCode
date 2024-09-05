@@ -23,8 +23,6 @@ namespace TankLike.UnitControllers
                 _currentConstraints.Remove(constraints);
             }
 
-            //Debug.Log("Constraints count -> " + _currentConstraints.Count);
-
             _currentConstraint = GetCurrentConstraint();
 
             _components.Movement.EnableMovement((_currentConstraint & AbilityConstraint.Movement) == 0);
@@ -33,7 +31,7 @@ namespace TankLike.UnitControllers
             _components.Health.EnableTakingDamage((_currentConstraint & AbilityConstraint.TakingDamage) == 0);
             _components.PlayerBoost.EnableBoost((_currentConstraint & AbilityConstraint.Boost) == 0);
             _components.OnHold.Enable((_currentConstraint & AbilityConstraint.HoldDownAction) == 0);
-            _components.Crosshair.EnableAimAssist((_currentConstraint & AbilityConstraint.AimAssist) == 0);
+            _components.AimAssist.EnableAimAssist((_currentConstraint & AbilityConstraint.AimAssist) == 0);
             _components.SuperAbilities.EnableAbility((_currentConstraint & AbilityConstraint.SuperAbility) == 0);
             _components.Jump.EnableJump((_currentConstraint & AbilityConstraint.Jump) == 0);
             _components.Tools.EnableToolsUsage((_currentConstraint & AbilityConstraint.Tools) == 0);

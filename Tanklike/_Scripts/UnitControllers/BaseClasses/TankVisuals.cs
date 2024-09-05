@@ -7,23 +7,16 @@ namespace TankLike
 {
     public class TankVisuals : MonoBehaviour, IController
     {
-        [Header("References")]
-        [SerializeField] private List<Renderer> _tankMeshes;
-
         [Header("Hit Flash")]
         [SerializeField] private Material _hitFlashMaterial;
         [SerializeField] private float _hitFlashTime;
 
+        [SerializeField] private List<Renderer> _tankMeshes = new List<Renderer>();
         private const float TRANSITION_DURATION = 0.5f;
         private Material _originalMaterial; // maybe save the material of each mesh by using a dictionary instead of a list
         private Color _originalColor;
         private Coroutine _hitFlashCoroutine;
         private Coroutine _switchColorCoroutine;
-
-        [Header("Tracks")]
-        // it'd look better if we reposition the tracks according to what direction the tank is moving e.g. position them at the front when the tank is moving backwards and vice versa
-        // applicable for tanks that have tracks (not tanks with limbs). Future idea
-        [SerializeField] private Transform _tracksTransform;
 
         public bool IsActive { get; private set; }
 
@@ -37,6 +30,12 @@ namespace TankLike
             _originalColor = _tankMeshes[0].material.color;
             components.Health.OnHit += OnHitHandler;
 
+        }
+
+        public void SetTextureForMainMaterial(Texture2D texture)
+        {
+            _originalMaterial.SetTexture("_BaseMap", texture);
+            SwitchMaterial(_originalMaterial);
         }
 
         public void SwitchMaterial(Material material)
@@ -114,6 +113,22 @@ namespace TankLike
         public Material GetOriginalMaterial()
         {
             return _originalMaterial;
+        }
+
+        public void HideVisuals()
+        {
+            foreach (var mesh in _tankMeshes)
+            {
+                mesh.enabled = false;
+            }
+        }
+
+        public void ShowVisuals()
+        {
+            foreach (var mesh in _tankMeshes)
+            {
+                mesh.enabled = true;
+            }
         }
 
         private void OnHitHandler()

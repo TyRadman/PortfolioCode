@@ -12,24 +12,19 @@ namespace TankLike.Combat
         [SerializeField][TextArea(3, 10)] protected string _description;
         [SerializeField] private Sprite _icon;
 
-        public virtual void SetUp(Transform tankTransform)
-        {
+        protected const string FILE_NAME_PREFIX = "Stat_";
+        protected const string MENU_ROOT = Directories.SKILLS + "Stats/";
 
+        public string Name => _name;
+        public string Description => _description;
+
+        public virtual void SetUp(TankComponents components)
+        {
         }
 
         public Sprite GetIcon()
         {
             return _icon;
-        }
-
-        public string GetName()
-        {
-            return _name;
-        }
-
-        public string GetDescription()
-        {
-            return _description;
         }
     }
 }

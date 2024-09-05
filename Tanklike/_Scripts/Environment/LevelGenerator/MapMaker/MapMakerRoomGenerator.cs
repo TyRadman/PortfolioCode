@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TankLike.Combat.Destructible;
 using TankLike.Environment.LevelGeneration;
+using TankLike.LevelGeneration;
 using UnityEngine;
 
 namespace TankLike.Environment.MapMaker
@@ -17,7 +18,7 @@ namespace TankLike.Environment.MapMaker
         }
 
         [ContextMenu("Load Map")]
-        public void BuildRoom(MapTiles_SO map, LevelData level, Room room)
+        public void BuildRoom(MapTiles_SO map, LevelData level, Room room, BuildConfigs configs = null)
         {
             // remove previous tile
             for (int i = 0; i < _manager.AllTiles.GetLength(0); i++)

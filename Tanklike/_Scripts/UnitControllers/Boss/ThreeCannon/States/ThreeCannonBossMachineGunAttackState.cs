@@ -34,6 +34,7 @@ namespace TankLike.UnitControllers.States
         public override void SetUp(StateMachine<BossStateType> stateMachine, BossComponents bossComponents)
         {
             base.SetUp(stateMachine, bossComponents);
+            _machineGunWeapon.SetUp(bossComponents);
         }
 
         public override void OnEnter()
@@ -73,6 +74,9 @@ namespace TankLike.UnitControllers.States
         public override void OnExit()
         {
             _isActive = false;
+
+            if (_attackCoroutine != null)
+                _attackController.StopCoroutine(_attackCoroutine);
         }
 
         public override void OnDispose()
@@ -116,7 +120,7 @@ namespace TankLike.UnitControllers.States
             for (int i = 0; i < _machineGunShotsNumber; i++)
             {
                 float angle = UnityEngine.Random.Range(-halfAngle, halfAngle);
-                _machineGunWeapon.OnShot(_components, _attackController.MachineGunShootingPoint, angle);
+                _machineGunWeapon.OnShot(_attackController.MachineGunShootingPoint, angle);
                 yield return wait;
             }
 

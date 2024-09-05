@@ -10,12 +10,16 @@ namespace TankLike.UI.HUD
     public class PlayerHUD : MonoBehaviour
     {
         [SerializeField] private GameObject _parent;
+        [Header("Avatar")]
+        [SerializeField] private Image _avatarImage;        
         [Header("Health")]
         [SerializeField] private Image _healthFillImage;
+        [SerializeField] private ResizableBar _healthBar;
         [Header("Active Skills")]
         [SerializeField] private HUDSkillIcon _superAbility;
         [SerializeField] private HUDSkillIcon _weaponAbility;
         [SerializeField] private HUDSkillIcon _holdDownAbility;
+        [SerializeField] private HUDSkillIcon _boostAbility;
         [Header("Tools")]
         [SerializeField] private ToolIcon _selectedToolIcon;
         [SerializeField] private ToolIcon _previousToolIcon;
@@ -25,10 +29,9 @@ namespace TankLike.UI.HUD
         [SerializeField] private TextMeshProUGUI _levelText;
         [Header("Fuel")]
         [SerializeField] private Image _fuelFillImage;
-        [Header("Boost")]
-        [SerializeField] private Transform _boostParent;
-        [SerializeField] private Image _boostIconPrefab;
-        [SerializeField] private TextMeshProUGUI _boostKeyText;
+        [Header("Energy")]
+        [SerializeField] private Image _energyFillImage;
+        [SerializeField] private TextMeshProUGUI _energyKeyText;
         [Header("Wealth")]
         [SerializeField] private TextMeshProUGUI _coinsText;
         [Header("Inventory")]
@@ -46,9 +49,14 @@ namespace TankLike.UI.HUD
         #region Health
         public void SetupHealthBar(int maxHealth)
         {
-            if (_healthFillImage == null) return;
+            if (_healthFillImage == null)
+            {
+                return;
+            }
 
-            _healthFillImage.fillAmount = 1f;
+            // TODO: must store this value somewhere
+            float highestHealthPossible = 600f;
+            _healthBar.SetMaxSize(maxHealth / highestHealthPossible, true);
         }
 
         public void UpdateHealthBar(int currentHealth, int maxHealth)
@@ -58,7 +66,8 @@ namespace TankLike.UI.HUD
                 return;
             }
 
-            _healthFillImage.fillAmount = (float)currentHealth / (float)maxHealth;
+            _healthBar.SetValue((float)currentHealth / (float)maxHealth);
+            //_healthFillImage.fillAmount = (float)currentHealth / (float)maxHealth;
         }
         #endregion
 
@@ -119,11 +128,18 @@ namespace TankLike.UI.HUD
             _holdDownAbility.SetKey(key);
         }
 
-
         public void SetHoldDownChargeAmount(float amount, int playerIndex)
         {
             _holdDownAbility.SetFillAmount(amount);
             _holdDownAbility.PlayAnimation(amount <= 0f);
+        }
+        #endregion
+
+        #region Boost
+        public void SetBoostInfo(Sprite icon, string key)
+        {
+            _boostAbility.SetIconSprite(icon);
+            _boostAbility.SetKey(key);
         }
         #endregion
         #endregion
@@ -142,7 +158,8 @@ namespace TankLike.UI.HUD
 
         public void UpdateActiveTool(string amountText)
         {
-            _selectedToolIcon.SetAmountText(amountText);
+            int amount = int.Parse(amountText);
+            _selectedToolIcon.SetAmount(amount);
         }
 
         public void SetToolsKeys(string selected, string previous, string next)
@@ -168,36 +185,6 @@ namespace TankLike.UI.HUD
         }
         #endregion
 
-        #region Boost
-        public void SetupBoostIcons(int boostAmaount)
-        {
-            for (int i = 0; i < boostAmaount; i++)
-            {
-                Image icon = Instantiate(_boostIconPrefab);
-                icon.transform.parent = _boostParent;
-                _boostIcons.Add(icon);
-            }
-        }
-
-        public void UpdateBoostIcons(int amount)
-        {
-            foreach (var icon in _boostIcons)
-            {
-                icon.gameObject.SetActive(false);
-            }
-
-            for (int i = 0; i < amount; i++)
-            {
-                _boostIcons[i].gameObject.SetActive(true);
-            }
-        }
-
-        public void SetBoostKey(string key)
-        {
-            _boostKeyText.text = key;
-        }
-        #endregion
-
         #region Inventory
         public void SetInventoryKey(string key)
         {
@@ -211,6 +198,27 @@ namespace TankLike.UI.HUD
             if (_fuelFillImage == null) return;
 
             _fuelFillImage.fillAmount = currentFuel / maxFuel;
+        }
+        #endregion
+
+        #region Energy
+        public void UpdateEnergyBar(float currentEnergy, float maxEnergy)
+        {
+            if (_energyFillImage == null) return;
+
+            _energyFillImage.fillAmount = currentEnergy / maxEnergy;
+        }
+
+        public void SetEnergyKey(string key)
+        {
+            _energyKeyText.text = key;
+        }
+        #endregion
+
+        #region Avatar
+        public void SetPlayerAvatar(Sprite avatar)
+        {
+            _avatarImage.sprite = avatar;
         }
         #endregion
     }

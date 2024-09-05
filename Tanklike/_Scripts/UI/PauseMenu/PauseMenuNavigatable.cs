@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TankLike.Sound;
 using UnityEngine;
 
 namespace TankLike.UI.PauseMenu
@@ -27,7 +28,6 @@ namespace TankLike.UI.PauseMenu
         public override void Navigate(Direction direction)
         {
             base.Navigate(direction);
-
         }
     }
 }

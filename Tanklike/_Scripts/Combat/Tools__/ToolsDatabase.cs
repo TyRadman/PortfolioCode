@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Tools_DB_Default", menuName = "TankLike/Tools/Tools DB")]
+    [CreateAssetMenu(fileName = "Tools_DB_Default", menuName = Directories.TOOLS_SETTINGS + "Tools DataBase", order = 0)]
     public class ToolsDatabase : ScriptableObject
     {
         [SerializeField] private List<ToolInfo> _tools;

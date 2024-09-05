@@ -15,11 +15,7 @@ namespace TankLike.UnitControllers.States
         private EnemyMovement _movement;
         private Transform _target;
 
-        private bool _isTelegraphing;
         [SerializeField] private Vector2 _attackCooldownRange;
-        private float _cooldownDuration;
-        private float _cooldownTimer;
-        private bool _isCooldown;
 
         private Vector3 _targetPoint;
         private bool _targetPointFound;
@@ -38,17 +34,10 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
-            //Debug.Log("ATTACK STATE");
-
             _isActive = true;
-            _target = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
 
+            _target = _shooter.GetCurrentTarget().PlayerTransform;
             _shooter.TelegraphAttack();
-            _isTelegraphing = true;
-
-            _isCooldown = false;
-            _cooldownDuration = Random.Range(_attackCooldownRange.x, _attackCooldownRange.y);
-            _cooldownTimer = 0f;
 
             float moveChance = Random.Range(0f, 1f);
 
@@ -60,17 +49,13 @@ namespace TankLike.UnitControllers.States
 
         public override void OnUpdate()
         {
-            if(_target == null)
-            {
-                _target= GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
-            }
-
             _turretController.HandleTurretRotation(_target);
         }
 
         public override void OnExit()
         {
             _isActive = false;
+            _shooter.UnsetCurrentTarget();
         }
 
         public override void OnDispose()
@@ -121,7 +106,6 @@ namespace TankLike.UnitControllers.States
             if (!_isActive)
                 return;
 
-            _isTelegraphing = false;
             _shooter.StartAttackRoutine(_attacksAmountRange.RandomValue(), _breakBetweenAttacks);
         }
 

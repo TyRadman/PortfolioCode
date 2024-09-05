@@ -6,6 +6,9 @@ using UnityEngine.UI;
 
 namespace TankLike.UI.PauseMenu
 {
+    /// <summary>
+    /// Handles all the functionality related to the pause menu's settings.
+    /// </summary>
     public class PauseMenuSettings : MonoBehaviour
     {
         [SerializeField] private Image _aimSensitivityBar;

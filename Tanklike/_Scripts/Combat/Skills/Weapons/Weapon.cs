@@ -9,29 +9,25 @@ using TankLike.Sound;
 
 namespace TankLike.Combat
 {
-    public enum WeaponType
-    {
-        NORMAL = 0,
-        LASER = 1,
-        THROWER = 2,
-        AOE = 3,
-        ROCKET_LAUNCHER,
-    }
 
     public abstract class Weapon : Skill
     {
+        public const string DIRECTORY = Directories.AMMUNITION + "Weapons/";
         [field: SerializeField] public AmmunationData BulletData { get; private set; }
-        [Header("Weapon Settings")]
-        [SerializeField] protected WeaponType _weaponType;
-        [field: SerializeField] public float CoolDownTime { get; private set; }
+
+        [field: SerializeField, Header("Weapon Settings")] public float CoolDownTime { get; private set; }
+        [field: SerializeField] public int AmmoCapacity { get; private set; } = 5;
         [field: SerializeField] public int Damage { get; private set; }
         [field: SerializeField] public Audio ShotAudio { get; private set; }
         [field: SerializeField] public IndicatorType IndicatorType { get; private set; }
 
         protected Transform _tankTransform;
+        protected TankComponents _components;
+
+        [Tooltip("Set this only if the \'OnShot\' method doesn't pass a tank component.")]
         protected LayerMask _targetLayerMask;
 
-        public virtual void OnShot(TankComponents shooter = null, Transform shootingPoint = null, float angle = 0)
+        public virtual void OnShot(Transform shootingPoint = null, float angle = 0)
         {
             if(ShotAudio != null)
             {
@@ -43,19 +39,29 @@ namespace TankLike.Combat
             }
         }
 
-        public virtual void OnShot(System.Action<Bullet, Transform, float> spawnBulletAction, Transform shootingPoint, float angle)
+        public virtual void OnShot(Vector3 spawnPoint, Vector3 rotation, float angle = 0)
         {
-
+            if (ShotAudio != null)
+            {
+                GameManager.Instance.AudioManager.Play(ShotAudio);
+            }
+            else
+            {
+                Debug.LogError($"No ShotAudio found for the weapon {this.name}");
+            }
         }
 
-        public override void SetUp(Transform tankTransform)
+        public virtual void OnShot(System.Action<Bullet, Transform, float> spawnBulletAction, Transform shootingPoint, float angle)
         {
-            base.SetUp(tankTransform);
-            _tankTransform = tankTransform;
-            // clone this SO and add it to the player
-            Weapon normalShot = Instantiate(this);       
-            // add the copied SO to the player
-            tankTransform.GetComponent<PlayerShooter>().AddNormalShot(normalShot);
+        }
+
+        public override void SetUp(TankComponents components)
+        {
+            base.SetUp(components);
+            _tankTransform = components.transform;
+            _components = _tankTransform.GetComponent<TankComponents>();
+            // TODO: Move it to the skill tree
+            //tankTransform.GetComponent<PlayerShooter>().AddNormalShot(this);
         }
 
         public void SetDamage(int damage)
@@ -70,6 +76,10 @@ namespace TankLike.Combat
         public void SetTargetLayer(LayerMask targetLayers)
         {
             _targetLayerMask = targetLayers;
+        }
+
+        public virtual void DisposeWeapon()
+        {
         }
     }
 }

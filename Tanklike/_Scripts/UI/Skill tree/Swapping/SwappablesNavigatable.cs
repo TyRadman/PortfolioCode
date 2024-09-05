@@ -62,7 +62,6 @@ namespace TankLike.UI.SkillTree
         public override void Open(int playerIndex = 0)
         {
             base.Open(playerIndex);
-            IsLastLayer = true;
             _selectedCell.Cell.HighLight(true);
         }
 
@@ -78,8 +77,10 @@ namespace TankLike.UI.SkillTree
         {
             // load the 3 different skills
             _swappables.Find(s => s.CellType == CellType.Weapon).Cell.SetSkill(_player.Shooter.GetWeapon());
-            _swappables.Find(s => s.CellType == CellType.HoldDownAction).Cell.SetSkill(_player.OnHold.GetHoldDownSkill());
-            _swappables.Find(s => s.CellType == CellType.SuperAbility).Cell.SetSkill(_player.SuperAbilities.GetSuperAbility());
+
+            // TODO: Skill tree fixes
+            //_swappables.Find(s => s.CellType == CellType.HoldDownAction).Cell.SetSkill(_player.OnHold.GetHoldDownSkill());
+            //_swappables.Find(s => s.CellType == CellType.SuperAbility).Cell.SetSkill(_player.SuperAbilities.GetSuperAbility());
         }
 
         public override void Navigate(Direction direction)
@@ -97,8 +98,9 @@ namespace TankLike.UI.SkillTree
             // highlight the previous cell
             _selectedCell.HighLight(true);
             // fill in the skill's info
-            _skillNameText.text = _selectedCell.Cell.Skill.GetName();
-            _skillDescriptionText.text = _selectedCell.Cell.Skill.GetDescription();
+            // TODO: Skill tree fixes
+            //_skillNameText.text = _selectedCell.Cell.Skill.GetName();
+            //_skillDescriptionText.text = _selectedCell.Cell.Skill.GetDescription();
         }
 
         public override void Select()
@@ -113,80 +115,80 @@ namespace TankLike.UI.SkillTree
             _selectedCell.SkillsSelector.Open();
             // dehighlight the currently selected cell on the left to show the transition
             _selectedCell.HighLight(false);
-            // since we're opening the skills selector, this is no longer the last window opened
-            IsLastLayer = false;
             IsActive = false;
         }
 
         private void LoadSkillsBasedOnSkillType(SwappableGroup group)
         {
-            List<Skill> skills = new List<Skill>();
+            // TODO: Skill tree fixes
+            //List<Skill> skills = new List<Skill>();
 
-            switch (group.CellType)
-            {
-                case CellType.Weapon:
-                    {
-                        _player.Shooter.GetWeapons().ForEach(w => skills.Add(w));
-                        
-                        if (_player.Shooter.GetWeapon() == null)
-                        {
-                            group.SkillsSelector.SetEmpty();
-                            return;
-                        }
+            //switch (group.CellType)
+            //{
+            //    case CellType.Weapon:
+            //        {
+            //            _player.Shooter.GetWeapons().ForEach(w => skills.Add(w));
 
-                        group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.Shooter.GetWeapon()));
-                        return;
-                    }
-                case CellType.HoldDownAction:
-                    {
-                        _player.OnHold.GetHoldDownSkills().ForEach(w => skills.Add(w));
+            //            if (_player.Shooter.GetWeapon() == null)
+            //            {
+            //                group.SkillsSelector.SetEmpty();
+            //                return;
+            //            }
 
-                        if(_player.OnHold.GetHoldDownSkill() == null)
-                        {
-                            group.SkillsSelector.SetEmpty();
-                            return;
-                        }
+            //            group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.Shooter.GetWeapon()));
+            //            return;
+            //        }
+            //    case CellType.HoldDownAction:
+            //        {
+            //            _player.OnHold.GetHoldDownSkills().ForEach(w => skills.Add(w));
 
-                        group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.OnHold.GetHoldDownSkill()));
-                        return;
-                    }
-                case CellType.SuperAbility:
-                    {
-                        _player.SuperAbilities.GetSuperAbilities().ForEach(w => skills.Add(w));
+            //            if(_player.OnHold.GetHoldDownSkill() == null)
+            //            {
+            //                group.SkillsSelector.SetEmpty();
+            //                return;
+            //            }
 
-                        if (_player.SuperAbilities.GetSuperAbility() == null)
-                        {
-                            group.SkillsSelector.SetEmpty();
-                            return;
-                        }
+            //            group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.OnHold.GetHoldDownSkill()));
+            //            return;
+            //        }
+            //    case CellType.SuperAbility:
+            //        {
+            //            _player.SuperAbilities.GetSuperAbilities().ForEach(w => skills.Add(w));
 
-                        group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.SuperAbilities.GetSuperAbility()));
-                        return;
-                    }
-            }
+            //            if (_player.SuperAbilities.GetSuperAbility() == null)
+            //            {
+            //                group.SkillsSelector.SetEmpty();
+            //                return;
+            //            }
+
+            //            group.SkillsSelector.LoadSkillsIntoCells(skills, skills.IndexOf(_player.SuperAbilities.GetSuperAbility()));
+            //            return;
+            //        }
+            //}
         }
 
         public void LoadCellWithSkill(Skill skill)
         {
-            if (skill is Weapon)
-            {
-                _swappables.Find(s => s.CellType == CellType.Weapon).Cell.SetSkill(skill);
-                _player.Shooter.SetWeapon((Weapon)skill);
-            }
-            else if (skill is OnHoldSkill)
-            {
-                _swappables.Find(s => s.CellType == CellType.HoldDownAction).Cell.SetSkill(skill);
-                _player.OnHold.SetOnHoldSkill((Ability)skill);
-            }
-            else if (skill is Ability)
-            {
-                _swappables.Find(s => s.CellType == CellType.SuperAbility).Cell.SetSkill(skill);
-                _player.SuperAbility.SetSuperAbility((Ability)skill);
-            }
-            else
-            {
-                Debug.LogError("Wait what?");
-            }
+            // TODO: Skill tree fixes
+            //if (skill is Weapon)
+            //{
+            //    _swappables.Find(s => s.CellType == CellType.Weapon).Cell.SetSkill(skill);
+            //    _player.Shooter.SetWeapon((Weapon)skill);
+            //}
+            //else if (skill is OnHoldSkill)
+            //{
+            //    _swappables.Find(s => s.CellType == CellType.HoldDownAction).Cell.SetSkill(skill);
+            //    _player.OnHold.SetOnHoldSkill((Ability)skill);
+            //}
+            //else if (skill is Ability)
+            //{
+            //    _swappables.Find(s => s.CellType == CellType.SuperAbility).Cell.SetSkill(skill);
+            //    _player.SuperAbility.SetSuperAbility((Ability)skill);
+            //}
+            //else
+            //{
+            //    Debug.LogError("Wait what?");
+            //}
         }
     }
 }

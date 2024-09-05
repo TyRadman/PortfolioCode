@@ -29,7 +29,18 @@ namespace TankLike.Utils
             }
         }
 
-        public T RequestObject(Vector3? position, Quaternion? rotation)
+        public string GetPoolList()
+        {
+            string list = "";
+
+            for (int i = 0; i < _pool.Count; i++)
+            {
+                list += _pool[i].ToString() + " ";
+            }
+            return list;
+        }
+
+        public T RequestObject(Vector3? position = null, Quaternion? rotation = null)
         {
             IPoolable obj;
 
@@ -62,7 +73,10 @@ namespace TankLike.Utils
         public void ReleaseObject(IPoolable obj)
         {
             _onRelease((T)obj);
-            _pool.Add(obj);
+            if (!_pool.Contains(obj))
+            {
+                _pool.Add(obj);
+            }
         }
 
         public void Clear()
@@ -70,7 +84,9 @@ namespace TankLike.Utils
             foreach (var obj in _pool)
             {
                 if (_onClear != null && !obj.Equals(null))
+                {
                     _onClear((T)obj);
+                }
             }
 
             _pool.Clear();

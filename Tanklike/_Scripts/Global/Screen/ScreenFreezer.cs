@@ -15,7 +15,7 @@ namespace TankLike.ScreenFreeze
         {
             if (data == null)
             {
-                Debug.Log("No freezing data");
+                //Debug.Log("No freezing data");
                 return;
             }
 

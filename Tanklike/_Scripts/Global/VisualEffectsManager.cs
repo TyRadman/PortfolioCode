@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace TankLike
 {
-    public class VisualEffectsManager : MonoBehaviour
+    public class VisualEffectsManager : MonoBehaviour, IManager
     {
         [field: SerializeField] public ExplosionEffects Explosions { get; private set; }
         [field: SerializeField] public BuffEffects Buffs { get; private set; }
@@ -19,24 +19,58 @@ namespace TankLike
         [field: SerializeField] public IndicatorEffects Indicators { get; private set; }
         [field: SerializeField] public MiscEffects Misc { get; private set; }
 
-        public void SetUp(AmmunitionDatabase bulletsDatabase)
+        public bool IsActive { get; private set; }
+
+        private AmmunitionDatabase _bulletsDatabase;
+
+        public void SetReferences(AmmunitionDatabase bulletsDatabase)
         {
+            _bulletsDatabase = bulletsDatabase;
+
+            Bullets.SetReferences(_bulletsDatabase.GetAllBullets());
+            Lasers.SetReferences(_bulletsDatabase.GetAllLaser());
+        }
+
+        #region IManager
+        public void SetUp()
+        {
+            IsActive = true;
+
             Explosions.SetUp();
             Buffs.SetUp();
             MuzzleFlashes.SetUp();
-            Bullets.SetUp(bulletsDatabase.GetAllBullets());
+            Bullets.SetUp();
             Telegraphs.SetUp();
-            Lasers.SetUp(bulletsDatabase.GetAllLaser());
+            Lasers.SetUp();
             Rockets.SetUp();
             Indicators.SetUp();
             Misc.SetUp();
         }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            Explosions.Dispose();
+            Buffs.Dispose();
+            MuzzleFlashes.Dispose();
+            Bullets.Dispose();
+            Telegraphs.Dispose();
+            Lasers.Dispose();
+            Rockets.Dispose();
+            Indicators.Dispose();
+            Misc.Dispose();
+        }
+        #endregion
     }
 
     #region Effects Classes
     public abstract class VisualEffects
     {
-        // temporary
+        public abstract void SetUp();
+        public abstract void Dispose();
+
+        // TODO: clean up
         #region CreatePool Overloads
         protected Pool<ParticleSystemHandler> CreatePool(ParticleSystemHandler prefab, int preFill)
         {
@@ -151,13 +185,23 @@ namespace TankLike
         private Pool<ParticleSystemHandler> _deathExplosionPool;
         private Pool<ParticleSystemHandler> _explosionDecalPool;
 
-        public ParticleSystemHandler DeathExplosion { get { return _deathExplosionPool.RequestObject(null, null); } }
-        public ParticleSystemHandler ExplosionDecal { get { return _explosionDecalPool.RequestObject(null, null); } }
+        public ParticleSystemHandler DeathExplosion { get { return _deathExplosionPool.RequestObject(); } }
+        public ParticleSystemHandler ExplosionDecal { get { return _explosionDecalPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _deathExplosionPool = CreatePool(_deathExplosion, 1);
             _explosionDecalPool = CreatePool(_explosionDecal, 1);
+        }
+
+        public override void Dispose()
+        {
+            _deathExplosionPool.Clear();
+            _explosionDecalPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _deathExplosionPool = null;
+            _explosionDecalPool = null;
         }
     }
 
@@ -172,15 +216,27 @@ namespace TankLike
         private Pool<ParticleSystemHandler> _superAbilityEffectPool;
         private Pool<ParticleSystemHandler> _healOnceEffectPool;
 
-        public ParticleSystemHandler LevelUp { get { return _levelUpEffectPool.RequestObject(null, null); } }
-        public ParticleSystemHandler SuperAbility { get { return _superAbilityEffectPool.RequestObject(null, null); } }
-        public ParticleSystemHandler HealOnce { get { return _healOnceEffectPool.RequestObject(null, null); } }
+        public ParticleSystemHandler LevelUp { get { return _levelUpEffectPool.RequestObject(); } }
+        public ParticleSystemHandler SuperAbility { get { return _superAbilityEffectPool.RequestObject(); } }
+        public ParticleSystemHandler HealOnce { get { return _healOnceEffectPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _levelUpEffectPool = CreatePool(_levelUpEffect, 1);
             _superAbilityEffectPool = CreatePool(_superAbilityEffect, 1);
             _healOnceEffectPool = CreatePool(_healOnceEffect, 1);
+        }
+
+        public override void Dispose()
+        {
+            _levelUpEffectPool.Clear();
+            _superAbilityEffectPool.Clear();
+            _healOnceEffectPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _levelUpEffectPool = null;
+            _superAbilityEffectPool = null;
+            _healOnceEffectPool = null;
         }
     }
 
@@ -191,11 +247,19 @@ namespace TankLike
 
         private Pool<ParticleSystemHandler> _iceMuzzleFlashPool;
 
-        public ParticleSystemHandler IceMuzzleFlash { get { return _iceMuzzleFlashPool.RequestObject(null, null); } }
+        public ParticleSystemHandler IceMuzzleFlash { get { return _iceMuzzleFlashPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _iceMuzzleFlashPool = CreatePool(_iceMuzzleFlash, 1);
+        }
+
+        public override void Dispose()
+        {
+            _iceMuzzleFlashPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _iceMuzzleFlashPool = null;
         }
     }
 
@@ -206,29 +270,66 @@ namespace TankLike
         private Dictionary<string, Pool<ParticleSystemHandler>> _muzzleFlashEffectsPool = new Dictionary<string, Pool<ParticleSystemHandler>>();
         private Dictionary<string, Pool<ParticleSystemHandler>> _impactEffectsPool = new Dictionary<string, Pool<ParticleSystemHandler>>();
 
-        public void SetUp(List<AmmunationData> bullets)
+        private List<AmmunationData> _bullets;
+
+        public void SetReferences(List<AmmunationData> bullets)
         {
-            foreach (var bullet in bullets)
+            _bullets = bullets;
+        }
+
+        public override void SetUp()
+        {
+            foreach (AmmunationData bullet in _bullets)
             {
+                // It fixes a very weird error (key already exists). We do the check already in the AmmuitionDatabase
+                if (_bulletsPool.ContainsKey(bullet.GUID))
+                {
+                    return;
+                }
+
                 _bulletsPool.Add(bullet.GUID, CreatePool((Bullet)bullet.Ammunition, 0));
                 _muzzleFlashEffectsPool.Add(bullet.GUID, CreatePool(bullet.MuzzleFlash, 0));
                 _impactEffectsPool.Add(bullet.GUID, CreatePool(bullet.Impact, 0));
             }
         }
 
+        public override void Dispose()
+        {
+            foreach (KeyValuePair<string, Pool<Bullet>> bullet in _bulletsPool)
+            {
+                bullet.Value.Clear();
+            }
+
+            _bulletsPool.Clear();
+
+            foreach (KeyValuePair<string, Pool<ParticleSystemHandler>> muzzleFlashEffect in _muzzleFlashEffectsPool)
+            {
+                muzzleFlashEffect.Value.Clear();
+            }
+
+            _muzzleFlashEffectsPool.Clear();
+
+            foreach (KeyValuePair<string, Pool<ParticleSystemHandler>> impactEffect in _impactEffectsPool)
+            {
+                impactEffect.Value.Clear();
+            }
+
+            _impactEffectsPool.Clear();
+        }
+
         public Bullet GetBullet(string guid)
         {
-            return _bulletsPool[guid].RequestObject(null, null);
+            return _bulletsPool[guid].RequestObject();
         }
 
         public ParticleSystemHandler GetImpact(string guid)
         {
-            return _impactEffectsPool[guid].RequestObject(null, null);
+            return _impactEffectsPool[guid].RequestObject();
         }
 
         public ParticleSystemHandler GetMuzzleFlash(string guid)
         {
-            return _muzzleFlashEffectsPool[guid].RequestObject(null, null);
+            return _muzzleFlashEffectsPool[guid].RequestObject();
         }
     }
 
@@ -239,11 +340,19 @@ namespace TankLike
 
         private Pool<ParticleSystemHandler> _enemyTelegraphEffectPool;
 
-        public ParticleSystemHandler EnemyTelegraph { get { return _enemyTelegraphEffectPool.RequestObject(null, null); } }
+        public ParticleSystemHandler EnemyTelegraph { get { return _enemyTelegraphEffectPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _enemyTelegraphEffectPool = CreatePool(_enemyTelegraphEffect, 0);
+        }
+
+        public override void Dispose()
+        {
+            _enemyTelegraphEffectPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _enemyTelegraphEffectPool = null;
         }
     }
 
@@ -251,26 +360,71 @@ namespace TankLike
     public class MiscEffects : VisualEffects
     {
         [SerializeField] private ParticleSystemHandler _enemySpawningEffect;
+        [SerializeField] private ParticleSystemHandler _playerSpawningEffect;
         [SerializeField] private ParticleSystemHandler _bossKeyEffect;
         [SerializeField] private ParticleSystemHandler _bossKeyImpact;
         [SerializeField] private ParticleSystemHandler _onCollectedPoof;
 
         private Pool<ParticleSystemHandler> _enemySpawningEffectPool;
+        private Pool<ParticleSystemHandler> _playerSpawningEffectPool;
         private Pool<ParticleSystemHandler> _bossKeyEffectPool;
         private Pool<ParticleSystemHandler> _bossKeyImpactPool;
         private Pool<ParticleSystemHandler> _onCollectedPoofPool;
 
-        public ParticleSystemHandler EnemySpawning { get { return _enemySpawningEffectPool.RequestObject(null, null); } }
-        public ParticleSystemHandler BossKey { get { return _bossKeyEffectPool.RequestObject(null, null); } }
-        public ParticleSystemHandler BossKeyImpact { get { return _bossKeyImpactPool.RequestObject(null, null); } }
-        public ParticleSystemHandler OnCollectedPoof { get { return _onCollectedPoofPool.RequestObject(null, null); } }
+        public ParticleSystemHandler EnemySpawning { 
+            get
+            { 
+                return _enemySpawningEffectPool.RequestObject(); 
+            } 
+        }
+        public ParticleSystemHandler PlayerSpawning { get { return _playerSpawningEffectPool.RequestObject(); } }
+        public ParticleSystemHandler BossKey { get { return _bossKeyEffectPool.RequestObject(); } }
+        public ParticleSystemHandler BossKeyImpact { get { return _bossKeyImpactPool.RequestObject(); } }
+        public ParticleSystemHandler OnCollectedPoof { get { return _onCollectedPoofPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _enemySpawningEffectPool = CreatePool(_enemySpawningEffect, 0);
+            _playerSpawningEffectPool = CreatePool(_playerSpawningEffect, 0);
             _bossKeyEffectPool = CreatePool(_bossKeyEffect, 0);
             _bossKeyImpactPool = CreatePool(_bossKeyImpact, 0);
             _onCollectedPoofPool = CreatePool(_onCollectedPoof, 0);
+        }
+
+        public override void Dispose()
+        {
+            _enemySpawningEffectPool.Clear();
+            _playerSpawningEffectPool.Clear();
+            _bossKeyEffectPool.Clear();
+            _bossKeyImpactPool.Clear();
+            _onCollectedPoofPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _enemySpawningEffectPool = null;
+            _playerSpawningEffectPool = null;
+            _bossKeyEffectPool = null;
+            _bossKeyImpactPool = null;
+            _onCollectedPoofPool = null;
+        }
+
+        public float PlayPlayerSpawnVFX(Vector3 position)
+        {
+            PlaySpawningEffect(PlayerSpawning, position);
+            return PlayerSpawning.Particles.main.startLifetime.constant / 2;
+        }
+
+        public float PlayEnemySpawnVFX(Vector3 position)
+        {
+            PlaySpawningEffect(EnemySpawning, position);
+            return EnemySpawning.Particles.main.startLifetime.constant / 2;
+        }
+
+        public void PlaySpawningEffect(ParticleSystemHandler particle, Vector3 position)
+        {
+            var vfx = particle;
+            vfx.transform.SetPositionAndRotation(position, Quaternion.identity);
+            vfx.gameObject.SetActive(true);
+            vfx.Play();
         }
     }
 
@@ -284,29 +438,65 @@ namespace TankLike
         private Dictionary<string, Pool<ParticleSystemHandler>> _muzzleFlashEffectsPool = new Dictionary<string, Pool<ParticleSystemHandler>>();
         private Dictionary<string, Pool<ParticleSystemHandler>> _impactEffectsPool = new Dictionary<string, Pool<ParticleSystemHandler>>();
 
-        public void SetUp(List<AmmunationData> lasers)
+        private List<AmmunationData> _lasers;
+
+        public void SetReferences(List<AmmunationData> lasers)
         {
-            foreach (var laser in lasers)
+            _lasers = lasers;
+        }
+
+        public override void SetUp()
+        {
+            foreach (var laser in _lasers)
             {
+                if (_lasersPool.ContainsKey(laser.GUID))
+                {
+                    return;
+                }
+
                 _lasersPool.Add(laser.GUID, CreatePool((Laser)laser.Ammunition, 0));
                 _muzzleFlashEffectsPool.Add(laser.GUID, CreatePool(laser.MuzzleFlash, 0));
                 _impactEffectsPool.Add(laser.GUID, CreatePool(laser.Impact, 0));
             }
         }
 
+        public override void Dispose()
+        {
+            foreach (KeyValuePair<string, Pool<Laser>> laser in _lasersPool)
+            {
+                laser.Value.Clear();
+            }
+
+            _lasersPool.Clear();
+
+            foreach (KeyValuePair<string, Pool<ParticleSystemHandler>> muzzleFlashEffect in _muzzleFlashEffectsPool)
+            {
+                muzzleFlashEffect.Value.Clear();
+            }
+
+            _muzzleFlashEffectsPool.Clear();
+
+            foreach (KeyValuePair<string, Pool<ParticleSystemHandler>> impactEffect in _impactEffectsPool)
+            {
+                impactEffect.Value.Clear();
+            }
+
+            _impactEffectsPool.Clear();
+        }
+
         public Laser GetLaser(string guid)
         {
-            return _lasersPool[guid].RequestObject(null, null);
+            return _lasersPool[guid].RequestObject();
         }
 
         public ParticleSystemHandler GetImpact(string guid)
         {
-            return _impactEffectsPool[guid].RequestObject(null, null);
+            return _impactEffectsPool[guid].RequestObject();
         }
 
         public ParticleSystemHandler GetMuzzleFlash(string guid)
         {
-            return _muzzleFlashEffectsPool[guid].RequestObject(null, null);
+            return _muzzleFlashEffectsPool[guid].RequestObject();
         }
     }
 
@@ -317,11 +507,19 @@ namespace TankLike
 
         private Pool<Rocket> _rocketPool;
 
-        public Rocket Rocket_01 { get { return _rocketPool.RequestObject(null, null); } }
+        public Rocket Rocket_01 { get { return _rocketPool.RequestObject(); } }
 
-        public void SetUp()
+        public override void SetUp()
         {
             _rocketPool = CreatePool(_rocket_01, 0);
+        }
+
+        public override void Dispose()
+        {
+            _rocketPool.Clear();
+
+            // Remove the references so it can be garbage collected
+            _rocketPool = null;
         }
     }
 
@@ -346,7 +544,7 @@ namespace TankLike
         [SerializeField] private Indicator _rocketRedIndicatorEffect;
         [SerializeField] private Indicator _rocketBlueIndicatorEffect;
 
-        public void SetUp()
+        public override void SetUp()
         {
             _indicatorEffectsPool.Add(IndicatorType.Circle, CreatePool(_circleIndicatorEffect, 0));       
             _indicatorEffectsPool.Add(IndicatorType.Square, CreatePool(_squareIndicatorEffect, 0));       
@@ -355,9 +553,19 @@ namespace TankLike
             _indicatorEffectsPool.Add(IndicatorType.RocketBlue, CreatePool(_rocketBlueIndicatorEffect, 0));       
         }
 
+        public override void Dispose()
+        {
+            foreach (KeyValuePair<IndicatorType, Pool<Indicator>> indicatorEffect in _indicatorEffectsPool)
+            {
+                indicatorEffect.Value.Clear();
+            }
+
+            _indicatorEffectsPool.Clear();
+        }
+
         public Indicator GetIndicatorByType(IndicatorType type)
         {
-            return _indicatorEffectsPool[type].RequestObject(null, null);
+            return _indicatorEffectsPool[type].RequestObject();
         }
     }
     #endregion

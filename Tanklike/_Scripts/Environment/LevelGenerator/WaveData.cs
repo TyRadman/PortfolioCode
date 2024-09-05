@@ -41,7 +41,7 @@ namespace TankLike.Environment
 
             if(Enemies.Exists(e => e == EnemyType.Aimer || e == EnemyType.Archer || e == EnemyType.Laser))
             {
-                Debug.Log($"WHYYYY is it false at {this.name}");
+                //Debug.Log($"WHYYYY is it false at {this.name}");
             }
 
             return false;

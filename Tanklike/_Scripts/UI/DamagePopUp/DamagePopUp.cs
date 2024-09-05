@@ -12,7 +12,7 @@ namespace TankLike.UI.DamagePopUp
     {
         [SerializeField] private TextMeshPro _text;
         [SerializeField] private Animation _animation;
-        protected Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
         private int _lastAmount = 0;
         [SerializeField] private MeshRenderer _mesh;
 
@@ -41,6 +41,7 @@ namespace TankLike.UI.DamagePopUp
             _animation.Play();
         }
 
+        #region Pool
         public void Init(Action<IPoolable> OnRelease)
         {
             OnReleaseToPool = OnRelease;
@@ -67,5 +68,6 @@ namespace TankLike.UI.DamagePopUp
         {
             OnReleaseToPool?.Invoke(this);
         }
+        #endregion
     }
 }

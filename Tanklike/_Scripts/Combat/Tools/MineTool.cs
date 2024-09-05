@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "Mine", menuName = ASSET_MENU_ROOT + "Mine")]
     public class MineTool : Tool
     {
         [Header("Special Values")]

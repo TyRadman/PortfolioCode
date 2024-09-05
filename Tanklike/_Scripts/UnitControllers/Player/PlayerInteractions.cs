@@ -7,15 +7,15 @@ namespace TankLike.UnitControllers
 {
     public class PlayerInteractions : MonoBehaviour, IController, IInput
     {
-        [SerializeField] private PlayerComponents _components;
-        [SerializeField] private InteractableArea _interactable;
+        private PlayerComponents _components;
+        private InteractableArea _interactable;
         [SerializeField] private Audio _onSwitchAudio;
 
         public bool IsActive { get; private set; }
 
-        public void SetUp()
+        public void SetUp(PlayerComponents components)
         {
-
+            _components = components;
         }
 
         #region Input
@@ -23,26 +23,26 @@ namespace TankLike.UnitControllers
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap interactionMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            interactionMap.FindAction(c.Player.Shoot.name).performed += Interact;
+            interactionMap.FindAction(c.Player.Jump.name).performed += Interact;
         }
 
         public void DisposeInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap interactionMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            interactionMap.FindAction(c.Player.Shoot.name).performed -= Interact;
+            interactionMap.FindAction(c.Player.Jump.name).performed -= Interact;
         }
         #endregion
 
-        public void OnInteractionAreaEnter(InteractableArea type, Transform buttonDisplayPosition, string interactionText, AbilityConstraint constraints)
+        public void OnInteractionAreaEnter(InteractableArea interactable, Transform buttonDisplayPosition, string interactionText, AbilityConstraint constraints)
         {
-            _interactable = type;
+            _interactable = interactable;
             // enable the interaction input
             SetUpInput(_components.PlayerIndex);
             // disable shooting input by apply constraints
             _components.Constraints.ApplyConstraints(true, constraints);
             //GameManager.Instance.InputManager.EnableInteractionInput(true);
-            GameManager.Instance.InteractableAreasManager.ActivateTextBox(buttonDisplayPosition, interactionText, _components.PlayerIndex);
+            GameManager.Instance.InteractableAreasManager.ActivateTextBox(buttonDisplayPosition, interactionText);
         }
 
         public void OnInteractionAreaExit(AbilityConstraint constraints)
@@ -52,7 +52,7 @@ namespace TankLike.UnitControllers
             DisposeInput(_components.PlayerIndex);
             // enable shooting and other constraints that have been applied
             _components.Constraints.ApplyConstraints(false, constraints);
-            //GameManager.Instance.InputManager.EnablePlayerInput(true);
+            //GameManager.Instance.InputManager.EnablePlayerInput();
             GameManager.Instance.InteractableAreasManager.DeactivateTextBox(_components.PlayerIndex);
         }
 

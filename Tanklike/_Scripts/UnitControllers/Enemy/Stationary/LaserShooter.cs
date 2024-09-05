@@ -4,25 +4,31 @@ using TankLike.Cam;
 using TankLike.Combat;
 using TankLike.Misc;
 using TankLike.Sound;
+using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
     public class LaserShooter : EnemyShooter
     {
+        public System.Action OnLaserFacedTarget;
+
         [SerializeField] private LayerMask _wallLayers;
 
         public override void DefaultShot(Transform shootingPoint = null, float angle = 0)
         {
-            if (_currentWeapon == null) return;
+            if (_currentWeapon == null)
+            {
+                return;
+            }
 
-            OnShoot?.Invoke();
+            OnShootStarted?.Invoke();
 
             foreach (Transform point in _shootingPoints)
             {
-                _currentWeapon.OnShot(_components, point, angle);
+                _currentWeapon.OnShot(point, angle);
             }
-            //SpawnBullet();
+
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
         }
 
@@ -45,16 +51,13 @@ namespace TankLike.UnitControllers
                 _activePoolables.Add(vfx);
                 activeEffects.Add(vfx);
 
-              
-
                 if(_currentWeapon.IndicatorType != IndicatorEffects.IndicatorType.None)
                 {
                     Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_currentWeapon.IndicatorType);
                     indicator.gameObject.SetActive(true);
                     var pos = point.position;
-                    pos.y = 0.52f;
-                    indicator.transform.position = pos;
-                    indicator.transform.rotation = point.rotation;         
+                    pos.y = 0.52f; // dirty 
+                    indicator.transform.SetPositionAndRotation(pos, point.rotation);         
                     indicator.transform.parent = point;
                     indicator.Play();
                     _activePoolables.Add(indicator);
@@ -90,6 +93,7 @@ namespace TankLike.UnitControllers
             }
 
             OnTelegraphFinished?.Invoke();
+
             foreach (var effect in activeEffects)
             {
                 effect.TurnOff();
@@ -113,5 +117,71 @@ namespace TankLike.UnitControllers
             activeEffects.Clear();
             activeIndicators.Clear();
         }
+
+        public virtual void AimLaserAtTarget(Transform target)
+        {
+            float rotationAmount;
+            float rotationSpeed = 50f;
+
+            Vector3 direction = (target.position - transform.position).normalized;
+
+            Vector3 closestDirection = _shootingPoints[0].forward;
+            float maxDot = Vector3.Dot(direction, closestDirection);
+
+            for (int i = 1; i < _shootingPoints.Count; i++)
+            {
+                float dot = Vector3.Dot(direction, _shootingPoints[i].forward);
+
+                if (dot > maxDot)
+                {
+                    maxDot = dot;
+                    closestDirection = _shootingPoints[i].forward;
+                }
+            }
+
+            float angle = Vector3.SignedAngle(direction, closestDirection, Vector3.up);
+            float dirDot = Vector3.Dot(direction, closestDirection);
+
+            // Calculate the distance to the player
+            float distanceToPlayer = Vector3.Distance(transform.position, target.position);
+
+            // Calculate an angle threshold based on the distance
+            float angleThreshold = Mathf.Lerp(13f, 2.3f, distanceToPlayer / 13f);
+
+            float angleToTarget = Quaternion.Angle(Quaternion.LookRotation(direction), Quaternion.LookRotation(closestDirection));
+            Debug.Log(angleToTarget + " " + angleThreshold);
+
+            if (angleToTarget < angleThreshold)
+            {
+                OnLaserFacedTarget?.Invoke();
+            }
+
+            //if (dirDot >= 0.999f)
+            //{
+            //    OnLaserFacedTarget?.Invoke();
+            //}
+
+            if (angle > 1f)
+            {
+                rotationAmount = -1f;
+            }
+            else if (angle < 1f)
+            {
+                rotationAmount = 1f;
+            }
+            else
+            {
+                rotationAmount = 0f;
+            }
+
+            _turret.Rotate(rotationSpeed * rotationAmount * Time.deltaTime * Vector3.up);
+        }
+
+        #region IController
+        public override void Restart()
+        {
+            base.Restart();
+        }
+        #endregion
     }
 }

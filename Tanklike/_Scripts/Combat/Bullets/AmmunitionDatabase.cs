@@ -5,21 +5,34 @@ using UnityEditor;
 
 namespace TankLike.Combat
 {
+    using BT;
+
     [CreateAssetMenu(fileName = "Ammunition_DB_Default", menuName = Directories.AMMUNITION + "Ammunition Database")]
     public class AmmunitionDatabase : ScriptableObject
     {
         [SerializeField] private List<AmmunationData> _ammunitions;
 
-        private Dictionary<string, AmmunationData> _ammunitionsDB;
+        [SerializeField] private SerializableDictionary<string, AmmunationData> _ammunitionsDB;
         [field: SerializeField] public string DirectoryToCover { get; private set; }
 
         private void OnEnable()
         {
-            _ammunitionsDB = new Dictionary<string, AmmunationData>();
-         
-            foreach (var ammunition in _ammunitions)
+            FillDictionary();
+        }
+
+        public void FillDictionary()
+        {
+            _ammunitionsDB = new SerializableDictionary<string, AmmunationData>();
+
+            foreach (AmmunationData ammunition in _ammunitions)
             {
-                _ammunitionsDB.Add(ammunition.GUID, ammunition);
+                if (!_ammunitionsDB.ContainsKey(ammunition.GUID))
+                {
+                    //string guid = GUID.Generate().ToString();
+                    string guid = ammunition.GetInstanceID().ToString();
+                    ammunition.GUID = guid;
+                    _ammunitionsDB.Add(ammunition.GUID, ammunition);
+                }
             }
         }
 
@@ -60,7 +73,8 @@ namespace TankLike.Combat
 
         public void ClearAmmunitionList()
         {
-            _ammunitions.Clear();
+            _ammunitions.Clear(); 
+            _ammunitionsDB.Clear();
         }
     }
 }

@@ -24,7 +24,9 @@ namespace TankLike.UI.DamagePopUp
         public void DisplayPopUp(DamagePopUpType type, int damageText, Vector3 position)
         {
             if (!_enabled)
+            {
                 return;
+            }
 
             DamagePopUp popUp = _popUpsPool.RequestObject(position, Quaternion.identity);
             popUp.gameObject.SetActive(true);

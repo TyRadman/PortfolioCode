@@ -64,7 +64,7 @@ namespace TankLike.UnitControllers
             Vector3 dir = target.position - _shootingPoints[0].position;
             dir.Normalize();
             _shootingPoints[0].rotation = Quaternion.LookRotation(dir);
-            _currentWeapon.OnShot(_components, _shootingPoints[0]);
+            _currentWeapon.OnShot(_shootingPoints[0]);
         }
     }
 }

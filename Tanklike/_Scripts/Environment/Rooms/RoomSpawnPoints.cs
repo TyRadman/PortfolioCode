@@ -1,10 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Utils;
+using System.Linq;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using Utils;
+
     public class RoomSpawnPoints : MonoBehaviour
     {
         [System.Serializable]
@@ -27,6 +29,12 @@ namespace TankLike.Environment
 
         public Transform GetRandomSpawnPoint(bool markSpawnPointAsTaken = true)
         {
+            if (Points.Count <= 0)
+            {
+                Debug.LogError($"No points available in {gameObject.name}");
+                return null;
+            }
+
             SpawnPoint point;
 
             // if all the points are taken, then we reset them and reuse them
@@ -49,6 +57,11 @@ namespace TankLike.Environment
         public void SetAllPointsAsNotTaken()
         {
             Points.ForEach(p => p.Taken = false);
+        }
+
+        public Transform GetClosestSpawnPointToPosition(Vector3 position, int order)
+        {
+            return Points.OrderBy(p => Vector3.Distance(position, p.Point.position)).ToArray()[order].Point;
         }
     }
 }

@@ -34,6 +34,7 @@ namespace TankLike.UnitControllers.States
         public override void SetUp(StateMachine<BossStateType> stateMachine, BossComponents bossComponents)
         {
             base.SetUp(stateMachine, bossComponents);
+            _sideMachineGunsWeapon.SetUp(bossComponents);
             _movement.OnTargetFaced += OnTargetFacedHandler;
         }
 
@@ -79,6 +80,9 @@ namespace TankLike.UnitControllers.States
         {
             _isActive = false;
             _isFacingTarget = false;
+
+            if (_attackCoroutine != null)
+                _attackController.StopCoroutine(_attackCoroutine);
         }
 
         public override void OnDispose()
@@ -130,8 +134,8 @@ namespace TankLike.UnitControllers.States
 
             for (int i = 0; i < _sideMachineGunsShotsNumber; i++)
             {
-                _sideMachineGunsWeapon.OnShot(_components, _attackController.RightMachineGunShootingPoint);
-                _sideMachineGunsWeapon.OnShot(_components, _attackController.LeftMachineGunShootingPoint);
+                _sideMachineGunsWeapon.OnShot(_attackController.RightMachineGunShootingPoint);
+                _sideMachineGunsWeapon.OnShot(_attackController.LeftMachineGunShootingPoint);
                 yield return wait;
             }
 

@@ -9,11 +9,13 @@ namespace TankLike.UnitControllers
         [Header("Settings")]
         [SerializeField] private float _maxFuel;
         [SerializeField] private float _refillSpeed;
+        [SerializeField] private float _refillDelay = 1f;
 
         private PlayerComponents _components;
         private float _currentFuel;
-        private List<IController> _currentConsumers;
-        private float _canRefill;
+        private Coroutine _refillCoroutine;
+        private WaitForSeconds _refillWaitForSeconds;
+        private bool _canConsumeFuel = true;
 
         public bool IsActive { get; private set; }
 
@@ -22,23 +24,8 @@ namespace TankLike.UnitControllers
             _components = components;
             _currentFuel = _maxFuel;
 
-            _currentConsumers = new List<IController>();
-
+            _refillWaitForSeconds = new WaitForSeconds(_refillDelay);
             UpdateFuelUI();
-        }
-
-        private void Update()
-        {
-            if(!IsActive)
-            {
-                return;
-            }
-
-            if(_currentFuel < _maxFuel && _currentConsumers.Count == 0)
-            {
-                _currentFuel += _refillSpeed * Time.deltaTime;
-                UpdateFuelUI();
-            }
         }
 
         public bool HasEnoughFuel(float amount)
@@ -51,11 +38,34 @@ namespace TankLike.UnitControllers
             return true;
         }
 
+        public bool HasEnoughFuel()
+        {
+            return _currentFuel > 0f;
+        }
+
         public void UseFuel(float amount)
         {
+            if(!_canConsumeFuel)
+            {
+                return;
+            }
+
             _currentFuel -= amount;
             _currentFuel = Mathf.Clamp(_currentFuel, 0f, _maxFuel);
 
+            UpdateFuelUI();
+
+            if (_refillCoroutine != null)
+            {
+                StopCoroutine(_refillCoroutine);
+            }
+
+            _refillCoroutine = StartCoroutine(RefillRoutine());
+        }
+
+        public void RefillFuel()
+        {
+            _currentFuel = _maxFuel;
             UpdateFuelUI();
         }
 
@@ -64,24 +74,22 @@ namespace TankLike.UnitControllers
             GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].UpdateFuelBar(_currentFuel, _maxFuel);
         }
 
-        public void AddConsumer(IController consumer)
+        private IEnumerator RefillRoutine()
         {
-            //Debug.Log("Adding fuel consumer " + consumer);
+            yield return _refillWaitForSeconds;
 
-            if (!_currentConsumers.Contains(consumer))
+            while (_currentFuel < _maxFuel)
             {
-                _currentConsumers.Add(consumer);
+                _currentFuel += _refillSpeed * Time.deltaTime;
+                UpdateFuelUI();
+
+                yield return null;
             }
         }
 
-        public void RemoveConsumer(IController consumer)
+        public void EnableFuelConsumption(bool enable)
         {
-            //Debug.Log("Removing fuel consumer " + consumer);
-
-            if (_currentConsumers.Contains(consumer))
-            {
-                _currentConsumers.Remove(consumer);
-            }
+            _canConsumeFuel = enable;
         }
 
         #region IController

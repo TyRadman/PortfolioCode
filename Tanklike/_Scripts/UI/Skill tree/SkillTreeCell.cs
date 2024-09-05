@@ -55,7 +55,7 @@ namespace TankLike.SkillTree
                 _lines.ForEach(l => l.PlayLockedAnimation());
             }
 
-            SetIcon(SkillProfile.Skill.GetIcon());
+            SetIcon(SkillProfile.SkillHolder.GetIcon());
 
             switch (CellType)
             {
@@ -84,7 +84,7 @@ namespace TankLike.SkillTree
                 return;
             }
 
-            SetIcon(SkillProfile.Skill.GetIcon());
+            SetIcon(SkillProfile.SkillHolder.GetIcon());
             _coverImage.enabled = true;
         }
 

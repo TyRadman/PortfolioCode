@@ -36,7 +36,7 @@ namespace TankLike.UI.SkillTree
             IsActive = true;
             //EnableInput(true);
             _skillTreeHolder.gameObject.SetActive(true);
-            GameManager.Instance.InputManager.EnableUIInput(true);
+            GameManager.Instance.InputManager.EnableUIInput();
         }
 
         public override void Close(int playerIndex = 0)
@@ -49,8 +49,8 @@ namespace TankLike.UI.SkillTree
             //EnableInput(false);
             _skillTreeHolder.gameObject.SetActive(false);
             CancelInvoke();
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
-            GameManager.Instance.InputManager.EnableUIInput(true);
+            GameManager.Instance.InputManager.DisableInputs();
+            GameManager.Instance.InputManager.EnablePlayerInput();
         }
 
         #region Input set up
@@ -74,12 +74,5 @@ namespace TankLike.UI.SkillTree
             _skillTreeHolder.Navigate(direction);
         }
         #endregion
-
-        private void Select()
-        {
-            if (!IsActive) return;
-
-            _skillTreeHolder.Select();
-        }
     }
 }

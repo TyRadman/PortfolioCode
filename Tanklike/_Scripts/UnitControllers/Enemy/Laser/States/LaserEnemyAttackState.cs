@@ -10,7 +10,6 @@ namespace TankLike.UnitControllers.States
     public class LaserEnemyAttackState : AttackState
     {
         [SerializeField] private Vector2 _attackCooldownRange;
-        [SerializeField] private float _aimAtTargetChance = 0.5f;
         private EnemyMovement _movement;
         private Transform _target;
         private bool _isTelegraphing;
@@ -43,18 +42,14 @@ namespace TankLike.UnitControllers.States
             _cooldownTimer = 0f;
 
             _startAttack = true;
-
-            var aimChance = Random.Range(0f, 1f);
-            _aimAtTarget = aimChance <= _aimAtTargetChance ? true : false;
         }
 
         public override void OnUpdate()
         {
-            //if (_aimAtTarget)
-            //    _turretController.HandleTurretRotation(_target);
-
             if (_movement.GetCurrentSpeed() >= 0.1f)
+            {
                 return;
+            }
 
             if (_startAttack)
             {
@@ -65,6 +60,7 @@ namespace TankLike.UnitControllers.States
             if (_isCooldown)
             {
                 _cooldownTimer += Time.deltaTime;
+
                 if (_cooldownTimer >= _cooldownDuration)
                 {
                     _stateMachine.ChangeState(EnemyStateType.MOVE);
@@ -85,10 +81,12 @@ namespace TankLike.UnitControllers.States
         private void OnTelegraphFinishedHandler()
         {
             if (!_isActive)
+            {
                 return;
+            }
 
             _isTelegraphing = false;
-            _shooter.StartAttackRoutine(((LaserWeapon)_shooter.GetWeapon()).GetDuration());
+            _shooter.StartAttackRoutine(((LaserWeapon)_shooter.GetWeapon()).GetLaserDuration());
             _aimAtTarget = false;
         }
 

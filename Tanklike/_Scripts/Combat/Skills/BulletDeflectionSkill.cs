@@ -5,17 +5,17 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Bullet Deflection Skill", menuName = "Skills/Stats/Bullet Deflection")]
+    [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "BulletDeflection", menuName = MENU_ROOT + "Bullet Deflection")]
     public class BulletDeflectionSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private Deflection _deflectionInfo;
 
-        public override void SetUp(Transform tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
 
-            TankShooter shooter = tankTransform.GetComponent<TankShooter>();
+            TankShooter shooter = components.Shooter;
             shooter.SetDeflection(_deflectionInfo);
         }
     }

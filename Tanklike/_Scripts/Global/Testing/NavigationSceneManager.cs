@@ -6,23 +6,24 @@ namespace TankLike
 {
     public class NavigationSceneManager : GameManager
     {
-        protected override void Start()
-        {
-            Debug.Log("Setting up Navigation Manager");
+        // TODO: What is this class used for?
+        //protected override void Start()
+        //{
+        //    Debug.Log("Setting up Navigation Manager");
 
-            AudioManager.SetUp();
-            DamagePopUpManager.SetUp();
+        //    AudioManager.SetUp();
+        //    DamagePopUpManager.SetUp();
 
-            ObstaclesVanisher.SetUp();
-            PoolingManager.Setup(_spawnablesParent);
-            InteractableAreasManager.SetUp();
-            CollectableManager.SetUp();
-            VisualEffectsManager.SetUp(BulletsDatabase);
+        //    ObstaclesVanisher.SetUp();
+        //    PoolingManager.Setup(_spawnablesParent);
+        //    InteractableAreasManager.SetUp();
+        //    CollectableManager.SetUp();
+        //    VisualEffectsManager.SetUp(BulletsDatabase);
 
-            BossKeysManager.SetUp();
-            ShopsManager.SetUp();
+        //    BossKeysManager.SetUp();
+        //    ShopsManager.SetUp();
 
-            InputManager.EnablePlayerInput(true);
-        }
+        //    InputManager.EnablePlayerInput();
+        //}
     }
 }

@@ -106,5 +106,15 @@ namespace TankLike.Environment
 
             return _droppers;
         }
+
+        public Vector3 GetRandomSpawnPoint()
+        {
+            return Spawner.SpawnPoints.GetRandomSpawnPoint(false).position;
+        }
+
+        public Vector3 GetClosestSpawnPointToPosition(Vector3 position, int order)
+        {
+            return Spawner.SpawnPoints.GetClosestSpawnPointToPosition(position, order).position;
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,7 +16,6 @@ namespace TankLike.UI.Notifications
             public QuestState State;
         }
 
-        [SerializeField] private List<NotificationBarSettings_SO> _notificationSettings;
         [Header("Quests")]
         [SerializeField] private QuestNotificationBar _questBar;
         private const float QUEST_ON_DISPLAY_SHORT_DURATION = 1f;
@@ -39,10 +39,9 @@ namespace TankLike.UI.Notifications
             _playerNotifications.ForEach(p => p.SetUp());
         }
 
-        public void PushCollectionNotification(NotificationType notificationType, int amount, int playerIndex)
+        public void PushCollectionNotification(NotificationBarSettings_SO settings, int amount, int playerIndex, string extraText = "")
         {
-            NotificationBarSettings_SO settings = _notificationSettings.Find(s => s.Type == notificationType);
-            _playerNotifications[playerIndex].PushCollectionNotification(notificationType, amount, settings);
+            _playerNotifications[playerIndex].PushCollectionNotification(amount, settings, extraText);
         }
 
         #region Quest Notification
@@ -64,8 +63,14 @@ namespace TankLike.UI.Notifications
             yield return new WaitForEndOfFrame();
 
             // if this is the last task, then display it twice as long, otherwise, make it short
-            if (_questTasks.Count == 1) yield return _questLongWait;
-            else yield return _questShortWait;
+            if (_questTasks.Count == 1)
+            {
+                yield return _questLongWait;
+            }
+            else
+            {
+                yield return _questShortWait;
+            }
 
             _questBar.Hide();
             yield return _questHideWait;

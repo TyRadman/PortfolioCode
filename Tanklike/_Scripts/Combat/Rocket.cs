@@ -25,11 +25,8 @@ namespace TankLike.Combat
         {
             if (shooter != null)
             {
-                _shooter = shooter;
+                Instigator = shooter;
             }
-
-            //AddTargetTag(MUTUAL_HITTABLE_TAG);
-            //AddTargetTag(WALL_TAG);
         }
    
         public void Fire(Vector3 startPoint, Vector3 endPoint, float range, System.Action<IDamageable, Vector3?, bool> OnAttackHit, Indicator targetIndicator)
@@ -87,13 +84,13 @@ namespace TankLike.Combat
             if (_targetTags.Exists(t => other.CompareTag(t)))
             {
                 IDamageable damagable = null;
-                IElementTarget elementTarget = null;
+                //IElementTarget elementTarget = null;
 
                 // checks for damagables
                 if (other.GetComponent<IDamageable>() != null)
                 {
                     damagable = other.GetComponent<IDamageable>();
-                    if (!damagable.Invincible)
+                    if (!damagable.IsInvincible)
                     {
                         // we need to get the contact point in the future for more accuracy, but this will do for now REWORK_CHECK
                         //_impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
@@ -133,60 +130,20 @@ namespace TankLike.Combat
 
                     if (t.TryGetComponent(out IDamageable damagable))
                     {
-                        if (damagable.Invincible) continue;
+                        if (damagable.IsInvincible) continue;
 
-                        damagable.TakeDamage(_damage, Vector3.zero, _shooter, transform.position);
+                        damagable.TakeDamage(_damage, Vector3.zero, Instigator, transform.position);
                     }
                 }
             }
-
-            //if (targetIndicator != null)
-            //    targetIndicator.SetActive(false);
-
-            //StartCoroutine(CollisionEffectsRoutine());
         }
 
-        //private IEnumerator CollisionEffectsRoutine()
-        //{
-        //    //audioSource.Stop();
-        //    //audioSource.Play();
-        //    //explosionParticles.Stop(true);
-        //    //explosionParticles.Play(true);
-
-        //    //yield return new WaitForSeconds(explosionDuration);
-
-        //    //if (ReleaseToPool != null)
-        //    //    ReleaseToPool(this);
-        //    //else
-        //    //    Destroy(gameObject);
-
-
-        //}
-
-        //public void PlayImpactEffects()
-        //{
-        //    var impact = GameManager.Instance.VisualEffectsManager.Bullets.GetImpact(_bulletData.GUID);
-        //    impact.transform.position = transform.position;
-        //    var rotation = Quaternion.LookRotation(transform.forward);
-        //    impact.transform.rotation = rotation;
-        //    impact.gameObject.SetActive(true);
-        //    impact.Play();
-        //}
-
-        //private void PlayEffects()
-        //{
-        //    GameManager.Instance.BulletsManager.RemoveBullet(this);
-        //    OnReleaseToPool(this);
-        //}
-
         #region Pool
-        public void OnRelease()
+        public override void OnRelease()
         {
-            gameObject.SetActive(false);
-            GameManager.Instance.SetParentToSpawnables(gameObject);
-
-            //if (_laserCoroutine != null)
-            //    StopCoroutine(_laserCoroutine);
+            base.OnRelease();
+            //gameObject.SetActive(false);
+            //GameManager.Instance.SetParentToSpawnables(gameObject);
         }
 
         #endregion

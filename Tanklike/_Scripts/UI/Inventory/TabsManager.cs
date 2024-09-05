@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using TankLike.Utils;
 using TMPro;
+using UnityEngine.InputSystem;
 
 namespace TankLike.UI.Inventory
 {
+    using Signifiers;
+    using TankLike.Sound;
+
     /// <summary>
     /// Also known as the inventory, but can be used for any tabs manager (but we won't do so)
     /// </summary>
@@ -16,6 +20,7 @@ namespace TankLike.UI.Inventory
             TabHeads, TabContent
         }
 
+
         private TabReferenceUI _selectedTab;
         [SerializeField] private int _selectedTabIndex = 0;
         [Header("References")]
@@ -24,10 +29,13 @@ namespace TankLike.UI.Inventory
         [SerializeField] private GameObject _content;
         [SerializeField] private TextMeshProUGUI _switchLeftKeyText;
         [SerializeField] private TextMeshProUGUI _switchRightKeyText;
+        [SerializeField] private UIActionSignifiersController _menuActionSignifiersController;
         [Header("Tab Heads Settings")]
         [SerializeField] private TabActivationSettings _enableTabSettings;
         [SerializeField] private TabActivationSettings _disableTabSettings;
         [SerializeField] private TabActivationSettings _selectedTabSettings;
+
+        private const string RETURN_ACTION_TEXT = "Return";
 
         private void Awake()
         {
@@ -57,7 +65,7 @@ namespace TankLike.UI.Inventory
         {
             SetPlayerIndex(playerIndex);
             // disable gameplay and enable UI input
-            GameManager.Instance.InputManager.EnableUIInput(true);
+            GameManager.Instance.InputManager.EnableUIInput();
 
             // load all the tabs' content
             _tabs.ForEach(t => t.Navigator.Load(playerIndex));
@@ -79,15 +87,56 @@ namespace TankLike.UI.Inventory
             _selectedTab.Navigator.SetActiveCellAsFirstCell();
             // change the tab's text size and color to indicate that the control went over to the content of the tab
             _selectedTab.Tab.HighLight(_selectedTabSettings);
+            // display input signifiers
+            SetUpSignifiers();
 
             base.Open(playerIndex);
         }
 
+        public override void SetUpSignifiers()
+        {
+            if(_menuActionSignifiersController == null)
+            {
+                Debug.LogError($"No signifiers controller reference at {gameObject.name}");
+                return;
+            }
+
+            base.SetUpSignifiers();
+            PlayerInputActions c = InputManager.Controls;
+            InputActionMap UIMap = InputManager.GetMap(PlayerIndex, ActionMap.UI);
+
+            if(UIMap == null)
+            {
+                Debug.LogError($"Input map {ActionMap.UI} reference is null");
+                return;
+            }
+
+            int returnActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Cancel.name, PlayerIndex);
+            //string inventoryReturnActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Inventory.name, PlayerIndex).ToString();
+
+            _menuActionSignifiersController.DisplaySignifier(RETURN_ACTION_TEXT, Helper.GetInputIcon(returnActionIconIndex));
+            _menuActionSignifiersController.SetLastSignifierAsParent();
+
+            int leftKeyIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.UI.Tab_Left.name, PlayerIndex);
+            int rightKeyIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.UI.Tab_Right.name, PlayerIndex);
+            _switchLeftKeyText.text = Helper.GetInputIcon(leftKeyIconIndex);
+            _switchRightKeyText.text = Helper.GetInputIcon(rightKeyIconIndex);
+        }
+
+        private void ResetSignifiers()
+        {
+            _menuActionSignifiersController.ClearAllSignifiers();
+        }
+
         public override void Close(int playerIndex = 0)
         {
-            if (!IsActive) return;
+            if (!IsActive)
+            {
+                return;
+            }
 
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
+            ResetSignifiers();
+            GameManager.Instance.InputManager.EnablePlayerInput();
 
             _content.SetActive(false);
             ResetTabs();
@@ -132,6 +181,11 @@ namespace TankLike.UI.Inventory
             {
                 _selectedTab.Content.SetActive(true);
             }
+
+            // Play navigate menu audio
+            AudioManager audioManager = GameManager.Instance.AudioManager;
+            // TODO: where did the UI Audio go?
+            //audioManager.Play(audioManager.UIAudio.NavigateMenuAudio);
         }
         #endregion
 

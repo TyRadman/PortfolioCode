@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "HealField", menuName = ASSET_MENU_ROOT + "Heal Field")]
     public class HealFieldTool : Tool
     {
         [Header("Special Values")]

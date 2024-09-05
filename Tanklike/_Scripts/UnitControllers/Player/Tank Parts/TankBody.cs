@@ -9,7 +9,6 @@ namespace TankLike.UnitControllers
     {
         [field: SerializeField] public CollisionEventPublisher Bumper { private set; get; }
         [field: SerializeField] public List<ParticleSystem> BoostParticles { private set; get; }
-        [field: SerializeField] public List<ParticleSystem> DoubleBoostParticles { private set; get; }
         [field: SerializeField] public ParticleSystem LandParticles { private set; get; }
         [field: SerializeField] public List<DamageDetector> DamageDetectors { private set; get; }
 

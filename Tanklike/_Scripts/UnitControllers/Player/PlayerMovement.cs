@@ -10,7 +10,6 @@ namespace TankLike.UnitControllers
 {
     public class PlayerMovement : TankMovement, IInput
     {
-        public System.Action OnBoostFinished;
         [SerializeField] private LayerMask _bumpingLayers;
 
         [Header("Testing")]
@@ -20,13 +19,11 @@ namespace TankLike.UnitControllers
 
         [Header("Bumping")]
         [SerializeField] private float _obstacleDetectionDistance = 1f;
-        [SerializeField] private float _bumpDragDistance = 0.1f;
 
         [SerializeField] private PlayerJump _playerJump;
         private Vector3 _lastMovementInput;
         private Vector3 _moveDir;
         private bool _useGravity;
-        private Coroutine _boostCoroutine;
         private CollisionEventPublisher _bumper;
         private bool _isTouchingWall;
         private bool _decelerate;
@@ -37,13 +34,14 @@ namespace TankLike.UnitControllers
 
         private Vector2 _inputVector;
         private PlayerComponents _playerComponents;
-        private bool _isBoosting;
+        private PlayerBoost _boost;
 
 
         public override void SetUp(TankComponents components)
         {
             base.SetUp(components);
             _playerComponents = (PlayerComponents)components;
+            _boost = _playerComponents.PlayerBoost;
             TankBodyParts parts = components.TankBodyParts;
 
             SetUpInput(((PlayerComponents)_components).PlayerIndex);
@@ -101,7 +99,7 @@ namespace TankLike.UnitControllers
             }
             else
             {
-                if (!_isBoosting)
+                if (!_boost.IsBoosting)
                 {
                     ApplyWiggle();
                     ApplyMomentum();
@@ -116,6 +114,7 @@ namespace TankLike.UnitControllers
         private void ApplyDeceleration()
         {
             CurrentSpeed -= Time.deltaTime * _decelerationDefault;
+
             if (CurrentSpeed <= 0)
             {
                 CurrentSpeed = 0f;
@@ -162,7 +161,6 @@ namespace TankLike.UnitControllers
         private void ApplyAnimation()
         {
             _animation.AnimateMovement(_lastMovementInput.magnitude != 0, 1, 0, CurrentSpeed * _speedMultiplier);
-            _animation.AnimateTurretTurn(CurrentSpeed, _turnAmount);
         }
 
         private void ApplyWiggle()
@@ -201,42 +199,6 @@ namespace TankLike.UnitControllers
                 _forwardAmount = 1;
             }
         }
-        //private void ApplyWiggle()
-        //{
-        //    if (_movementInput.magnitude > 0)
-        //    {
-        //        if (CurrentSpeed == 0f && _forwardAmount == 0)
-        //        {
-        //            if (!_playerJump.IsJumping)
-        //            {
-        //                _components.TankWiggler.WiggleBody(_backwardWiggle);
-        //            }
-
-        //            _forwardAmount = 1;
-        //        }
-        //    }
-        //    else
-        //    {
-        //        if (CurrentSpeed == 1f && _forwardAmount == 1)
-        //        {
-        //            if (!_playerJump.IsJumping)
-        //            {
-        //                _components.TankWiggler.WiggleBody(_forwardWiggle);
-        //            }
-
-        //            _forwardAmount = 0;
-        //        }
-        //    }
-
-        //    if (CurrentSpeed == 0f && _forwardAmount != 0)
-        //    {
-        //        _forwardAmount = 0;
-        //    }
-        //    else if (CurrentSpeed == 1f && _forwardAmount != 1)
-        //    {
-        //        _forwardAmount = 1;
-        //    }
-        //}
 
         public void SetBodyRotation(Quaternion rotation)
         {
@@ -307,71 +269,10 @@ namespace TankLike.UnitControllers
             _useGravity = value;
         }
 
-        public void StartBoost(float boostMultiplier, float boostDuration, AnimationCurve boostCurve)
+        public void SetCurrentSpeed(float currentSpeed)
         {
-            _currentMovement = Vector3.zero;
-            CurrentSpeed = 0.5f;
-
-            if (_boostCoroutine != null)
-            {
-                StopCoroutine(_boostCoroutine);
-            }
-
-            _boostCoroutine = StartCoroutine(BoostMovementRoutine(boostMultiplier, boostDuration, boostCurve));
+            CurrentSpeed = currentSpeed;
         }
-
-        private IEnumerator BoostMovementRoutine(float boostMultiplier, float boostDuration, AnimationCurve boostCurve)
-        {
-            _bumper.gameObject.SetActive(true);
-
-            _isBoosting = true;
-            float timer = 0f;
-            _forwardAmount = 1;
-            _lastForwardAmount = 1;
-            bool stopBoost = false;
-            float accelerationTime = 0.25f;
-            
-            while(timer < accelerationTime)
-            {
-                timer += Time.deltaTime;
-                CurrentSpeed = Mathf.Lerp(CurrentSpeed, 1f, timer / accelerationTime);
-                yield return null;
-            }
-
-            timer = 0f;
-            CurrentSpeed = 1f;
-
-            while (timer < boostDuration && !stopBoost)
-            {
-                float t = boostCurve.Evaluate(timer / boostDuration);
-
-                CurrentSpeed = 1f + t * boostMultiplier;
-
-                timer += Time.deltaTime;
-                yield return null;
-            }
-
-            StopBoost();
-        }
-
-        public void CancelBoost()
-        {
-            if (_boostCoroutine != null)
-            {
-                StopCoroutine(_boostCoroutine);
-            }
-
-            StopBoost();
-        }
-
-        private void StopBoost()
-        {
-            _isBoosting = false;
-            _bumper.gameObject.SetActive(false);
-            OnBoostFinished?.Invoke();
-            GameManager.Instance.CameraManager.PlayerCameraFollow.ResetSpeedMultiplier(_playerComponents.PlayerIndex);
-        }
-
 
         public void SetBumper(CollisionEventPublisher bumper)
         {
@@ -392,32 +293,6 @@ namespace TankLike.UnitControllers
             }
         }
 
-        private IEnumerator BumpingRoutine()
-        {
-            if (_boostCoroutine != null)
-            {
-                StopCoroutine(_boostCoroutine);
-            }
-
-            GameManager.Instance.AudioManager.Play(_bumpAudio);
-            IsActive = false;
-            StopBoost();
-            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.HIT);
-            _currentMovement = _lastForwardAmount * _body.forward * _bumpDragDistance;
-            _currentMovement.y = 0f;
-            HandleGravity();
-            _characterController.Move(_currentMovement); 
-            _currentMovement = Vector3.zero;
-            _turnAmount = 0;
-            CurrentSpeed = 0f;
-            _animation.AnimateTurretMotion(-_forwardAmount);
-            _forwardAmount = 0;
-            _animation.AnimateMovement(_forwardAmount != 0, _lastForwardAmount, _turnAmount, CurrentSpeed * _speedMultiplier);
-            _animation.PlayBumpAnimation();
-            yield return new WaitForSeconds(0.5f);
-            IsActive = true;
-        }
-
         #region IController
         public override void Activate()
         {
@@ -429,9 +304,9 @@ namespace TankLike.UnitControllers
         public override void Deactivate()
         {
             base.Deactivate();
-            StopBoost();
-            if (_boostCoroutine != null)
-                StopCoroutine(_boostCoroutine);
+            //StopBoost();
+            //if (_boostCoroutine != null)
+            //    StopCoroutine(_boostCoroutine);
         }
 
         public override void Dispose()

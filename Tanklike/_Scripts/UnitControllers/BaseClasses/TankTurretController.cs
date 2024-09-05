@@ -1,3 +1,4 @@
+using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
@@ -8,6 +9,8 @@ namespace TankLike.UnitControllers
         [SerializeField] protected float _rotationSpeed = 50f;
 
         protected const float ROTATION_CORRECTION_THRESHOLD = 0.1f;
+        [SerializeField] private float _minimumThreshold = 0.8f;
+        
 
         protected bool _canRotate = true;
 
@@ -31,11 +34,19 @@ namespace TankLike.UnitControllers
             float rotationAmount;
             float cross = crossDot.y;
 
-            if (cross > ROTATION_CORRECTION_THRESHOLD)
+            // TODO: make this a utility for every turret rotator
+            Vector2 dotProductAccuracy = new Vector2(_minimumThreshold, ROTATION_CORRECTION_THRESHOLD);
+            Vector2 frameRateRange = new Vector2Int(30, 60);
+            int fp = (int)(1f / Time.deltaTime);
+
+            float t = Mathf.InverseLerp(frameRateRange.x, frameRateRange.y, fp);
+            float dotProductThreshold = 1 - dotProductAccuracy.Lerp(t);
+
+            if (cross > dotProductThreshold)
             {
                 rotationAmount = 1f;
             }
-            else if (cross < -ROTATION_CORRECTION_THRESHOLD)
+            else if (cross < -dotProductThreshold)
             {
                 rotationAmount = -1f;
             }
@@ -43,11 +54,54 @@ namespace TankLike.UnitControllers
             {
                 if (cross > 0)
                 {
-                    rotationAmount = Mathf.Lerp(1f, 0f, Mathf.InverseLerp(ROTATION_CORRECTION_THRESHOLD, 0f, cross));
+                    rotationAmount = Mathf.Lerp(1f, 0f, Mathf.InverseLerp(dotProductThreshold, 0f, cross));
                 }
                 else if (cross < 0)
                 {
-                    rotationAmount = Mathf.Lerp(-1f, 0f, Mathf.InverseLerp(-ROTATION_CORRECTION_THRESHOLD, 0f, cross));
+                    rotationAmount = Mathf.Lerp(-1f, 0f, Mathf.InverseLerp(-dotProductThreshold, 0f, cross));
+                }
+                else
+                {
+                    rotationAmount = 0f;
+                }
+            }
+
+            _turret.Rotate(_rotationSpeed * rotationAmount * Time.deltaTime * Vector3.up);
+        }
+
+        public virtual void HandleTurretRotation(Vector3 crosshair)
+        {
+            Vector3 direction = (crosshair - _turret.position).normalized;
+            Vector3 tankForward = _turret.forward.normalized;
+            Vector3 crossDot = Vector3.Cross(tankForward, direction);
+            float rotationAmount;
+            float cross = crossDot.y;
+
+            // TODO: make this a utility for every turret rotator
+            Vector2 dotProductAccuracy = new Vector2(_minimumThreshold, ROTATION_CORRECTION_THRESHOLD);
+            Vector2 frameRateRange = new Vector2Int(30, 60);
+            int fp = (int)(1f / Time.deltaTime);
+
+            float t = Mathf.InverseLerp(frameRateRange.x, frameRateRange.y, fp);
+            float dotProductThreshold = 1 - dotProductAccuracy.Lerp(t);
+
+            if (cross > dotProductThreshold)
+            {
+                rotationAmount = 1f;
+            }
+            else if (cross < -dotProductThreshold)
+            {
+                rotationAmount = -1f;
+            }
+            else
+            {
+                if (cross > 0)
+                {
+                    rotationAmount = Mathf.Lerp(1f, 0f, Mathf.InverseLerp(dotProductThreshold, 0f, cross));
+                }
+                else if (cross < 0)
+                {
+                    rotationAmount = Mathf.Lerp(-1f, 0f, Mathf.InverseLerp(-dotProductThreshold, 0f, cross));
                 }
                 else
                 {

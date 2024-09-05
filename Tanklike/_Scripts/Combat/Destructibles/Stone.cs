@@ -9,7 +9,7 @@ using TankLike.Cam;
 
 namespace TankLike.Combat.Destructible
 {
-    public class Stone : DestructibleDropper
+    public class Stone : DestructibleDropper, IBoostDestructible
     {
         [Header("Special Values")]
         [SerializeField] private Renderer _meshRenderer;
@@ -20,12 +20,9 @@ namespace TankLike.Combat.Destructible
         [SerializeField] private Collider _trigger;
         [SerializeField] private ParticleSystem _shatterEffect;
 
-        private void OnTriggerEnter(Collider other)
+        public void Destruct()
         {
-            if (other.CompareTag("Bumper"))
-            {
-                StartCoroutine(ShatterRoutine());
-            }
+            StartCoroutine(ShatterRoutine());
         }
 
         protected override void OnDeath(TankComponents tank)

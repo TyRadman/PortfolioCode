@@ -7,19 +7,9 @@ using TankLike.UnitControllers.States;
 
 namespace TankLike.UnitControllers
 {
-    public enum EnemyType
-    {
-        None = 100,
-        Archer = 0,
-        Stationary = 1,
-        Aimer = 2,
-        Explosive = 3,
-        Laser = 4,
-    }
-
     public class EnemyAIController : MonoBehaviour, IController, IPoolable
     {
-        public Action<EnemyAIController> OnEnemyDeath;
+        public Action<EnemyAIController> OnEnemyDeath { get; set; }
 
         [Header("Debug")]
         [SerializeField] protected bool _movementDebug;
@@ -40,11 +30,11 @@ namespace TankLike.UnitControllers
         protected EnemyHealth _health;
         protected EnemyTurretController _turretController;
 
-        protected Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
         protected Dictionary<EnemyStateType, IState> _statesDictionary = new Dictionary<EnemyStateType, IState>();
 
         public bool IsActive { get; set; }
-        [field: SerializeField] public EnemyComponents Components { get; private set; }
+        public EnemyComponents Components { get; private set; }
 
         public virtual void SetReferences(EnemyComponents components)
         {
@@ -73,8 +63,6 @@ namespace TankLike.UnitControllers
             {
                 _movement.Activate();
             }
-
-            _health.OnDeath += OnDeathHandler;
         }
 
         protected virtual void InitStateMachine()
@@ -99,23 +87,16 @@ namespace TankLike.UnitControllers
 
         private void Update()
         {
-            //if (!IsActive)
-            //    return;
-
-            if (_stateMachine != null) _stateMachine.Update();
+            if (_stateMachine != null)
+            {
+                _stateMachine.Update();
+            }
         }
 
         public void ActivateEnemy()
         {
             _stateMachine.ChangeState(_activationState);
             _movement.Activate();
-        }
-
-        private void OnDeathHandler()
-        {
-            OnEnemyDeath?.Invoke(this);
-            OnReleaseToPool?.Invoke(this);
-            Restart();
         }
 
         private void OnPlayerDetected(Collider other)
@@ -149,7 +130,8 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            Components.Restart();
+            OnEnemyDeath?.Invoke(this);
+            OnReleaseToPool?.Invoke(this);
 
             if (_initialInactiveState)
             {
@@ -178,7 +160,7 @@ namespace TankLike.UnitControllers
 
         public void OnRequest()
         {
-
+            Components.TankBodyParts.InstantiateBodyParts();
         }
 
         public void OnRelease()

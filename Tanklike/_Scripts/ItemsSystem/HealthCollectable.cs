@@ -11,8 +11,8 @@ namespace TankLike.ItemsSystem
 
         public override void OnCollected(PlayerComponents player)
         {
-            GameManager.Instance.NotificationsManager.PushCollectionNotification(UI.Notifications.NotificationType.Health, HealthAmount, player.PlayerIndex);
-            player.Health.Heal(HealthAmount);
+            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, HealthAmount, player.PlayerIndex);
+            player.Energy.AddEnergy(HealthAmount);
             base.OnCollected(player);
         }
     }

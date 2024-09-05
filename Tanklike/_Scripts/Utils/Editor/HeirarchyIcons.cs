@@ -9,13 +9,8 @@ namespace TankLike.Utils
 	[InitializeOnLoad]
 	static class HierarchyIcons
 	{
-
-		// add your components and the associated icons here
-		static Dictionary<Type, GUIContent> typeIcons = new Dictionary<Type, GUIContent>() {
-		{ typeof(PlayerComponents), EditorGUIUtility.IconContent( "Assets/UI/Editor/Testicon.png" ) },
-		//{ typeof(Locator), EditorGUIUtility.IconContent( "d_Transform Icon" ) },
-		// ...
-	};
+		// add components and associated icon
+		static Dictionary<Type, GUIContent> _typeIcons;
 
 		// cached game object information
 		static Dictionary<int, GUIContent> labeledObjects = new Dictionary<int, GUIContent>();
@@ -25,6 +20,23 @@ namespace TankLike.Utils
 		// set up all callbacks needed
 		static HierarchyIcons()
 		{
+			EditorApplication.delayCall += Initialize;
+			//EditorApplication.hierarchyWindowItemOnGUI += OnHierarchyGUI;
+
+			//// callbacks for when we want to update the object GUI state:
+			//ObjectFactory.componentWasAdded += c => UpdateObject(c.gameObject.GetInstanceID());
+			//// there's no componentWasRemoved callback, but we can use selection as a proxy:
+			//Selection.selectionChanged += OnSelectionChanged;
+		}
+
+		private static void Initialize()
+		{
+			_typeIcons = new Dictionary<Type, GUIContent>()
+			{
+				{ typeof(PlayerComponents), EditorGUIUtility.IconContent( "T_PlayerIcon" ) },
+				{ typeof(Bootstrapper), EditorGUIUtility.IconContent("T_Gear") },
+			};
+
 			EditorApplication.hierarchyWindowItemOnGUI += OnHierarchyGUI;
 
 			// callbacks for when we want to update the object GUI state:
@@ -59,7 +71,7 @@ namespace TankLike.Utils
 			GameObject go = EditorUtility.InstanceIDToObject(id) as GameObject;
 			if (go != null)
 			{
-				foreach ((Type type, GUIContent typeIcon) in typeIcons)
+				foreach ((Type type, GUIContent typeIcon) in _typeIcons)
 				{
 					if (go.GetComponent(type))
 					{
@@ -81,7 +93,7 @@ namespace TankLike.Utils
 			SortObject(id, out _);
 		}
 
-		const int MAX_SELECTION_UPDATE_COUNT = 3; // how many objects we want to allow to get updated on select/deselect
+		private const int MAX_SELECTION_UPDATE_COUNT = 3; // how many objects we want to allow to get updated on select/deselect
 
 		static void OnSelectionChanged()
 		{

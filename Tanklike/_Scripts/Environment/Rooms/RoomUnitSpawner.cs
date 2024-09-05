@@ -20,7 +20,19 @@ namespace TankLike.Environment
 
         private void Start()
         {
+            if(GameManager.Instance == null)
+            {
+                return;
+            }
+
+            Invoke(nameof(SetParticleWait), 0.5f);
+        }
+
+        // TODO: Roomts shouldn't set themselves up on start, otherwise, things will break when we have a room already spawned
+        private void SetParticleWait()
+        {
             _particleWait = new WaitForSeconds(GameManager.Instance.VisualEffectsManager.Misc.EnemySpawning.Particles.main.startLifetime.constant / 2);
+
         }
 
         public void ActivateSpawnedEnemies()
@@ -60,21 +72,15 @@ namespace TankLike.Environment
             }
         }
 
-        private IEnumerator SpawnEnemy(EnemySpawnProfile enemy, bool spawnEffect = true)
+        private IEnumerator SpawnEnemy(EnemySpawnProfile enemy)
         {
             // perform slight delay before the enemy spawns (for variety)
             yield return new WaitForSeconds(_spawningDelaysRange.RandomValue());
             Vector3 pos = SpawnPoints.GetRandomSpawnPoint().position;
 
             // play the effect (Should be called from the pooling system later)
-            var vfx = GameManager.Instance.VisualEffectsManager.Misc.EnemySpawning;
-            vfx.transform.SetPositionAndRotation(pos, Quaternion.identity);
-            vfx.gameObject.SetActive(true);
-            vfx.Play();
-
-            // play audio
+            GameManager.Instance.VisualEffectsManager.Misc.PlayEnemySpawnVFX(pos);
             GameManager.Instance.AudioManager.Play(_spawnAudio);
-
             yield return _particleWait;
 
             EnemyAIController spawnedEnemy = GameManager.Instance.EnemiesManager.SpawnEnemyAtPoint(enemy.Enemy, pos);
@@ -104,25 +110,10 @@ namespace TankLike.Environment
             }
             else
             {
-                if(_room == null)
-                {
-                    print("Room is null");
-                }
-                if (_room.GatesInfo == null)
-                {
-                    print("Gateinfo is null");
-                }
-                if (_room.GatesInfo.Gates.Count == 0)
-                {
-                    print("Gateinfo is null");
-                }
-                if(_room.GatesInfo.Gates.Exists(g => g.Gate == null))
-                {
-                    print("One of the gates has a missing gate");
-                }
                 _room.GatesInfo.Gates.ForEach(g => g.Gate.OpenGate());
                 _room.PlayOpenGateAudio();
                 GameManager.Instance.CameraManager.Zoom.SetToNormalZoom();
+                GameManager.Instance.EnemiesManager.SetFightActivated(false);
             }
         }
 

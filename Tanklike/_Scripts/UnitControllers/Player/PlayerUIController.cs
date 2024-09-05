@@ -8,6 +8,8 @@ namespace TankLike.UnitControllers
     {
         [field: SerializeField] public PlayerInventoryController InventoryController { set; get; }
         [field: SerializeField] public PlayerPauseMenuController PauseMenuController { set; get; }
+        [field: SerializeField] public PlayerConfirmPanelController PlayerConfirmPanelController { set; get; }
+
         private PlayerComponents _components;
 
         public void SetUp(PlayerComponents components)
@@ -15,6 +17,10 @@ namespace TankLike.UnitControllers
             _components = components;
             InventoryController.SetUp(components);
             PauseMenuController.SetUp(components);
+            PlayerConfirmPanelController.SetUp(components);
+
+            int playerIndex = _components.PlayerIndex;
+            GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetPlayerAvatar(((PlayerData)_components.Stats).Skins[playerIndex].Avatar);
         }
 
         public void EnableInventoryController(bool enable)
@@ -41,6 +47,18 @@ namespace TankLike.UnitControllers
             }
         }
 
+        public void EnableConfirmPanelController(bool enable)
+        {
+            if (enable)
+            {
+                PlayerConfirmPanelController.SetUpInput(_components.PlayerIndex);
+            }
+            else
+            {
+                PlayerConfirmPanelController.DisposeInput(_components.PlayerIndex);
+            }
+        }
+
         #region IController
         public bool IsActive => throw new System.NotImplementedException();
 
@@ -58,6 +76,8 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
+            InventoryController.Restart();
+            PauseMenuController.Restart();
         }
         #endregion
     }

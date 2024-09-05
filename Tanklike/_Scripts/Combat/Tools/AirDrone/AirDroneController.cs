@@ -61,7 +61,7 @@ namespace TankLike.Combat.AirDrone
             yield return new WaitForSeconds(_animation.GetSpawnAnimationLength());
             
             IsActive = true;
-            _tankShooter.OnShoot += Shoot;
+            _tankShooter.OnShootStarted += Shoot;
             _isLockedToTarget = false;
             Invoke(nameof(LookForTarget), _scanningForEnemiesFrequency);
             _animation.LiftDrone();
@@ -80,7 +80,7 @@ namespace TankLike.Combat.AirDrone
             {
                 _target = targets[0].GetComponent<TankComponents>();
                 // set an event for when the target dies
-                _target.OnTankDeath += OnTankDeath;
+                _target.Health.OnDeath += OnTankDeath;
                 // lock the drone to the target
                 LockToTarget(_target.transform);
             }
@@ -142,10 +142,10 @@ namespace TankLike.Combat.AirDrone
 
         private void DisableDrone()
         {
-            _tankShooter.OnShoot -= Shoot;
+            _tankShooter.OnShootStarted -= Shoot;
             IsActive = false;
 
-            if (_target != null) _target.OnTankDeath -= OnTankDeath;
+            if (_target != null) _target.Health.OnDeath -= OnTankDeath;
 
             _animation.PlayDespawnAnimation();
             _isLockedToTarget = false;
@@ -157,13 +157,13 @@ namespace TankLike.Combat.AirDrone
             gameObject.SetActive(false);
         }
 
-        private void OnTankDeath()
+        private void OnTankDeath(TankComponents tank)
         {
             print($"Done with {_target.name}");
             // stop aiming at the current target
             _isLockedToTarget = false;
             // unsubscribe the tank's listener
-            _target.OnTankDeath -= OnTankDeath;
+            _target.Health.OnDeath -= OnTankDeath;
 
             // resume following the player
             if (_movingToPlayerCoroutine != null) StopCoroutine(_movingToPlayerCoroutine);

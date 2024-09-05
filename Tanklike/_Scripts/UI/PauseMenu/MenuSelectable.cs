@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using TMPro;
+using UnityEngine.UI;
 
-namespace TankLike.UI.PauseMenu
+namespace TankLike.UI
 {
     public class MenuSelectable : MonoBehaviour
     {
@@ -18,23 +19,19 @@ namespace TankLike.UI.PauseMenu
         };
 
         [Header("References")]
-        [SerializeField] private GameObject _highlight;
-        [SerializeField] private TextMeshProUGUI _text;
+        [Tooltip("Other elements that should get highlighted when this object is highlighted")]
+        [SerializeField] private List<Graphic> _highlightedGraphics;
+        [SerializeField] private TextMeshProUGUI _buttonText;
         [SerializeField] private Color _normalColor;
         [SerializeField] private Color _highlightedColor;
 
-        private void Awake()
+        public virtual void Highlight(bool highlight)
         {
-            _text.color = _normalColor;
+            Color newColor = highlight ? _highlightedColor : _normalColor;
+            _highlightedGraphics.ForEach(g => g.color = newColor);
         }
 
-        public void Highlight(bool highlight)
-        {
-            //_highlight.SetActive(highlight);
-            _text.color = highlight? _highlightedColor : _normalColor;
-        }
-
-        public void InvokeAction(Direction direction = Direction.None)
+        public virtual void InvokeAction(Direction direction = Direction.None)
         {
             if(direction == Direction.None)
             {
@@ -44,6 +41,27 @@ namespace TankLike.UI.PauseMenu
             {
                 _actions.Find(a => a.Direction == direction).Action.Invoke();
             }
+        }
+
+        public List<SelectableAction> GetActions()
+        {
+            return _actions;
+        }
+
+        public SelectableAction GetMainAction()
+        {
+            return _selectionAction;
+        }
+
+        public void SetText(string text)
+        {
+            if(_buttonText == null)
+            {
+                Debug.LogError($"No button text at {gameObject.name}");
+                return;
+            }
+
+            _buttonText.text = text;
         }
     }
 }

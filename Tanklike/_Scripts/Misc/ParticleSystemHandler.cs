@@ -9,7 +9,7 @@ namespace TankLike.Misc
     public class ParticleSystemHandler : MonoBehaviour, IPoolable
     {
         [SerializeField] private float _lifetime;
-        private Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
         private Coroutine _turnOffCoroutine;
         private WaitForSeconds _turnOffWaitForseconds;
         private ParticleSystem _particles;

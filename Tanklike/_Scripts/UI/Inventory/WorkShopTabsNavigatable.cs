@@ -5,8 +5,12 @@ using TankLike.Utils;
 using UnityEngine.InputSystem;
 using System;
 
-namespace TankLike.UI.Inventory
+namespace TankLike.UI.Workshop
 {
+    using Signifiers;
+    using Inventory;
+    using TankLike.Sound;
+
     public class WorkShopTabsNavigatable : Navigatable, IInput
     {
         private TabReferenceUI _selectedTab;
@@ -15,12 +19,14 @@ namespace TankLike.UI.Inventory
         [SerializeField] private List<TabReferenceUI> _tabs;
         [SerializeField] private List<TabReferenceUI> _oldTabs;
         [SerializeField] private GameObject _content;
+        [SerializeField] private UIActionSignifiersController _menuActionSignifiersController;
         [Header("Tab Heads Settings")]
         [SerializeField] private TabActivationSettings _enableTabSettings;
         [SerializeField] private TabActivationSettings _disableTabSettings;
         [SerializeField] private TabActivationSettings _selectedTabSettings;
         public Action OnWorkShopClosed { get; set; }
 
+        private const string RETURN_ACTION_TEXT = "Return";
 
         private void Awake()
         {
@@ -43,25 +49,38 @@ namespace TankLike.UI.Inventory
             // close the tab (in case it was opened for editing)
             Close();
 
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
+            //GameManager.Instance.InputManager.EnablePlayerInput();
             _tabs.ForEach(t => t.Navigator.SetUp());
+            _tabs.ForEach(t => t.Navigator.SetUpActionSignifiers(_menuActionSignifiersController));
         }
 
         #region Input Set up
         public void SetUpInput(int playerIndex)
         {
-            // disable all action maps for the other player
             GameManager.Instance.InputManager.DisableInputs((playerIndex + 1) % 2);
-            // enable UI action map for the current player
-            GameManager.Instance.InputManager.EnableUIInput(true, playerIndex);
+            GameManager.Instance.InputManager.EnableUIInput(playerIndex);
 
             PlayerInputActions c = InputManager.Controls;
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
-            //UIMap.FindAction(c.UI.Submit.name).performed += (context) => Select();
+
+            // TODO: Add callback context to the methods
             UIMap.FindAction(c.UI.Cancel.name).performed += (context) => Return();
             UIMap.FindAction(c.UI.Tab_Left.name).performed += (context) => SwitchTabs(Direction.Left);
             UIMap.FindAction(c.UI.Tab_Right.name).performed += (context) => SwitchTabs(Direction.Right);
             UIMap.FindAction(c.UI.Exit.name).performed += CloseWorkShop;
+
+            SetUpSignifiers();
+        }
+
+        public override void SetUpSignifiers()
+        {
+            PlayerInputActions c = InputManager.Controls;
+            InputActionMap UIMap = InputManager.GetMap(PlayerIndex, ActionMap.UI);
+
+            // add the actions that are mutual between windows to the signifiers controller
+            int returnActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Cancel.name, PlayerIndex);
+            _menuActionSignifiersController.DisplaySignifier(RETURN_ACTION_TEXT, Helper.GetInputIcon(returnActionIconIndex));
+            _menuActionSignifiersController.SetLastSignifierAsParent();
         }
 
         public void DisposeInput(int playerIndex)
@@ -74,6 +93,8 @@ namespace TankLike.UI.Inventory
             UIMap.FindAction(c.UI.Tab_Left.name).performed -= (context) => SwitchTabs(Direction.Left);
             UIMap.FindAction(c.UI.Tab_Right.name).performed -= (context) => SwitchTabs(Direction.Right);
             UIMap.FindAction(c.UI.Exit.name).performed -= CloseWorkShop;
+
+            _menuActionSignifiersController.ClearAllSignifiers();
         }
 
         private void CloseWorkShop(InputAction.CallbackContext _)
@@ -163,6 +184,11 @@ namespace TankLike.UI.Inventory
             {
                 _selectedTab.Content.SetActive(true);
             }
+
+            // Play navigate menu audio
+            // TODO: where did the UI Audio go?
+            AudioManager audioManager = GameManager.Instance.AudioManager;
+            //audioManager.Play(audioManager.UIAudio.NavigateMenuAudio);
         }
         #endregion
 

@@ -10,6 +10,7 @@ namespace TankLike.UI.HUD
     {
         [SerializeField] private Image _iconImage;
         [SerializeField] private TextMeshProUGUI _keyText;
+        [SerializeField] private TextMeshProUGUI _inputTypeText;
         [SerializeField] private Image _fillingImage;
         [Header("Animation")]
         [SerializeField] private Animation _activeKeyAnimation;

@@ -8,8 +8,7 @@ namespace TankLike
     {
         public void EnableShopBasedOnPlayersCount()
         {
-            bool spawnShop = GameManager.Instance.InputManager.ControlsStarter.PlayersCount != 1;
-            GameManager.Instance.LevelGenerator.ShopsBuilder.SetSpawnWorkshop(spawnShop);
+
         }
     }
 }

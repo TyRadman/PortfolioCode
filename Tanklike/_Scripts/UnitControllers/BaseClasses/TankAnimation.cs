@@ -6,8 +6,6 @@ namespace TankLike.UnitControllers
 {
     public class TankAnimation : MonoBehaviour, IController
     {
-        [SerializeField] protected Animator _tankAnimator;
-
         //Turret
         protected Animator _turretAnimator;
         protected readonly int _moveForward = Animator.StringToHash("MoveForward");
@@ -34,13 +32,11 @@ namespace TankLike.UnitControllers
             if (_carrierAnimator == null) return;
 
             _carrierAnimator.SetBool(_moveHash, true);
-            //_carrierAnimator.SetFloat(_speedHash, 1);
-            //_carrierAnimator.SetFloat(_rotationHash, rotation);
+
             if (move)
             {
                 _carrierAnimator.SetLayerWeight(1, 1);
                 _carrierAnimator.SetLayerWeight(2, 1);
-                //_carrierAnimator.SetFloat(_speedMultiplierHash, speedMultiplier * lastForwardAmount);
                 _carrierAnimator.SetFloat(_leftWheelHash, speedMultiplier * lastForwardAmount);
                 _carrierAnimator.SetFloat(_rightWheelHash, speedMultiplier * lastForwardAmount);
             }
@@ -93,21 +89,6 @@ namespace TankLike.UnitControllers
                 _turretAnimator.SetTrigger(_moveBackward);
         }
 
-        public void AnimateTurretTurn(float currentSpeed, int turnAmount)
-        {
-            //_turretAnimator.SetLayerWeight(2, 1);
-            //_turretAnimator.SetFloat(_turnAmount, turnAmount);
-
-            //if (currentSpeed > 0.1)
-            //{
-            //    _turretAnimator.SetFloat(_turnAmount, turnAmount);
-            //}
-            //else
-            //{
-            //    _turretAnimator.SetFloat(_turnAmount, 0);
-            //}
-        }
-
         public void EnableDustParticles(bool enable)
         {
             for (int i = 0; i < _dustParticles.Count; i++)
@@ -115,16 +96,7 @@ namespace TankLike.UnitControllers
                 ParticleSystem dust = _dustParticles[i];
                 var emission = dust.emission;
                 emission.rateOverDistance = enable ? _dustCountRange.y : _dustCountRange.x;
-                //dust.emission = emission;
-            }
-            //if (enable)
-            //{
-            //    _dustParticles.ForEach(p => p.Play());
-            //}
-            //else
-            //{
-            //    _dustParticles.ForEach(p => p.Stop());
-            //}
+            }  
         }
 
         public void StopAnimations(bool value)
@@ -141,16 +113,6 @@ namespace TankLike.UnitControllers
                 _carrierAnimator.speed = 1f;
                 _turretAnimator.speed = 1f;
             }
-        }
-
-        public void PlayBumpAnimation()
-        {
-            _tankAnimator.Play("Bump");
-        }
-
-        public void PlayBoostAnimation()
-        {
-            _tankAnimator.Play("Sprint");
         }
 
         public void PlayShootAnimation(float speed = 1f)

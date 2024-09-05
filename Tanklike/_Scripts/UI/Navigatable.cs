@@ -5,14 +5,19 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.UI
 {
-    public abstract class Navigatable : MonoBehaviour
+    using Signifiers;
+    using TankLike.Sound;
+
+    public abstract class Navigatable : MonoBehaviour, ISignifiersDisplayer
     {
-        // means that this navigatable is not controlling a child navigatable (set it to true if this navigatable opened another navigatable and set it to false when this navigatable gains control)
-        public bool IsLastLayer = true;
         public bool IsActive = false;
-        public bool Usable = true;
+        public System.Action OnOpened { get; set; } 
+        public System.Action OnClosed { get; set; }
         public System.Action<int> CloseAction;
-        [field: SerializeField] public int PlayerIndex { get; private set; } = -1;
+        public int PlayerIndex { get; private set; } = -1;
+        public ISignifierController SignifierController { get; set; }
+
+        
 
         public virtual void NavigateLeft(InputAction.CallbackContext _)
         {
@@ -28,22 +33,13 @@ namespace TankLike.UI
         }
 
         public virtual void Navigate(Direction direction)
-        {
-            //if (!IsActive) return;
-
-            //print($"Navigated in {gameObject.name}");
+        {        
         }
         public virtual void Select()
         {
-            if (!IsActive) return;
-
-            //print($"Selected in {gameObject.name}");
         }
         public virtual void Return()
         {
-            if (!IsActive) return;
-
-            //print($"Returned in {gameObject.name}");
         }
 
         public virtual void DehighlightCells()
@@ -59,6 +55,7 @@ namespace TankLike.UI
         public virtual void Open(int playerIndex)
         {
             IsActive = true;
+            SetPlayerIndex(playerIndex);
         }
 
         public virtual void Close(int playerIndex)
@@ -92,5 +89,17 @@ namespace TankLike.UI
         {
             PlayerIndex = index;
         }
+
+        #region Signifiers
+        public virtual void SetUpActionSignifiers(ISignifierController signifierController)
+        {
+
+        }
+
+        public virtual void SetUpSignifiers()
+        {
+
+        }
+        #endregion
     }
 }

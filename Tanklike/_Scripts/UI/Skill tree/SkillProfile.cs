@@ -11,7 +11,7 @@ namespace TankLike.SkillTree
     [CreateAssetMenu(fileName = "SP_NAME_00", menuName = Directories.SKILL_TREE + "/Skill Profile")]
     public class SkillProfile : ScriptableObject
     {
-        public Skill Skill;
+        public SkillHolder SkillHolder;
         public int SkillPointsRequired = 1;
     }
 }

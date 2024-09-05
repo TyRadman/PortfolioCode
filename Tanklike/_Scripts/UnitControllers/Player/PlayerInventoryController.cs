@@ -54,15 +54,21 @@ namespace TankLike.UnitControllers
             // disable the Pause menu controller so that the inputs don't interfere 
             _components.UIController.EnablePauseMenuController(false);
             GameManager.Instance.InputManager.DisableInputs();
-            GameManager.Instance.InputManager.EnableUIInput(true, _components.PlayerIndex);
+            GameManager.Instance.InputManager.EnableUIInput(_components.PlayerIndex);
             GameManager.Instance.Inventory.Open(_components.PlayerIndex);
         }
 
         public void CloseInventory(InputAction.CallbackContext _)
         {
+            if (!GameManager.Instance.Inventory.IsActive)
+            {
+                return;
+            }
+
+            print("Performed");
             // enable the input for the pause manager
             _components.UIController.EnablePauseMenuController(true);
-            GameManager.Instance.InputManager.EnableUIInput(true);
+            GameManager.Instance.InputManager.EnablePlayerInput();
             GameManager.Instance.Inventory.Close(_components.PlayerIndex);
         }
 
@@ -94,7 +100,7 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-
+            DisposeInput(_components.PlayerIndex);
         }
         #endregion
     }

@@ -9,7 +9,6 @@ namespace TankLike.Cam
     public class CameraFollow : MonoBehaviour
     {
         [SerializeField] private Transform _target;
-        [SerializeField] private float _maxDistance = 3f;
         [SerializeField] [Range(0f, 100f)] private float _snapSpeed = 0.1f;
         [SerializeField] private float _timeBeforeOffsettingCamera = 2f;
         [SerializeField] private float _height;
@@ -29,7 +28,7 @@ namespace TankLike.Cam
         {
             if (!this.enabled) return;
 
-            _crosshair = GameManager.Instance.PlayersManager.GetPlayer(0).Crosshair.GetCrosshair();
+            _crosshair = GameManager.Instance.PlayersManager.GetPlayer(0).Crosshair.GetCrosshairTransform();
             _target.position = GameManager.Instance.PlayersManager.GetPlayer(0).transform.position;
         }
 
@@ -66,6 +65,12 @@ namespace TankLike.Cam
         public void SetLimits(CameraLimits limits)
         {
             _limits.ScaleUpValues(limits, _offset, 1f);
+        }
+
+        // Used for test scenes
+        public void ResetLimits(CameraLimits limits)
+        {
+            _limits.SetValues(limits);
         }
 
         public void EnableInterpolation(bool enable)

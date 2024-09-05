@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TankLike.ItemsSystem;
 using TankLike.Utils;
 using UnityEngine;
 
@@ -9,8 +10,8 @@ namespace TankLike.UnitControllers
     {
         // to be set from the enemy data
         private float _dropChance = 0.5f;
-        [SerializeField] private List<CollectableTag> _droppedCollectables;
-        private List<CollectableTag> _collectablesToDrop;
+        [SerializeField] private List<CollectableType> _droppedCollectables;
+        private List<CollectableType> _collectablesToDrop;
 
         private void OnEnable()
         {
@@ -24,8 +25,8 @@ namespace TankLike.UnitControllers
 
         public void SetAsKeyHolder()
         {
-            _collectablesToDrop = new List<CollectableTag>();
-            _collectablesToDrop.Add(CollectableTag.BossKey);
+            _collectablesToDrop = new List<CollectableType>();
+            _collectablesToDrop.Add(CollectableType.BossKey);
             _dropChance = 1f;
         }
 

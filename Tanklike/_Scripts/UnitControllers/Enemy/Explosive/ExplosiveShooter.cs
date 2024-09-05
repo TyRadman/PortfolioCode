@@ -10,7 +10,7 @@ namespace TankLike.UnitControllers
     {
         public void Explode()
         {
-            _currentWeapon.OnShot(_components);
+            _currentWeapon.OnShot();
         }
 
         public void SetRadius(float radius)

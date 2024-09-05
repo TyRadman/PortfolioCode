@@ -50,8 +50,6 @@ namespace TankLike.UnitControllers
             _stateMachine.SetInitialState(_initialState);
 
             StartBossIntroduction();
-
-            _health.OnDeath += OnDeathHandler;
         }
 
         protected virtual void InitStateMachine()
@@ -90,12 +88,6 @@ namespace TankLike.UnitControllers
             return (State)_statesDictionary[type];
         }
 
-        private void OnDeathHandler()
-        {
-            _stateMachine.ChangeState(BossStateType.Death);
-            Restart();
-        }
-
         public void StartBossIntroduction()
         {
             _stateMachine.ChangeState(BossStateType.Introduction);
@@ -123,10 +115,8 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
+            _stateMachine.ChangeState(BossStateType.Death);
             IsActive = false;
-            _movementController.Restart();
-            _attackController.Restart();
-            _health.Restart();
         }
 
         public void Dispose()

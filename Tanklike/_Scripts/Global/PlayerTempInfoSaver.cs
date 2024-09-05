@@ -13,6 +13,8 @@ namespace TankLike
     {
         [field: SerializeField] public List<PlayerInputHandler> InputHandlers { get; private set; } = new List<PlayerInputHandler>();
         [field: SerializeField] public int PlayersCount = 0;
+        [field: SerializeField] public float GameDifficulty { get; private set; } = 0.5f;
+        [field: SerializeField] public RoomType StartRoomType { get; private set; } = RoomType.Normal;
 
         public void DisableAllInputs()
         {
@@ -43,6 +45,16 @@ namespace TankLike
         public bool HasPlayer()
         {
             return InputHandlers.Count > 0 && !InputHandlers.Exists(p => p == null);
+        }
+
+        public void SetDifficulty(float difficulty)
+        {
+            GameDifficulty = difficulty;
+        }
+
+        public void SetStartRoom(RoomType startRoomType)
+        {
+            StartRoomType = startRoomType;
         }
     }
 }

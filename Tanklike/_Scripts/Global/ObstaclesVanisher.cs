@@ -26,6 +26,11 @@ namespace TankLike
 
         private void Update()
         {
+            if(_players.Count <= 0)
+            {
+                return;
+            }
+
             LookAtPlayer();
         }
 

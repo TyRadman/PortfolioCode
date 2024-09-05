@@ -9,12 +9,8 @@ namespace TankLike.UnitControllers.States
     [CreateAssetMenu(fileName = "State_Aimer_Aim", menuName = MENU_PATH + "Aimer/Aim")]
     public class AimerAimState : AimState
     {
-        private Transform _target;
-        private int _rotationDirection;
-
-        private float _aimDuration;
-        // the time after which the tank attacks
-        private float _aimTimer;
+        private float _switchTargetDuration;
+        private float _switchTargetTimer;
 
         public AimerAimState(StateMachine<EnemyStateType> stateMachine, EnemyMovement movement, EnemyShooter shooter,
             Vector2 aimDurationRange)
@@ -30,25 +26,48 @@ namespace TankLike.UnitControllers.States
             //Debug.Log("AIM STATE");
             _isActive = true;
 
-            //find target position and set rotation direction
-            _target = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
+            SetTarget();
 
             //set random values for state parameters
             _aimDuration = Random.Range(_aimDurationRange.x, _aimDurationRange.y);
             _aimTimer = 0f;
+            _switchTargetDuration = Random.Range(_switchTargetDurationRange.x, _switchTargetDurationRange.y);
+            _switchTargetTimer = 0f;
         }
 
         public override void OnUpdate()
         {
-            //switch to ATTACK state when the timer is up
+            // switch to ATTACK state when the timer is up
+            // TODO: add a bool to control whether the enemy should shoot a blocked target
             if (_aimTimer >= _aimDuration)
             {
-                _stateMachine.ChangeState(EnemyStateType.ATTACK);
+                if (!_shooter.IsWayToTargetBlocked(_target))
+                {
+                    _stateMachine.ChangeState(EnemyStateType.ATTACK);
+                }
+                else
+                {
+                    _stateMachine.ChangeState(EnemyStateType.AIM);
+                }
             }
 
             _aimTimer += Time.deltaTime;
 
             _turretController.HandleTurretRotation(_target);
+
+            // check if the target can be shot
+            if (_shooter.IsWayToTargetBlocked(_target))
+            {
+                _switchTargetTimer += Time.deltaTime;
+
+                if (_switchTargetTimer >= _switchTargetDuration)
+                {
+                    SetTarget();
+                    _switchTargetTimer = 0f;
+                }
+
+                return;
+            }
         }
 
         public override void OnExit()

@@ -21,11 +21,12 @@ namespace TankLike.Combat
         [Header("Visuals")]
         [SerializeField] protected bool _removeTrailOnHit = false;
         [SerializeField] protected GameObject _bullet;
+        [Tooltip("Optional")]
         [SerializeField] protected GameObject _trail;
 
         protected Rigidbody _rb;
         protected SphereCollider _collider;
-        protected Vector3 _movementDir;
+        public Vector3 MovementDir;
         protected float _currentSpeed;
         protected float _deltaTime;
         [SerializeField] protected List<string> _deflectionTags = new List<string>();
@@ -48,14 +49,17 @@ namespace TankLike.Combat
             _collider = GetComponent<SphereCollider>();
 
             // if there is no deflection behaviour, then set the deflection to "no deflection"
-            if (Deflection == null) Deflection = ScriptableObject.CreateInstance<NoneDeflections>();
+            if (Deflection == null)
+            {
+                Deflection = ScriptableObject.CreateInstance<NoneDeflections>();
+            }
         }
 
         public void SetUp(TankComponents shooter = null)
         {
             if (shooter != null)
             {
-                _shooter = shooter;
+                Instigator = shooter;
             }
 
             SetUpConfigurations();
@@ -63,11 +67,27 @@ namespace TankLike.Combat
 
         public void EnableBullet(bool enable)
         {
-            _trail.SetActive(enable);
+            if (_trail != null)
+            {
+                _trail.SetActive(enable);
+            }
+
             gameObject.SetActive(enable);
             _isActive = enable;
             _collider.enabled = enable;
             _bullet.SetActive(enable);
+        }
+
+        public void EnableBullet()
+        {
+            if (_trail != null)
+            {
+                _trail.SetActive(true);
+            }
+
+            SetUpConfigurations();
+            _collider.enabled = true;
+            _bullet.SetActive(true);
         }
 
         public void StartBullet(TankComponents shooter, Vector3? dir = null)
@@ -78,14 +98,14 @@ namespace TankLike.Combat
             // movement part (TBR)
             if (dir != null)
             {
-                _movementDir = (Vector3)dir;
+                MovementDir = (Vector3)dir;
             }
             else
             {
-                _movementDir = transform.forward;
+                MovementDir = transform.forward;
             }
 
-            _movementDir.Normalize();
+            MovementDir.Normalize();
             StartCoroutine(MovementRoutine());
 
             // get the defleection data
@@ -93,14 +113,6 @@ namespace TankLike.Combat
             {
                 _deflectionData = Deflection.GetData();
             }
-        }
-
-        public void EnableBullet()
-        {
-            SetUpConfigurations();
-            _collider.enabled = true;
-            _bullet.SetActive(true);
-            _trail.SetActive(true);
         }
 
         public void SetActive(bool active)
@@ -151,7 +163,7 @@ namespace TankLike.Combat
             while (_isActive)
             {
                 // handle speed
-                MoveBulletForFrame(gravityVector, SpeedOverLife.GetSpeed(_currentSpeed, Time.deltaTime));
+                 MoveBulletForFrame(gravityVector, SpeedOverLife.GetSpeed(_currentSpeed, Time.deltaTime));
 
                 if (_limitedDistance)
                 {
@@ -159,12 +171,19 @@ namespace TankLike.Combat
                  
                     if (distanceTraveled >= _maxDistance)
                     {
-                        Explode();
+                        OnLifeTimeEnd();
+                        yield break;
                     }
                 }
 
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
+        }
+
+        private void OnLifeTimeEnd()
+        {
+            IDamageable damagable = null;
+            Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
         }
 
         /// <summary>
@@ -173,12 +192,15 @@ namespace TankLike.Combat
         public void MoveBulletForFrame(Vector3 gravity, float speed)
         {
             float deltaTime = Time.deltaTime;
-            _movementDir = transform.forward;
-            _movementDir.Normalize();
+            MovementDir = transform.forward;
+            MovementDir.Normalize();
 
-            if (_useGravity) _movementDir += gravity * deltaTime;
+            if (_useGravity)
+            {
+                MovementDir += gravity * deltaTime;
+            }
 
-            transform.position += deltaTime * speed * _movementDir;
+            transform.position += deltaTime * speed * MovementDir;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -196,14 +218,15 @@ namespace TankLike.Combat
         {
             if ((1 << other.gameObject.layer & _targetLayerMask) == 1 << other.gameObject.layer)
             {
-                IDamageable damagable = null;
+                //IDamageable damagable = null;
                 IElementTarget elementTarget = null;
 
                 // checks for damagables
-                if (other.GetComponent<IDamageable>() != null)
+                if (other.TryGetComponent(out IDamageable damagable))
                 {
-                    damagable = other.GetComponent<IDamageable>();
-                    if (!damagable.Invincible)
+                    //damagable = other.GetComponent<IDamageable>();
+
+                    if (!damagable.IsInvincible)
                     {
                         // we need to get the contact point in the future for more accuracy, but this will do for now REWORK_CHECK
                         Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
@@ -240,14 +263,8 @@ namespace TankLike.Combat
             if (_deflectionTags.Exists(t => other.CompareTag(t)) && Deflection != null)
             {
                 // handle deflection
-                Deflection.Deflect(_collider, ref _movementDir, _bumberDetectionDistance, _bumberLayers, other, _deflectionData, this);
+                Deflection.Deflect(_collider, ref MovementDir, _bumberDetectionDistance, _bumberLayers, other, _deflectionData, this);
             }
-        }
-
-        public void Explode()
-        {
-            IDamageable damagable = null;
-            Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
         }
 
         public void DisableBullet()
@@ -310,14 +327,14 @@ namespace TankLike.Combat
             _targetIndicator = indicator;
         }
 
-        public TankComponents GetShooter()
+        public TankComponents GetInstigator()
         {
-            return _shooter;
+            return Instigator;
         }
 
         public void SetShooter(TankComponents shooter)
         {
-            _shooter = shooter;
+            Instigator = shooter;
         }
 
         #region Set Up Methods
@@ -349,11 +366,11 @@ namespace TankLike.Combat
 
             if (tag == TanksTag.Enemy.ToString())
             {
-                _targetLayerMask |= 1 << Constants.EnemyDamagableLayer;//LayerMask.NameToLayer("Enemy");
+                _targetLayerMask |= 1 << Constants.EnemyDamagableLayer;
             }
             else
             {
-                _targetLayerMask |= 1 << Constants.PlayerDamagableLayer;//LayerMask.NameToLayer("Player");
+                _targetLayerMask |= 1 << Constants.PlayerDamagableLayer;
             }
         }
 
@@ -404,6 +421,7 @@ namespace TankLike.Combat
         public override void TurnOff()
         {
             base.TurnOff();
+            CancelInvoke();
             OnReleaseToPool(this);
         }
 

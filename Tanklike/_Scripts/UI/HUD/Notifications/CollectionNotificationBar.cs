@@ -8,18 +8,29 @@ namespace TankLike.UI.Notifications
 {
     public class CollectionNotificationBar : MonoBehaviour
     {
-        public bool IsAvailable;
-        public bool CanAddTo = true;
-        public int CurrentIndex = -1;
+        public bool IsAvailable { get; private set; }
+        public bool CanAddTo { get; private set; } = true;
         public RectTransform Rect;
-        public NotificationType Type;
+        public NotificationType Type { get; private set; }
         [SerializeField] private TextMeshProUGUI _notificationText;
         [SerializeField] private Image _notificationIcon;
-        [SerializeField] private CanvasGroup _canvasGroup;
-        public const float FADE_OUT_DURATION = 1f;
+
+        [Header("Animations")]
+        [SerializeField] private Animation _animation;
+        [SerializeField] private AnimationClip _showClip;
+        [SerializeField] private AnimationClip _hideClip;
+
+        private Coroutine _countDownCoroutine;
+        private WaitForSeconds _countDownWait = new WaitForSeconds(4);
+
         private int _itemAmount = 0;
 
-        public void FillInfo(string text, Sprite iconSprite, NotificationType notificationType, int amount)
+        public void SetUp()
+        {
+            IsAvailable = true;
+        }
+
+        public void Display(string text, Sprite iconSprite, NotificationType notificationType, int amount)
         {
             _itemAmount += amount;
 
@@ -34,67 +45,27 @@ namespace TankLike.UI.Notifications
 
             _notificationIcon.sprite = iconSprite;
             Type = notificationType;
-        }
 
-        public void Enable()
-        {
-            // if it's the first time it gets enabled, then make it fade in
             if (IsAvailable)
             {
                 IsAvailable = false;
-                _canvasGroup.alpha = 0f;
-                gameObject.SetActive(true);
-                StartCoroutine(FadeBarIn());
+
+                this.PlayAnimation(_animation, _showClip);
+
                 transform.SetAsLastSibling();
             }
+
+            this.StopCoroutineSafe(_countDownCoroutine);
+            _countDownCoroutine = StartCoroutine(CountDownProcess());
         }
 
-        private IEnumerator FadeBarIn()
+        private IEnumerator CountDownProcess()
         {
-            float time = 0f;
+            yield return _countDownWait;
 
-            while (time < FADE_OUT_DURATION)
-            {
-                time += Time.deltaTime;
-                float t = time / FADE_OUT_DURATION;
-
-                _canvasGroup.alpha = Mathf.Lerp(0f, 1f, t);
-
-                yield return null;
-            }
-        }
-
-        public void StartCountDown(float delay)
-        {
-            CancelInvoke();
-            gameObject.SetActive(true);
-            _canvasGroup.alpha = 1f;
-            Invoke(nameof(CountDown), delay);
-        }
-
-        private void CountDown()
-        {
-            StartCoroutine(FadeBarOut());
-        }
-
-        private IEnumerator FadeBarOut()
-        {
-            float time = 0f;
-            _itemAmount = 0;
-            CanAddTo = false;
-
-            while (time < FADE_OUT_DURATION)
-            {
-                time += Time.deltaTime;
-                float t = time / FADE_OUT_DURATION;
-                _canvasGroup.alpha = Mathf.Lerp(1f, 0f, t);
-
-                yield return null;
-            }
-
+            this.PlayAnimation(_animation, _hideClip);
             IsAvailable = true;
             CanAddTo = true;
-            gameObject.SetActive(false);
         }
     }
 }

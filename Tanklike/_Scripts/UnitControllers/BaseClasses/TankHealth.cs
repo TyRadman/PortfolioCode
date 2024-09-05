@@ -5,72 +5,77 @@ using TankLike.Minimap;
 using TankLike.Combat;
 using TankLike.UI.DamagePopUp;
 using TankLike.Cam;
+using TankLike.ScreenFreeze;
 
 namespace TankLike.UnitControllers 
 {
     [RequireComponent(typeof(DamagePopUpAnchor))]
     public abstract class TankHealth : MonoBehaviour, IController, IDamageable
     {
+        [Header("Settings")]
         [SerializeField] protected int _maxHealth;
-        [SerializeField] protected int _currentHealth;
-        [SerializeField] protected TankComponents _components;
         [SerializeField] protected bool _canTakeDamage = true;
-        [SerializeField] protected TankHealthEffect _effects;
-        [SerializeField] protected Vector3 _explosionDecalSize = Vector3.one;
-        [SerializeField] protected float _explosionDecalheight = 0.1f;
-        public const float DAMAGE_POP_UP_OFFSET = 2f;
-        [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { set; get; }
+        [field: SerializeField] public bool IsInvincible { get; set; } = false;
+        public bool IsDead { get; private set; } = true;
 
+        [Header("References")]
+        [SerializeField] protected TankHealthEffect _damageEffects;
+        [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { get; protected set;  }
+        [field: SerializeField] public ScreenFreezeData DeathScreenFreeze { get; protected set; }
+
+        public const float DAMAGE_POP_UP_OFFSET = 2f;
+
+        protected TankComponents _components;
         protected Transform _body;
         protected Transform _turret;
-        protected TankData _stats;
+        protected UnitData _stats;
         protected List<DamageDetector> _damageDetectors;
+        protected int _currentHealth;
 
         protected float _damageMultiplier = 0f;
 
-        public System.Action OnHit;
-        public System.Action OnDeath { get; set; }
+        public System.Action OnHit { get; set; }
+        public System.Action<TankComponents> OnDeath { get; set; }
 
-        public Transform Transform => transform;
-        public bool Invincible { get; set; }
+        [HideInInspector] public Transform Transform => transform;
         public bool IsActive { get; protected set; }
 
         public virtual void SetUp(TankComponents components)
         {
             TankBodyParts parts = components.TankBodyParts;
-            TankData stats = components.Stats;
+            UnitData stats = components.Stats;
 
+            IsDead = false;
             _stats = stats;
             _body = parts.GetBodyPartOfType(BodyPartType.Body).transform;
             _turret = parts.GetBodyPartOfType(BodyPartType.Turret).transform;
             _damageDetectors = ((TankBody)parts.GetBodyPartOfType(BodyPartType.Body)).DamageDetectors;
             _components = components;
-
+            IsInvincible = false;
             _currentHealth = _maxHealth;
         }
 
         public virtual void Die()
         {
-            _components.OnDeath();
-            OnDeath?.Invoke(); // only enemies use it so far
+            if(IsDead)
+            {
+                return;
+            }
 
-            // explosion and camera effects (MUTUAL)
-            var explosion = GameManager.Instance.VisualEffectsManager.Explosions.DeathExplosion;
-            explosion.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
-            explosion.gameObject.SetActive(true);
-            explosion.Play();
+            IsDead = true;
+            GameManager.Instance.ScreenFreezer.FreezeScreen(DeathScreenFreeze);
+            _components.VisualEffects.PlayDeathEffects();
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.EXPLOSION);
-            var decal = GameManager.Instance.VisualEffectsManager.Explosions.ExplosionDecal;
-            float randomAngle = Random.Range(0f, 360f);
-            Quaternion randomRotation = Quaternion.Euler(0f, randomAngle, 0f);
-            decal.transform.SetPositionAndRotation(transform.position + Vector3.up * _explosionDecalheight, randomRotation);
-            decal.transform.localScale = _explosionDecalSize;
-            decal.gameObject.SetActive(true);
-            decal.Play();
+            OnDeath?.Invoke(_components);
         }
 
         public virtual void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
         {
+            if (IsDead)
+            {
+                return;
+            }
+
             if (!_canTakeDamage)
             {
                 return;
@@ -85,7 +90,7 @@ namespace TankLike.UnitControllers
             }
 
             _currentHealth -= damage;
-            _effects.SetIntensity((float)_currentHealth / (float)_maxHealth);
+            _damageEffects.SetIntensity((float)_currentHealth / (float)_maxHealth);
 
             ///// display pop up /////
             // if the damage is positive, then it's a heal
@@ -119,7 +124,7 @@ namespace TankLike.UnitControllers
         {
             _currentHealth += amount;
 
-            _effects.SetIntensity((float)_currentHealth / (float)_maxHealth);
+            _damageEffects.SetIntensity((float)_currentHealth / (float)_maxHealth);
 
             if (_currentHealth > _maxHealth)
             {
@@ -148,13 +153,16 @@ namespace TankLike.UnitControllers
         public void SetMaxHealth(int health, bool refillHealth = true)
         {
             _maxHealth = health;
-            
-            if(refillHealth) _currentHealth = health;
+
+            if (refillHealth)
+            {
+                _currentHealth = health;
+            }
         }
 
         public void SetInvincible(bool value)
         {
-            Invincible = value;
+            IsInvincible = value;
         }
 
         public void SwitchDamageDetectorsLayer(int layer)
@@ -168,9 +176,15 @@ namespace TankLike.UnitControllers
             return _currentHealth / _maxHealth;
         }
 
+        public void ReplenishFullHealth()
+        {
+            Heal(_maxHealth - _currentHealth);
+        }
+
         #region IController
         public virtual void Activate()
         {
+            IsDead = false;
             IsActive = true;
         }
 
@@ -181,6 +195,7 @@ namespace TankLike.UnitControllers
 
         public virtual void Restart()
         {
+            IsDead = false;
             _currentHealth = _maxHealth;
         }
 

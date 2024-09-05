@@ -22,7 +22,7 @@ namespace TankLike.Combat.Destructible
         [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { get; private set; }
 
         public Transform Transform => transform;
-        public bool Invincible { get; set; }
+        public bool IsInvincible { get; set; }
 
         private void Awake()
         {

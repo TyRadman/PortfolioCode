@@ -18,16 +18,17 @@ namespace TankLike.UnitControllers
         [SerializeField] protected Wiggle _backwardWiggle;
         [Header("Rotation")]
         [SerializeField] protected float _rotationSpeed = 0.2f;
+        [Tooltip("Used for enemies when obstacles are detected (with transform.Rotate)")]
         [SerializeField] protected float _turnSpeed = 180f;
         [Header("Gravity")]
         [SerializeField] protected float GroundGravity;
         [SerializeField] protected float Gravity;
-        [SerializeField] protected CharacterController _characterController;
-
-        [SerializeField] protected TankComponents _components;
+        
+        protected CharacterController _characterController;
+        protected TankComponents _components;
         protected Transform _body;
         protected Transform _turret;
-        [SerializeField] protected TankAnimation _animation;
+        protected TankAnimation _animation;
         // extras
         [SerializeField] protected float _speedMultiplier = 1;
 
@@ -63,6 +64,7 @@ namespace TankLike.UnitControllers
            
             _components = components;
             _characterController = components.CharacterController;
+            _animation = components.Animation;
 
             _tempMaxMovementSpeed = _movementMaxSpeedDefault;
             _tempAcceleration = _accelerationDefault;
@@ -134,11 +136,6 @@ namespace TankLike.UnitControllers
 
             //Animation
             _animation.AnimateMovement(_forwardAmount != 0, _lastForwardAmount, _turnAmount, CurrentSpeed * _speedMultiplier); ;
-           
-            if (CurrentSpeed > 0.1f)
-            {
-                _animation.AnimateTurretTurn(CurrentSpeed, _turnAmount);
-            }
 
             ////Rotation
             _body.Rotate(Vector3.up * _turnAmount * _turnSpeed * Time.deltaTime);       
@@ -201,6 +198,16 @@ namespace TankLike.UnitControllers
         {
             _movementMaxSpeedDefault = speed;
             _tempMaxMovementSpeed = _movementMaxSpeedDefault;
+        }
+
+        public float GetSpeed()
+        {
+            return _movementMaxSpeedDefault;
+        }
+
+        public float GetMultipliedSpeed()
+        {
+            return _movementMaxSpeedDefault * CurrentSpeed;
         }
 
         public void EnableRotation(bool enable)

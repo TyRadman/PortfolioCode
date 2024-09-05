@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using TankLike.Environment.LevelGeneration;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using System;
@@ -18,6 +17,7 @@ namespace TankLike
         private int _gameDifficulty;
         private GameManager _gameManager;
         private bool _stretchProperties;
+        private static Texture _windowIcon;
 
         private void OnEnable()
         {
@@ -34,10 +34,17 @@ namespace TankLike
             return _gameManager;
         }
 
-        [MenuItem("TankLike/Game Editor")]
+        [MenuItem("Tanklike/Game Editor")]
         public static void ShowWindow()
         {
-            GetWindow(typeof(GameEditor), false, "Game Editor");
+            GameEditor window = GetWindow<GameEditor>("Game Editor");
+            CacheTabIcon();
+            window.titleContent = new GUIContent("Game Editor", _windowIcon);
+        }
+
+        private static void CacheTabIcon()
+        {
+            _windowIcon = AssetDatabase.LoadAssetAtPath<Texture>("Assets/UI/EditorIcons/Controller.png");
         }
 
         private void OnGUI()
@@ -73,7 +80,7 @@ namespace TankLike
             {
                 AmmunitionDatabase database = GetGameManager().BulletsDatabase;
                 database.ClearAmmunitionList();
-                var ammunitionData = AssetUtils.GetAllInstances<AmmunationData>(true, new string[] { database.DirectoryToCover });
+                List<AmmunationData> ammunitionData = AssetUtils.GetAllInstances<AmmunationData>(true, new string[] { database.DirectoryToCover });
 
                 foreach (AmmunationData b in ammunitionData)
                 {
@@ -116,7 +123,7 @@ namespace TankLike
         {
             GUILayout.Label("Select Scene");
 
-            _buildIndex = GUILayout.Toolbar(_buildIndex, new string[] { "Player Selection", "Gameplay", "Bosses" });
+            _buildIndex = GUILayout.Toolbar(_buildIndex, new string[] { "Bootstrap", "Main Menu", "Ability Selection", "Lobby", "Gameplay", "Bosses" });
 
             if (GUILayout.Button("Load Scene"))
             {
@@ -124,6 +131,13 @@ namespace TankLike
                 {
                     EditorSceneManager.OpenScene(SceneUtility.GetScenePathByBuildIndex(_buildIndex));
                 }
+            }
+
+            // play the scene without leaving the original scene
+            if(GUILayout.Button("Play Scene"))
+            {
+                EditorSceneManager.OpenScene(SceneUtility.GetScenePathByBuildIndex(_buildIndex));
+                EditorApplication.isPlaying = true;
             }
         }
 
@@ -134,16 +148,16 @@ namespace TankLike
                 return;
             }
 
-            RoomsBuilder builder = GetGameManager().LevelGenerator.RoomsBuilder;
+            PlayerTempInfoSaver data = GetGameManager().PlayersTempInfoSaver;
             
-            if (builder == null)
+            if (data == null)
             {
                 return;
             }
 
             GUILayout.Space(10);
             
-            RoomType startRoom = builder.StartRoomType;
+            RoomType startRoom = data.StartRoomType;
             int roomNumber = (int)startRoom;
             string[] roomTypes = new string[Enum.GetValues(typeof(RoomType)).Length];
 
@@ -156,8 +170,8 @@ namespace TankLike
             roomNumber = EditorGUILayout.Popup(roomNumber, roomTypes);
             //roomNumber = GUILayout.Toolbar(roomNumber, roomTypes);
             startRoom = (RoomType)roomNumber;
-            builder.StartRoomType = startRoom;
-            EditorUtility.SetDirty(builder);
+            data.SetStartRoom(startRoom);
+            EditorUtility.SetDirty(data);
         }
 
         private void RenderPlayersNumber()

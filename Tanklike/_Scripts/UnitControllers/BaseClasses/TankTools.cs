@@ -22,14 +22,18 @@ namespace TankLike.UnitControllers
 
         public virtual void AddTool(ToolInfo toolInfo, int count)
         {
-            if (toolInfo == null) return;
+            if (toolInfo == null)
+            {
+                return;
+            }
 
             Tool newTool = null;
 
             // if the player doesn't have this tool already, then create a new one
             if (!_tools.Exists(t => t.Tool.GetTag() == toolInfo.ToolReference.GetTag()))
             {
-                newTool = Instantiate(toolInfo.ToolReference, transform);
+                newTool = ScriptableObject.Instantiate(toolInfo.ToolReference);
+                //newTool = Instantiate(toolInfo.ToolReference, transform);
                 // set up the tool
                 newTool.SetUp(_components);
                 // set the amount of the tool

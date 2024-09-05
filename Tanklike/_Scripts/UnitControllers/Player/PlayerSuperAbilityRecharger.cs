@@ -1,11 +1,12 @@
-using TankLike.Utils;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+    using Combat.Abilities;
+
     public class PlayerSuperAbilityRecharger : MonoBehaviour, IController
     {
         [SerializeField] private AbilityRechargingMethod _currentRechargingMethod;
@@ -57,14 +58,20 @@ namespace TankLike.UnitControllers
 
         private void RechargeOnHit()
         {
-            if (_abilityChargeAmount >= 1f) return;
+            if (_abilityChargeAmount >= 1f)
+            {
+                return;
+            }
 
             AddAbilityChargeAmount(_chargePerHit);
         }
 
         private void RechargeOnEnemyHit()
         {
-            if (_abilityChargeAmount >= 1f) return;
+            if (_abilityChargeAmount >= 1f)
+            {
+                return;
+            }
 
             AddAbilityChargeAmount(_chargePerEnemyHit);
         }
@@ -82,7 +89,6 @@ namespace TankLike.UnitControllers
         {
             _abilityChargeAmount += amount;
             // update UI
-            //GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].ChargeAbilityIcon(_tankAbility.GetCoolDownTime(), _tankAbility.GetDuration(), 0);
             GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetSuperAbilityChargeAmount(1 - _abilityChargeAmount, 0);
 
             if (_abilityChargeAmount >= 1f)
@@ -96,7 +102,10 @@ namespace TankLike.UnitControllers
 
         public void FullyChargeSuperAbility()
         {
-            if (_abilityChargeAmount == 1f) return;
+            if (_abilityChargeAmount == 1f)
+            {
+                return;
+            }
 
             _abilityChargeAmount = 1f;
             ((PlayerSuperAbilities)_components.SuperAbility).EnableAbilityUsage();

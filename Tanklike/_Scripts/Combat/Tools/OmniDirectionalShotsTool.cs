@@ -1,13 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Combat;
-using TankLike.Utils;
-using TankLike.UnitControllers;
-using TankLike.Cam;
 
 namespace TankLike.Combat
 {
+    using UnitControllers;
+    using Cam;
+
+    [CreateAssetMenu(fileName = NAME_PREFIX + "OmniDirectionalShot", menuName = ASSET_MENU_ROOT + "Omni-directional Shot")]
     public class OmniDirectionalShotsTool : Tool
     {
         [Header("Special Values")]
@@ -17,15 +17,15 @@ namespace TankLike.Combat
         [SerializeField] private float _startingAngle;
         [SerializeField] private float _bulletSpeed;
 
-        private TankComponents _shooter;
+        private TankComponents _components;
 
-        public override void SetUp(TankComponents tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
 
-            _shooter = tankTransform.GetComponent<TankComponents>();
+            _components = components;
             _normalShot.SetSpeed(_bulletSpeed);
-            //_startingAngle = (_bulletsNumber - 1) * _angleBetweenShots / -2f;
+            _normalShot.SetUp(components);
         }
 
         public override void UseTool()
@@ -34,21 +34,8 @@ namespace TankLike.Combat
 
             for (int i = 0; i < _bulletsNumber; i++)
             {
-                //Quaternion rotation = Quaternion.Euler(0f, _startingAngle + _angleBetweenShots * i, 0f) * _shooter.transform.rotation;
-
-                _normalShot.OnShot(_shooter, _shooter.transform, _startingAngle + _angleBetweenShots * i);
-
+                _normalShot.OnShot(_components.transform, _startingAngle + _angleBetweenShots * i);
                 GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
-
-                // create the bullet
-                //Bullet bullet = GameManager.Instance.VisualEffectsManager.Bullets.GetBullet(_bulletdata.GUID);
-
-                //bullet.transform.SetPositionAndRotation(_shooter.transform.position, rotation);
-                //bullet.gameObject.SetActive(true);
-
-                //_shooter.LaunchBullet(bullet);
-
-                //_shooter.Shoot(_bulletPrefab, _shooter.transform.position, _startingAngle + _angleBetweenShots * i, false);
             }
         }
 

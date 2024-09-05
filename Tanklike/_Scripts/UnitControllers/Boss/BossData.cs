@@ -7,7 +7,7 @@ using UnityEngine;
 namespace TankLike.UnitControllers
 {
     [CreateAssetMenu(fileName = "BD_NAME", menuName = Directories.BOSSES + "Boss Data")]
-    public class BossData : TankData
+    public class BossData : UnitData
     {
         [field: SerializeField] public BossType BossType { get; private set; }
         [field: SerializeField] public GameObject BossPrefab { get; private set; }
@@ -16,7 +16,7 @@ namespace TankLike.UnitControllers
         [field: SerializeField] public float CameraMovementToBossDuration { get; private set; } = 2f;
         [field: SerializeField] public float BossAnimationDuration { get; private set; } = 1f;
         [field: SerializeField] public Vector3 RoomSize { get; private set; }
-        [field: SerializeField] public EnemyParts PartsPrefab { get; private set; }
+        [field: SerializeField] public UnitParts PartsPrefab { get; private set; }
 
     }
 }

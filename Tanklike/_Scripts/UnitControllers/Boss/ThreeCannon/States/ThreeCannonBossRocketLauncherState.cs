@@ -42,7 +42,7 @@ namespace TankLike.UnitControllers.States
 
             _followTargetTransform = false;
 
-            // Chance to attack a random target vs closest target
+            // Chance to attack a random target vs farthest target
             float rand = Random.Range(0f, 1f);
 
             if (rand <= _randomTargetChance)
@@ -56,7 +56,7 @@ namespace TankLike.UnitControllers.States
             }
             else
             {
-                var targetPlayerTransform = GameManager.Instance.PlayersManager.GetClosestPlayer(_movement.transform.position);
+                var targetPlayerTransform = GameManager.Instance.PlayersManager.GetFarthestPlayer(_movement.transform.position);
                 _attackController.SetTarget(targetPlayerTransform);
                 _currentTarget = targetPlayerTransform;
                 _targetTransform = targetPlayerTransform.PlayerTransform;
@@ -83,6 +83,9 @@ namespace TankLike.UnitControllers.States
         {
             _isActive = false;
             _followTargetTransform = false;
+
+            if (_attackCoroutine != null)
+                _attackController.StopCoroutine(_attackCoroutine);
         }
 
         public override void OnDispose()
@@ -123,11 +126,11 @@ namespace TankLike.UnitControllers.States
                 var newPoint = _currentTarget.ImageTransform.position;
                 newPoint.y = 0.16f; // dirty, have a variable for it
 
-                LaunchRocket(newPoint, false);
+                LaunchRocket(newPoint);
 
                 if (i % _rocketLauncherRandomProjectilesGap == 0 && i > 0)
                 {
-                    ShootRocketsAtRandomPoints(_rocketLauncherRandomProjectilesCount);
+                    _attackController.StartCoroutine(ShootRocketsAtRandomPointsRoutine(_rocketLauncherRandomProjectilesCount));
                 }
 
                 yield return new WaitForSeconds(_rocketLauncherTimeBetweenProjectiles);
@@ -136,7 +139,7 @@ namespace TankLike.UnitControllers.States
             OnAttackFinished();
         }
 
-        private void LaunchRocket(Vector3 targetPoint, bool random)
+        private void LaunchRocket(Vector3 targetPoint)
         {
             Transform shootingPoint = _attackController.RocketLauncherShootingPoint;
 
@@ -167,11 +170,6 @@ namespace TankLike.UnitControllers.States
             Vector3 indicatorSize = new Vector3(((AreaOfEffectImpact)bullet.Impact).AreaRadius * 2, 1, ((AreaOfEffectImpact)bullet.Impact).AreaRadius * 2);
             var indicatorType = _rocketLauncherWeapon.IndicatorType;
 
-            if (random)
-            {
-                indicatorType = IndicatorEffects.IndicatorType.RocketBlue;
-            }
-
             Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(indicatorType);
             indicator.gameObject.SetActive(true);
             indicator.transform.position = targetPoint;
@@ -183,7 +181,7 @@ namespace TankLike.UnitControllers.States
         }
 
 
-        private void ShootRocketsAtRandomPoints(int pointsCount)
+        private IEnumerator ShootRocketsAtRandomPointsRoutine(int pointsCount)
         {
             Vector3[] targetPoints = new Vector3[pointsCount];
 
@@ -193,7 +191,8 @@ namespace TankLike.UnitControllers.States
 
             for (int i = 0; i < targetPoints.Length; i++)
             {
-                LaunchRocket(targetPoints[i], true);
+                LaunchRocket(targetPoints[i]);
+                yield return new WaitForSeconds(0.05f);
             }
 
             //yield return new WaitForSeconds(2f);

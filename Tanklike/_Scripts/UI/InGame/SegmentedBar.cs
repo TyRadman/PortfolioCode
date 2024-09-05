@@ -69,6 +69,9 @@ namespace TankLike.UI.InGame
 
         public void SetCount(int barsCount)
         {
+            if(_bars == null || _bars.Exists(b => b == null) || _bars.Exists(b => b.Material == null))
+                print(gameObject.name);
+
             _bars.ForEach(b => b.Material.SetInt(COUNT, barsCount));
             _segmentsCount = _bars[0].Material.GetInt(COUNT);
         }

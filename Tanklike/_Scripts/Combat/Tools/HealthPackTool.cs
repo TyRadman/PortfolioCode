@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "HealthPack", menuName = ASSET_MENU_ROOT + "Health Pack")]
     public class HealthPackTool : Tool
     {
         [Header("Special Values")]

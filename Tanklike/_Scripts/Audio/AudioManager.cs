@@ -5,48 +5,68 @@ using UnityEngine.Audio;
 
 namespace TankLike.Sound
 {
-    public class AudioManager : MonoBehaviour
+    public class AudioManager : MonoBehaviour, IManager
     {
         [SerializeField] private AudioDatabase _database;
         [SerializeField] private AudioSource _oneShotSource;
-        [SerializeField] private bool _hasAudio = true;
+        //[SerializeField] private bool _hasAudio = true;
         [SerializeField] private AudioPool _pooler;
         [SerializeField] private AudioMixer _mainAudioMixer;
         [SerializeField] private AudioSource _bgMusicSource;
+
+        [field: SerializeField, Header("Subcomponents")] public UIAudio UIAudio { get; private set; }
+
+        public bool IsActive { get; private set; }
 
         private const string SFX_VOLUME = "SFXVolume";
         private const string BG_MUSIC_VOLUME = "BGMusicVolume";
         private const float FADE_OUT_DURATION = 1f;
         private const float FADE_IN_DURATION = 1f;
 
+        #region IManager
         public void SetUp()
         {
             _pooler.SetUpPools();
         }
 
-        public void Play(Audio audioFile)
+        public void Dispose()
         {
-            if (!_hasAudio) return;
+            _pooler.Dispose();
+        }
+        #endregion
 
-            Audio audio = _database.Audios[audioFile.AudioName];
 
-            if (!audio.OneShot)
+        public AudioSource Play(Audio audioFile)
+        {
+            if (audioFile == null)
             {
-                PlayAudio(audio);
+                return null;
+            }
+
+            AudioSource source = null;
+
+            if (!audioFile.OneShot)
+            {
+                source = PlayAudio(audioFile);
             }
             else
             {
-                PlayOneShotAudio(audio);
+                PlayOneShotAudio(audioFile);
             }
+
+            return source;
         }
 
-        private void PlayAudio(Audio audio)
+        private AudioSource PlayAudio(Audio audio)
         {
             AudioSource source = _pooler.GetAvailableSource();
+            source.loop = audio.Loop;
             source.clip = audio.Clip;
             source.volume = audio.VolumeMultiplier;
             source.pitch = audio.Pitch;
             source.Play();
+
+            return source;
         }
 
         private void PlayOneShotAudio(Audio audio)

@@ -12,7 +12,7 @@ namespace TankLike.ItemsSystem
             base.OnCollected(player);
             // increment the count
             GameManager.Instance.BossKeysManager.OnKeyCollected();
-            GameManager.Instance.NotificationsManager.PushCollectionNotification(UI.Notifications.NotificationType.BossKey, 1, player.PlayerIndex);
+            //GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, player.PlayerIndex);
         }
 
         public override void DisableCollectable()

@@ -5,18 +5,18 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Speed Boost Skill", menuName = "Skills/Stats/Speed Boost")]
+    [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "SpeedBoost", menuName = MENU_ROOT + "Speed Boost")]
     public class SpeedBoostSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private float _speedMultiplier = 0.3f;
 
-        public override void SetUp(Transform tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
 
             // changes the tank's speed modifier
-            tankTransform.GetComponent<TankMovement>().MultiplySpeed(_speedMultiplier);
+            components.Movement.MultiplySpeed(_speedMultiplier);
         }
     }
 }

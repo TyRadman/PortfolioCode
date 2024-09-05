@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace TankLike.UI.PauseMenu
+namespace TankLike.UI
 {
     [System.Serializable]
     public class SelectableAction
@@ -13,5 +13,15 @@ namespace TankLike.UI.PauseMenu
         [HideInInspector] public Direction Direction;
 #endif
         public UnityEvent Action;
+
+        public void AddListener(UnityAction action)
+        {
+            Action.AddListener(action);
+        }
+
+        public void RemoveAllListeners()
+        {
+            Action.RemoveAllListeners();
+        }
     }
 }

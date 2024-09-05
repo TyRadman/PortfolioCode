@@ -12,6 +12,8 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.SkillTree
 {
+    using UI.Workshop;
+
     public class SkillTreeHolder : Navigatable, IInput
     {
         #region Constants
@@ -60,11 +62,6 @@ namespace TankLike.SkillTree
 
         public override void SetUp()
         {
-            if (!Usable)
-            {
-                return;
-            }
-
             base.SetUp();
 
             _cells.ForEach(c => c.SetUp());
@@ -82,7 +79,7 @@ namespace TankLike.SkillTree
             _activeSkillCell.HighLight(true);
             _canMove = true;
             SetUpInput(PlayerIndex);
-            GameManager.Instance.InputManager.EnableUIInput(true);
+            GameManager.Instance.InputManager.EnableUIInput();
             _currentPlayer = GameManager.Instance.PlayersManager.GetPlayer(PlayerIndex);
             // load the player's skill
         }
@@ -97,8 +94,6 @@ namespace TankLike.SkillTree
             base.Close(playerIndex);
             CancelInvoke();
             DisposeInput(playerIndex);
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
-            GameManager.Instance.InputManager.EnableUIInput(true);
         }
 
         public override void Load(int playerIndex = 0)
@@ -148,6 +143,7 @@ namespace TankLike.SkillTree
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
+
             UIMap.FindAction(c.UI.Navigate_Up.name).performed -= NavigateUp;
             UIMap.FindAction(c.UI.Navigate_Down.name).performed -= NavigateDown;
             UIMap.FindAction(c.UI.Navigate_Right.name).performed -= NavigateRight;
@@ -156,6 +152,9 @@ namespace TankLike.SkillTree
             UIMap.FindAction(c.UI.Submit.name).started -= StartSelection;
             UIMap.FindAction(c.UI.Submit.name).canceled -= EndSelection;
             UIMap.FindAction(c.UI.Submit.name).performed -= SelectAction;
+
+            GameManager.Instance.InputManager.DisableInputs();
+            GameManager.Instance.InputManager.EnablePlayerInput();
         }
 
         public override void NavigateLeft(InputAction.CallbackContext _)
@@ -234,8 +233,8 @@ namespace TankLike.SkillTree
             }
             else
             {
-                name = _activeSkillCell.SkillProfile.Skill.GetName();
-                description = _activeSkillCell.SkillProfile.Skill.GetDescription();
+                //name = _activeSkillCell.SkillProfile.GetName();
+                //description = _activeSkillCell.SkillProfile.GetDescription();
                 requiredPoints = _activeSkillCell.SkillProfile.SkillPointsRequired.ToString();
             }
 
@@ -352,7 +351,8 @@ namespace TankLike.SkillTree
         {
             SkillProfile skillProfile = _activeSkillCell.SkillProfile;
             // apply the skill
-            skillProfile.Skill.SetUp(_currentPlayer.Upgrades.transform);
+            // TODO: Fix the skill tree
+            //skillProfile.SkillHolder.SetUp(_currentPlayer.Upgrades.transform);
             // set the cell's state to unlocked
             _activeSkillCell.ChangeCellState(CellState.Unlocked);
             // deduct the skill points
@@ -391,7 +391,8 @@ namespace TankLike.SkillTree
 
             SkillProfile skillProfile = _activeSkillCell.SkillProfile;
             // apply the skill
-            skillProfile.Skill.SetUp(_currentPlayer.Upgrades.transform);
+            // TODO: Skill tree fixes
+            //skillProfile.SkillHolder.SetUp(_currentPlayer.Upgrades.transform);
             // deduct the skill points
             _currentPlayer.Upgrades.AddSkillPoints(-skillProfile.SkillPointsRequired);
 

@@ -8,6 +8,8 @@ using TankLike.UI.Inventory;
 
 namespace TankLike.UI.Workshop
 {
+    using Signifiers;
+
     public class ResurrectionNavigatable : Navigatable, IInput
     {
         [SerializeField] private Image _processBar;
@@ -21,8 +23,10 @@ namespace TankLike.UI.Workshop
         private const string REVIVE_TEXT = "Revive player ";
         private const string REVIVE_ACTION_TEXT = " - Hold ";
         private const string NO_REVIVAL_MESSAGE = "No dead players to revive";
+        private const string ACTION_TEXT = "Revive";
         private string _actionKey;
         private bool _revived = false;
+        private UIActionSignifiersController _actionSignifiersController;
 
         private void Start()
         {
@@ -45,7 +49,7 @@ namespace TankLike.UI.Workshop
             SetPlayerIndex(playerIndex);
             SetUpInput(playerIndex);
             
-            _coinsText.text = $"{Constants.REVIVAL_COST} / {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _coinsText.text = $"{Constants.REVIVAL_COST} / {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
             _coinsText.color = PlayerHasEnoughCoins() ? _sufficientCoinsColor : _insufficientCoinsColor;
         }
 
@@ -71,6 +75,31 @@ namespace TankLike.UI.Workshop
             UIMap.FindAction(c.UI.Submit.name).started += LoadResurrection;
             UIMap.FindAction(c.UI.Submit.name).canceled += StopResurrectionLoading;
             _actionKey = UIMap.FindAction(c.UI.Submit.name).GetBindingDisplayString();
+
+            SetUpSignifiers();
+        }
+
+        public override void SetUpSignifiers()
+        {
+            base.SetUpSignifiers();
+
+            PlayerInputActions c = InputManager.Controls;
+            InputActionMap UIMap = InputManager.GetMap(PlayerIndex, ActionMap.UI);
+
+            // display main action signifiers
+            string reviveEnergyActionKey = UIMap.FindAction(c.UI.Submit.name).GetBindingDisplayString(PlayerIndex);
+            _actionSignifiersController.DisplaySignifier(ACTION_TEXT, reviveEnergyActionKey);
+        }
+
+        public override void SetUpActionSignifiers(ISignifierController signifierController)
+        {
+            if (signifierController is not UIActionSignifiersController)
+            {
+                Debug.LogError($"Type mismatching for the action signifiers controller at {gameObject.name}");
+                return;
+            }
+
+            _actionSignifiersController = (UIActionSignifiersController)signifierController;
         }
 
         public void DisposeInput(int playerIndex)
@@ -79,6 +108,8 @@ namespace TankLike.UI.Workshop
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
             UIMap.FindAction(c.UI.Submit.name).started -= LoadResurrection;
             UIMap.FindAction(c.UI.Submit.name).canceled -= StopResurrectionLoading;
+
+            _actionSignifiersController.ClearChildSignifiers();
         }
         #endregion
 
@@ -130,8 +161,8 @@ namespace TankLike.UI.Workshop
             _resurrectionActionText.text = NO_REVIVAL_MESSAGE;
             _processBar.fillAmount = 0f;
             // deduct cash
-            GameManager.Instance.PlayersManager.AddCoins(-Constants.REVIVAL_COST);
-            _coinsText.text = GameManager.Instance.PlayersManager.CoinsAmount.ToString();
+            GameManager.Instance.PlayersManager.Coins.AddCoins(-Constants.REVIVAL_COST);
+            _coinsText.text = GameManager.Instance.PlayersManager.Coins.CoinsAmount.ToString();
             // subscribe so that the effect takes place only when the workshop is exitted
             GameManager.Instance.ShopsManager.WorkShopArea.OnInteractorExit += RevivePlayer;
         }
@@ -141,7 +172,7 @@ namespace TankLike.UI.Workshop
             // revive player
             Vector3 respawnPosition = GameManager.Instance.ShopsManager.WorkShopArea.transform.position;
             int deadPlayerIndex = GameManager.Instance.PlayersManager.GetInactivePlayerIndex();
-            GameManager.Instance.PlayersManager.RevivePlayer(deadPlayerIndex, respawnPosition);
+            GameManager.Instance.PlayersManager.PlayerSpawner.RevivePlayer(deadPlayerIndex, respawnPosition);
             GameManager.Instance.ShopsManager.WorkShopArea.OnInteractorExit -= RevivePlayer;
         }
 
@@ -162,7 +193,7 @@ namespace TankLike.UI.Workshop
 
         private bool PlayerHasEnoughCoins()
         {
-            return GameManager.Instance.PlayersManager.CoinsAmount >= Constants.REVIVAL_COST;
+            return GameManager.Instance.PlayersManager.Coins.CoinsAmount >= Constants.REVIVAL_COST;
         }
 
         private bool IsPlayerDead()

@@ -9,6 +9,9 @@ using TankLike.Sound;
 
 namespace TankLike.UnitControllers
 {
+    /// <summary>
+    /// Holds the tools that the player possesses and handles the logic of the input to start those tools.
+    /// </summary>
     public class PlayerTools : TankTools, IInput, IDisplayedInput
     {
         [System.Serializable]
@@ -29,7 +32,7 @@ namespace TankLike.UnitControllers
         public void SetUp(PlayerComponents components)
         {
             _playerComponents = components;
-            UpdateInput(_playerComponents.PlayerIndex);
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
             _toolsToAdd.FindAll(t => t.Add).ForEach(t => AddTool(t.Tool, t.Tool.ToolReference.GetMaxAmount()));
         }
 
@@ -52,7 +55,7 @@ namespace TankLike.UnitControllers
             playerMap.FindAction(c.Player.ToolSwitchLeft.name).performed -= OnMoveSelectionLeft;
         }
 
-        public void UpdateInput(int playerIndex)
+        public void UpdateInputDisplay(int playerIndex)
         {
             string toolSelect = GameManager.Instance.InputManager.GetButtonBindingKey(
                    InputManager.Controls.Player.Tool.name, playerIndex);
@@ -121,7 +124,22 @@ namespace TankLike.UnitControllers
 
         public override void UseTool()
         {
-            if (_currentTool == null || !_canUseTools)
+            if (_currentTool == null)
+            {
+                return;
+            }
+
+            if (!_canUseTools)
+            {
+                return;
+            }
+
+            if (_currentTool.Tool == null)
+            {
+                return;
+            }
+
+            if (!_currentTool.Tool.CanUseTool())
             {
                 return;
             }
@@ -182,11 +200,6 @@ namespace TankLike.UnitControllers
             GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].UpdateTools(_tools[_currentIndex].Tool, nextTool, previousTool);
         }
 
-        public void SetActiveTool(ToolTags toolTag)
-        {
-            _currentTool = _tools.Find(t => t.Tool.GetTag() == toolTag);
-        }
-
         public void EnableToolsUsage(bool enable)
         {
             _canUseTools = enable;
@@ -202,6 +215,12 @@ namespace TankLike.UnitControllers
         public override void Dispose()
         {
             base.Dispose();
+            DisposeInput(_playerComponents.PlayerIndex);
+        }
+
+        public override void Restart()
+        {
+            base.Restart();
             DisposeInput(_playerComponents.PlayerIndex);
         }
         #endregion

@@ -7,10 +7,16 @@ namespace TankLike.UnitControllers.States
 {
     [CreateAssetMenu(fileName = "State_Laser_Aim", menuName = MENU_PATH + "Laser/Aim State")]
     public class LaserEnemyAimState : AimState
-    {   
-        private float _aimDuration;
-        private float _aimTimer;
+    {
+        [SerializeField] private float _aimAtTargetChance = 0.5f;
+        private bool _aimAtTarget;
 
+        public override void SetUp(StateMachine<EnemyStateType> stateMachine, EnemyComponents enemyComponents)
+        {
+            base.SetUp(stateMachine, enemyComponents);
+
+            ((LaserShooter)_shooter).OnLaserFacedTarget += OnLaserFacedTargetHandler;
+        }
         public override void OnEnter()
         {
             //Debug.Log("AIM STATE");
@@ -19,17 +25,31 @@ namespace TankLike.UnitControllers.States
             //set random values for state parameters
             _aimDuration = Random.Range(_aimDurationRange.x, _aimDurationRange.y);
             _aimTimer = 0f;
+
+            _target = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
+
+            var aimChance = Random.Range(0f, 1f);
+            _aimAtTarget = aimChance <= _aimAtTargetChance ? true : false;
         }
 
         public override void OnUpdate()
         {
-            //switch to ATTACK state when the timer is up
-            if (_aimTimer >= _aimDuration)
+            //a delay to make sure the enemy stopped rotating (dirty)
+            if (_aimTimer < _aimDuration)
             {
-                _stateMachine.ChangeState(EnemyStateType.ATTACK);
+                _aimTimer += Time.deltaTime;
             }
-
-            _aimTimer += Time.deltaTime;
+            else
+            {
+                if(_aimAtTarget)
+                {
+                    ((LaserShooter)_shooter).AimLaserAtTarget(_target);
+                }
+                else
+                {
+                    _stateMachine.ChangeState(EnemyStateType.ATTACK);
+                }
+            }
         }
 
         public override void OnExit()
@@ -41,5 +61,12 @@ namespace TankLike.UnitControllers.States
         {
         }
 
+        private void OnLaserFacedTargetHandler()
+        {
+            if (!_isActive)
+                return;
+
+            _aimAtTarget = false;
+        }
     }
 }

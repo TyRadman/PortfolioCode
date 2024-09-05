@@ -26,7 +26,7 @@ namespace TankLike.UnitControllers
         private Vector2 _spawnRadiusRange;
         private bool _isSpawned;
 
-        protected System.Action<IPoolable> OnReleaseToPool;
+        public System.Action<IPoolable> OnReleaseToPool { get; private set; }
 
         public bool IsActive { get; set; }
 

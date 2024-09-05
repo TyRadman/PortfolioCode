@@ -16,7 +16,7 @@ namespace TankLike.Combat
 
         private float _duration;
 
-        private Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
 
         private void Start()
         {

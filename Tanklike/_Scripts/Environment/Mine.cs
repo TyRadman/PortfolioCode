@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEditor;
 using TankLike.Utils;
 using System;
+using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
@@ -24,7 +25,7 @@ namespace TankLike.UnitControllers
         [SerializeField] private List<string> _targetTags;
         private TankComponents _minesUser;
 
-        private Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
 
         private Material _mineMaterial;
         private const string EMISSION_KEY = "_EmissionStrength";

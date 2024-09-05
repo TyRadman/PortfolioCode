@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
-    [CreateAssetMenu(fileName = "Piercing Impact", menuName = "Shot Configurations/Impact/Piercing Impact")]
+    [CreateAssetMenu(fileName = "OnImpact_Piercing", menuName = MENU_MAIN + "Piercing Impact")]
     public class PiercingImpact : OnImpact
     {
         public override void Impact(Vector3 hitPoint, IDamageable target, int damage, LayerMask mask, Bullet bullet)
@@ -15,7 +15,7 @@ namespace TankLike.UnitControllers
             // if there is a target, then apply damage to it, play the impact effects, and continue
             if (target != null)
             {
-                target.TakeDamage(damage, Vector3.zero, bullet.GetShooter(), bullet.transform.position);
+                target.TakeDamage(damage, Vector3.zero, bullet.GetInstigator(), bullet.transform.position);
                 // play the effect 
                 bullet.PlayImpactEffects();
             }

@@ -20,16 +20,21 @@ namespace TankLike.UI.HUD
             PlayAnimation(_showClip);
         }
 
-        public void HideIcon()
+        public void HideIcon(float speed = 1f)
         {
             PlayAnimation(_hideClip);
         }
 
-        private void PlayAnimation(AnimationClip clip)
+        private void PlayAnimation(AnimationClip clip, float speed = 1f)
         {
             if (_animation.isPlaying)
             {
                 _animation.Stop();
+            }
+
+            if(speed != 1f)
+            {
+                _animation[clip.name].speed = speed;
             }
 
             _animation.clip = clip;

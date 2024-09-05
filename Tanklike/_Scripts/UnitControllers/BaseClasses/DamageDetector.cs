@@ -1,13 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
     public class DamageDetector : MonoBehaviour, IDamageable
     {
         #region Not Used
-        public bool Invincible => _health.Invincible;
+        public bool IsInvincible => _health.IsInvincible;
         public Transform Transform => _health.Transform;
 
         public void Die()

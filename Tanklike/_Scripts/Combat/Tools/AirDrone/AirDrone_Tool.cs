@@ -7,6 +7,7 @@ using TankLike.UnitControllers;
 
 namespace TankLike
 {
+    [CreateAssetMenu(fileName = NAME_PREFIX + "AirDrone", menuName = ASSET_MENU_ROOT + "Air Drone")]
     public class AirDrone_Tool : Tool
     {
         [Header("Special Values")]

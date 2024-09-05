@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    // TODO: delete this if not needed
     public abstract class TankSkills : MonoBehaviour
     {
         private List<Skill> _relics = new List<Skill>();
@@ -12,9 +13,9 @@ namespace TankLike.UnitControllers
         public virtual void AddRelic(Skill relic)
         {
             // temporary. We need to look into whether we need scriptable objects for this, or stick to in-game instances
-            Skill newRelic = Instantiate(relic, transform);
-            _relics.Add(newRelic);
-            newRelic.SetUp(transform);
+            //Skill newRelic = Instantiate(relic, transform);
+            //_relics.Add(newRelic);
+            //newRelic.SetUp(transform);
         }
     }
 }

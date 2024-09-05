@@ -36,5 +36,14 @@ namespace TankLike.Sound
             _sources.Add(audioSource);
         }
 
+        public void Dispose()
+        {
+            foreach (var source in _sources)
+            {
+                source.Clear();
+            }
+
+            _sources.Clear();
+        }
     }
 }

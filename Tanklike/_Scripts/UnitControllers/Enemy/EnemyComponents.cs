@@ -22,6 +22,12 @@ namespace TankLike.UnitControllers
             ItemDrop = GetComponent<EnemyItemDropper>();
         }
 
+        public override void OnDeathHandler(TankComponents components)
+        {
+            base.OnDeathHandler(components);
+            Restart();
+        }
+
         public override void SetUp()
         {
             base.SetUp();
@@ -40,6 +46,12 @@ namespace TankLike.UnitControllers
             base.Dispose();
             EnemyController.Dispose();
             ItemDrop.Dispose();
+        }
+
+        public override void Restart()
+        {
+            base.Restart();
+            EnemyController.Restart();
         }
     }
 }

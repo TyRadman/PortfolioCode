@@ -12,6 +12,7 @@ namespace TankLike.Environment
         private GameObject _boss;
         private Transform _bossSpawnPoint;
         [SerializeField] private AbilityConstraint _onCinematicConstraints;
+        [SerializeField] private AbilityConstraint _onRoomEnterConstraints;
         [field: SerializeField] public Vector3 RoomSize { get; private set; }
 
 
@@ -29,6 +30,7 @@ namespace TankLike.Environment
         {
             base.LoadRoom();
             _boss = Instantiate(_bossData.BossPrefab, _bossSpawnPoint.position, Quaternion.Euler(0f, 180f, 0f));
+            GameManager.Instance.PlayersManager.ApplyConstraints(true, _onRoomEnterConstraints);
         }
 
         public void SetBossSpawnPoint(Transform point)
@@ -58,6 +60,8 @@ namespace TankLike.Environment
 
         private IEnumerator BossStartProcess()
         {
+            GameManager.Instance.PlayersManager.ApplyConstraints(false, _onRoomEnterConstraints);
+
             // disable the players movement
             GameManager.Instance.PlayersManager.ApplyConstraints(true, _onCinematicConstraints);
 
@@ -66,10 +70,14 @@ namespace TankLike.Environment
 
             GameManager.Instance.CameraManager.PlayerCameraFollow.MoveToPoint(
                 _boss.transform, _bossData.CameraMovementToBossDuration);
+
             yield return new WaitForSeconds(_bossData.CameraMovementToBossDuration);
 
             GameManager.Instance.BossesManager.AddBoss(_boss.GetComponent<BossComponents>());
+            GameManager.Instance.EnemiesManager.AddEnemy(_boss.GetComponent<BossComponents>());
+
             yield return new WaitForSeconds(_bossData.BossAnimationDuration);
+
             GameManager.Instance.HUDController.EnableBossHUD(true);
             GameManager.Instance.CameraManager.Zoom.SetToZoomValue(_bossData.ZoomValue);
 
@@ -81,6 +89,7 @@ namespace TankLike.Environment
             GameManager.Instance.CameraManager.PlayerCameraFollow.MoveBackToPlayers(_bossData.CameraMovementToBossDuration);
 
             yield return new WaitForSeconds(_bossData.CameraMovementToBossDuration);
+
             GameManager.Instance.CameraManager.PlayerCameraFollow.EnableFollowingPlayer();
         }
     }

@@ -6,18 +6,18 @@ using TankLike.UnitControllers;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Bullet Element Skill", menuName = "Skills/Stats/Bullet Element")]
+    [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "BulletElement", menuName = MENU_ROOT + "Bullet Element")]
     public class ElementBulletSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private ElementEffect _element;
 
         // what the skill does when it is added to the tank 
-        public override void SetUp(Transform tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
 
-            tankTransform.GetComponent<PlayerShooter>().SetElement(_element);
+            components.Shooter.SetElement(_element);
         }
 
     }

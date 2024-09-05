@@ -6,7 +6,6 @@ namespace TankLike.UnitControllers
 {
     public class TankWiggler : MonoBehaviour, IController
     {
-        [SerializeField] private Wiggle _wiggle;
         [Header("Body References")]
         [SerializeField] private Transform _tankHolder;
         [Header("Turret References")]
@@ -28,14 +27,6 @@ namespace TankLike.UnitControllers
             _turret = parts.GetBodyPartOfType(BodyPartType.Turret).transform;
 
             _defaultRotation = _tankHolder.rotation;
-        }
-
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.I))
-            {
-                WiggleTurret(_wiggle);
-            }
         }
 
         public void WiggleBody(Wiggle wiggle)

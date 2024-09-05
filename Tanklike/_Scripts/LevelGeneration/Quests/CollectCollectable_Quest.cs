@@ -13,7 +13,7 @@ namespace TankLike.LevelGeneration.Quests
         private int _collectablesRequired;
         private int _currentlyCollectedItems;
         [Tooltip("If set to true, the value set for Collectable Tag will be ignored")]
-        [SerializeField] private CollectableTag _collectableTag;
+        [SerializeField] private CollectableType _collectableType;
 
         public override void SetUp(LevelQuestSettings settings)
         {
@@ -26,7 +26,7 @@ namespace TankLike.LevelGeneration.Quests
 
         public void OnProgress(Collectable collectable, int playerIndex)
         {
-            if (collectable.Tag != _collectableTag) return;
+            if (collectable.Type != _collectableType) return;
 
             _currentlyCollectedItems++;
 
@@ -35,7 +35,7 @@ namespace TankLike.LevelGeneration.Quests
 
         public override string GetQuestString()
         {
-            return $"Collect {_collectablesRequired.ToString().Color(Color.green)} {_collectableTag}{(_collectablesRequired > 1? "s" : "")}";
+            return $"Collect {_collectablesRequired.ToString().Color(Color.green)} {_collectableType}{(_collectablesRequired > 1? "s" : "")}";
         }
 
         public override string GetQuestProgressString()
@@ -65,12 +65,12 @@ namespace TankLike.LevelGeneration.Quests
         public override void CopyValuesTo(Quest_SO quest)
         {
             CollectCollectable_Quest newQuest = (CollectCollectable_Quest)(quest);
-            newQuest.SetValues(_collectableTag, _collectablesCountRange);
+            newQuest.SetValues(_collectableType, _collectablesCountRange);
         }
 
-        public void SetValues(CollectableTag enemyType, Vector2Int itemsCountRange)
+        public void SetValues(CollectableType enemyType, Vector2Int itemsCountRange)
         {
-            _collectableTag = enemyType;
+            _collectableType = enemyType;
             _collectablesCountRange = itemsCountRange;
         }
         #endregion

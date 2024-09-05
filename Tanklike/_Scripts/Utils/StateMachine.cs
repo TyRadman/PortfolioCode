@@ -48,14 +48,18 @@ namespace TankLike.Utils
             if (_states.ContainsKey(stateType))
             {
                 if (_currentState != null)
+                {
                     _currentState.OnExit();
+                }
 
                 _currentStateType = stateType;
                 _currentState = _states[stateType];
                 _currentState.OnEnter();
             }
             else
+            {
                 throw new System.ArgumentException(string.Format("State of type {0} is not present in State Machine!", stateType.ToString()));
+            }
         }
 
         public void Update()

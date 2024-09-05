@@ -37,9 +37,15 @@ namespace TankLike.Environment.LevelGeneration
         [SerializeField] private List<Room> _createdRooms = new List<Room>();
         [field: SerializeField] public RoomType StartRoomType { get; set; }
 
-        public void BuildRooms()
+        public void SetUp()
+        {
+            StartRoomType = GameManager.Instance.PlayersTempInfoSaver.StartRoomType;
+        }
+
+        public void BuildRandomRooms()
         {
             count = 0;
+
             // get info about the room from some database, select maps that haven't been selected in a while, etc..
             if (_levelParent != null)
             {
@@ -90,6 +96,7 @@ namespace TankLike.Environment.LevelGeneration
         }
 
         private int count;
+
         private Room CreateRoom(MapTiles_SO mapToCreate, Room roomPrefab)
         {
             // create an empty room
@@ -238,8 +245,12 @@ namespace TankLike.Environment.LevelGeneration
             // assign a location for the room in the grid
             _roomsGrid[location.x, location.y] = createdRoom;
             createdRoom.Location = location;
+
             // to be removed
-            if (OffsetRooms) createdRoom.transform.position = new Vector3((location.x - STARTING_INDEX) * 62, 0f, (location.y - STARTING_INDEX) * 62);
+            if (OffsetRooms)
+            {
+                createdRoom.transform.position = new Vector3((location.x - STARTING_INDEX) * 62, 0f, (location.y - STARTING_INDEX) * 62);
+            }
 
             GateInfo selectedGate = createdRoom.GatesInfo.Gates.Find(g => (int)g.Direction / 90 == gateIndex);
 
@@ -336,7 +347,10 @@ namespace TankLike.Environment.LevelGeneration
                     Surrounding reqM = map[(i + j) % loops];
 
                     // don't check if None because None can be either a block or a gate
-                    if (reqS == Surrounding.None) continue;
+                    if (reqS == Surrounding.None)
+                    {
+                        continue;
+                    }
 
                     if (reqS != reqM)
                     {
@@ -375,8 +389,8 @@ namespace TankLike.Environment.LevelGeneration
             Room bossRoom = GameManager.Instance.RoomsManager.Rooms[0];
             // cache the furthest room from the boss room with the gate count of one
             Room startingRoom = null;
-            startingRoom = GameManager.Instance.RoomsManager.Rooms.
-                    Where(room => room.GatesInfo.Gates.Count(g => g.IsConnected) == 1 && room.RoomType != RoomType.Shop)
+            startingRoom = GameManager.Instance.RoomsManager.Rooms
+                    .Where(room => room.GatesInfo.Gates.Count(g => g.IsConnected) == 1 && room.RoomType != RoomType.Shop)
                     .OrderByDescending(r => (r.Location - bossRoom.Location).sqrMagnitude).FirstOrDefault();
             // disable enemies spawning
             startingRoom.SetRoomType(RoomType.Start);

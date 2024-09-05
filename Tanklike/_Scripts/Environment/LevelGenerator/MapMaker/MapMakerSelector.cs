@@ -97,7 +97,10 @@ namespace TankLike.Environment.MapMaker
         public void SetUpGround()
         {
             // create a parent for the room
-            if (_manager.Room != null) Destroy(_manager.Room.gameObject);
+            if (_manager.Room != null)
+            {
+                Destroy(_manager.Room.gameObject);
+            }
 
             _manager.Room = Instantiate(_roomPrefab, Vector3.zero, Quaternion.identity);
 

@@ -20,7 +20,7 @@ namespace TankLike.LevelGeneration
         [SerializeField] private RoomGate _gateToBuild;
         private Room _currentRoom;
 
-        public void BuildRoom(MapTiles_SO map, LevelData level, Room room)
+        public void BuildRoom(MapTiles_SO map, LevelData level, Room room, BuildConfigs configs = null)
         {
             int xDimension = map.Tiles.Max(t => t.Dimension.x) + 1;
             int yDimension = map.Tiles.Max(t => t.Dimension.y) + 1;
@@ -50,6 +50,14 @@ namespace TankLike.LevelGeneration
 
                 if (currentTile.Tag != TileTag.Gate)
                 {
+                    if (configs != null)
+                    {
+                        if (configs.IgnoreTileTags.Exists(t => t == currentTile.Tag))
+                        {
+                            continue;
+                        }
+                    }
+
                     tileToBuildPrefab = level.Styler.GetRandomTileByTag(currentTile.Tag);
                 }
                 else
@@ -191,5 +199,11 @@ namespace TankLike.LevelGeneration
 
             return overlays.Find(o => o.Tag == tag).OverlayObject;
         }
+    }
+
+    [System.Serializable]
+    public class BuildConfigs
+    {
+        public List<TileTag> IgnoreTileTags;
     }
 }

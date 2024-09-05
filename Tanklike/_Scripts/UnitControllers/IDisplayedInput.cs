@@ -10,6 +10,6 @@ namespace TankLike
         /// <summary>
         /// Called on start and every time the display input bindings need to be updated.
         /// </summary>
-        void UpdateInput(int playerIndex);
+        void UpdateInputDisplay(int playerIndex);
     }
 }

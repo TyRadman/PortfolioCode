@@ -210,6 +210,11 @@ namespace TankLike.Utils
             return distance <= radius;
         }
 
+        public static string GetInputIcon(int index)
+        {
+            return $"<sprite={index}>";
+        }
+
         public struct SimpleSpline
         {
             private Vector3 _a0, _a1, _a2;
@@ -231,5 +236,49 @@ namespace TankLike.Utils
                 return 2f * t * (_a2 - 2f * _a1 + _a0) + (2f * _a1 - 2f * _a0);
             }
         }
+    }
+}
+
+public static class GlobalHelper
+{
+    public static void StopCoroutineSafe(this MonoBehaviour monoBehavior, Coroutine coroutine)
+    {
+        if(coroutine == null)
+        {
+            return;
+        }
+
+        monoBehavior.StopCoroutine(coroutine);
+    }
+
+    public static void PlayAnimation(this MonoBehaviour monoBehavior, Animation animation, AnimationClip clip)
+    {
+        if(animation == null || clip == null)
+        {
+            return;
+        }
+
+        if (animation.isPlaying)
+        {
+            animation.Stop();
+        }
+
+        animation.clip = clip;
+        animation.Play();
+    }
+
+    public static void PlayAnimation(this MonoBehaviour monoBehavior, Animation animation)
+    {
+        if (animation == null)
+        {
+            return;
+        }
+
+        if (animation.isPlaying)
+        {
+            animation.Stop();
+        }
+
+        animation.Play();
     }
 }

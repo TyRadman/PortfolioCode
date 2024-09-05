@@ -56,11 +56,6 @@ namespace TankLike.Environment
         /// </summary>
         public void EnableGate()
         {
-            //if (this is BossRoomGate)
-            //{
-            //    print($"Triggered at {Time.time}".Color(Color.green));
-            //}
-
             _newRoomEnterTrigger.OnTriggerEnterEvent += SwitchRoom;
             _gateExitTrigger.OnTriggerEnterEvent += OnRoomEntered;
         }

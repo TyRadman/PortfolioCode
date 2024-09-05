@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEditor;
 using TankLike.LevelGeneration;
 using TankLike.Environment.LevelGeneration;
+using TankLike.Environment;
 
 namespace TankLike
 {
@@ -19,6 +20,12 @@ namespace TankLike
             if(GUILayout.Button("Generate Level"))
             {
                 gen.EditorGenerateLevel();
+            }
+
+            if (GUILayout.Button("Generate Map"))
+            {
+                Room newRoom = Instantiate(gen.RoomReference);
+                GameManager.Instance.GameplayRoomGenerator.BuildRoom(gen.MapToBuild, gen.LevelData, newRoom, gen.Configs);
             }
         }
     }

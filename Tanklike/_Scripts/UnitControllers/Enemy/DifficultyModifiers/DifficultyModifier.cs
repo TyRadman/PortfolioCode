@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
-    public class DifficultyModifier : ScriptableObject
+    public abstract class DifficultyModifier : ScriptableObject
     {
         public const string MENU_NAME = "TankLike/Enemies/Difficulty Modifiers/";
 

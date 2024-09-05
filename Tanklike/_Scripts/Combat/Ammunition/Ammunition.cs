@@ -9,7 +9,6 @@ namespace TankLike.Combat
 {
     public class Ammunition : MonoBehaviour, IPoolable
     {
-        [SerializeField] public OnImpact _impact;
         [SerializeField] protected List<string> _targetTags = new List<string>();
         [SerializeField] protected LayerMask _targetLayerMask;
 
@@ -22,13 +21,8 @@ namespace TankLike.Combat
         protected bool _isActive;
         [Tooltip("This is the damage a projectile inflicts on hit and the damage a laser beam inflicts every second")]
         protected int _damage = 3;
-        protected TankComponents _shooter;
-        protected Action<IPoolable> OnReleaseToPool;
-
-        public void AddTargetTag(string tag)
-        {
-            _targetTags.Add(tag);
-        }
+        [HideInInspector] public TankComponents Instigator;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
 
         #region Pool
         public virtual void Init(Action<IPoolable> OnRelease)

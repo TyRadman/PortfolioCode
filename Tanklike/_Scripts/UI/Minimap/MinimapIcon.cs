@@ -20,12 +20,17 @@ namespace TankLike.Minimap
 
         protected virtual void Start()
         {
-            if (GameManager.Instance != null)
+            if (GameManager.Instance == null)
             {
-                _minimapTransform = GameManager.Instance.CameraManager.MinimapCameraFollow.transform;
+                return;
             }
 
-            if (!_getIconInfo) return;
+                _minimapTransform = GameManager.Instance.CameraManager.MinimapCameraFollow.transform;
+
+            if (!_getIconInfo)
+            {
+                return;
+            }
 
             MinimapManager.MinimapIcon info = GameManager.Instance.MinimapManager.GetMinimapIconInfo(_iconType);
 

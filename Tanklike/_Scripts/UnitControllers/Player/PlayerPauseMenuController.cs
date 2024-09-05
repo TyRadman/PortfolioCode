@@ -99,6 +99,7 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
+            DisposeInput(_component.PlayerIndex);
         }
 
         public void Dispose()

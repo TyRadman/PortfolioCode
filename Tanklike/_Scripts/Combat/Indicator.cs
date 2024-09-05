@@ -13,7 +13,7 @@ namespace TankLike.Combat
         [SerializeField] private AnimationClip _startAnimationClip;
         [SerializeField] private AnimationClip _finishAnimationClip;
         [SerializeField] private GameObject _graphics;
-        private Action<IPoolable> OnReleaseToPool;
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
 
         private void Awake()
         {

@@ -5,7 +5,7 @@ using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
-    [CreateAssetMenu(fileName = "One Target Impact", menuName = "Shot Configurations/Impact/One Target Impact")]
+    [CreateAssetMenu(fileName = "OnImpact_SingleTarget", menuName = MENU_MAIN + "Single Target")]
     public class OneTargetImpact : OnImpact
     {
         public override void Impact(Vector3 hitPoint, IDamageable target, int damage, LayerMask mask, Bullet bullet)
@@ -15,7 +15,7 @@ namespace TankLike.UnitControllers
             // whatever definition the target has for this method
             if (target != null)
             {
-                target.TakeDamage(damage, Vector3.zero, bullet.GetShooter(), bullet.transform.position); //not sure if we need the direction yet
+                target.TakeDamage(damage, Vector3.zero, bullet.GetInstigator(), bullet.transform.position); //not sure if we need the direction yet
             }
 
             // play the effect 

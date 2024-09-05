@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Combat;
-using TankLike.Utils;
-using TankLike.UnitControllers;
 
-namespace TankLike.Combat
+namespace TankLike.Combat.Tools
 {
+    using Utils;
+    using UnitControllers;
+
+    [CreateAssetMenu(fileName = NAME_PREFIX + "SpinningOrbs", menuName = ASSET_MENU_ROOT + "Spinning Orbs")]
     public class SpinningOrbsTool : Tool
     {
         [Header("Special Values")]
@@ -69,7 +70,7 @@ namespace TankLike.Combat
 
             _orbsParent.position = _playerComponents.transform.position;
             _orbs.ForEach(o => o.EnableBullet(true));
-            StartCoroutine(SpinningProcess());
+            _tank.StartCoroutine(SpinningProcess());
         }
 
         private IEnumerator SpinningProcess()

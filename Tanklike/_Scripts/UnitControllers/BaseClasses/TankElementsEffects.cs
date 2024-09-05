@@ -21,7 +21,7 @@ namespace TankLike.UnitControllers
         }
 
         private WaitForSeconds _waitingTime;
-        [SerializeField] protected TankComponents _components;
+        protected TankComponents _components;
         private List<Effect> _effects = new List<Effect>();
         [SerializeField] protected bool _canGetEffects = true;
 
@@ -31,8 +31,9 @@ namespace TankLike.UnitControllers
 
         public bool IsActive { get; set; }
 
-        private void Awake()
+        public void Setup(TankComponents components)
         {
+            _components = components;
             _waitingTime = new WaitForSeconds(1f);
         }
 

@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using TankLike.Sound;
+    using UnitControllers;
+    using Utils;
+
     public class Laser : Ammunition
     {
         [Header("Settings")]
@@ -15,26 +18,49 @@ namespace TankLike.Combat
         [SerializeField] private LineRenderer _beam;
         [SerializeField] protected ParticleSystem _hitParticles;
         [SerializeField] protected ParticleSystem _muzzleFlashParticles;
+        [SerializeField] private float _textureTilingSize = 5;
+
+        [Header("Audio")]
+        [SerializeField] private Audio _onShootingAudio;
+
+        private AudioSource _audioSource;
+
+        private Material _material;
+        private Action<IPoolable> OnRemoveFromActivePoolables;
+        private Coroutine _laserCoroutine;
+
         private float _duration;
         private float _maxLength;
         private int _damageOverTime;
         private float _damageInterval = 0.1f;
         private float _thickness = 0.3f;
-
         private float _damageTimer;
-        private Coroutine _laserCoroutine;
-        private Action<IPoolable> OnRemoveFromActivePoolables;
+        private bool _isDealingDamage = false;
+
+
+        /// <summary>
+        /// The texture's tiling property on the x axis. Determines how stretched the texture will be across the laser
+        /// </summary>
+        private const float LASER_FADE_OUT_TIME = 1f;
+        private const string LENGTH_ID = "_TilingLength";
+        private const string ALPHA_CLIP_ID = "_CutoffHeight";
+        private const string NOISE_CLIP_ID = "_NoiseMaxIn";
 
         private void Awake()
         {
-            Activate(false);
+            _material = _beam.material;
+            _hitParticles.Stop();
+            _muzzleFlashParticles.Stop();
+
+            _damageTimer = _damageInterval;
+            _isActive = false;
+            _beam.enabled = false;
+            _beam.SetPosition(0, _muzzlePoint.position);
+            _beam.SetPosition(1, _muzzlePoint.position);
         }
 
         public void SetUp(TankComponents shooter = null, Action<IPoolable> RemoveFromActivePoolables = null)
         {
-            //AddTargetTag(MUTUAL_HITTABLE_TAG);
-            //AddTargetTag(WALL_TAG);
-
             OnRemoveFromActivePoolables = RemoveFromActivePoolables;
         }
 
@@ -47,80 +73,82 @@ namespace TankLike.Combat
             _damageInterval = damageInterval;
         }
 
-        public void Activate(bool value)
+        public void Activate()
         {
-            _beam.enabled = value;
-            _isActive = value;
+            _audioSource = GameManager.Instance.AudioManager.Play(_onShootingAudio);
 
-            if (value)
-            {
-                _hitParticles.Play();
-                _muzzleFlashParticles.Play();
-                
-                if (_laserCoroutine != null)
-                {
-                    StopCoroutine(_laserCoroutine);
-                }
+            _beam.enabled = true;
+            _isActive = true;
+            _isDealingDamage = true;
+            _hitParticles.Play();
+            _muzzleFlashParticles.Play();
+            SetMaterialDisolveProperties(0);
 
-                _laserCoroutine = StartCoroutine(LaserRoutine());
-            }
-            else
+            if (_laserCoroutine != null)
             {
-                _beam.SetPosition(0, _muzzlePoint.position);
-                _beam.SetPosition(1, _muzzlePoint.position);
-                _hitParticles.Stop();
-                _muzzleFlashParticles.Stop();
+                StopCoroutine(_laserCoroutine);
             }
+
+            _laserCoroutine = StartCoroutine(LaserCountdownRoutine());
 
             _damageTimer = _damageInterval;
+
         }
 
-        private IEnumerator LaserRoutine()
+        private void SetMaterialDisolveProperties(float value)
+        {
+            _material.SetFloat(ALPHA_CLIP_ID, 1 - value);
+            _material.SetFloat(NOISE_CLIP_ID, 1 + value);
+        }
+
+        private IEnumerator LaserCountdownRoutine()
         {
             yield return new WaitForSeconds(_duration);
-            OnReleaseToPool(this);
-            OnRemoveFromActivePoolables(this);
+            Deactivate();
         }
 
         private void FixedUpdate()
         {
-            if (!_isActive)
+            if (!_isDealingDamage || !_beam.enabled)
             {
                 return;
             }
 
-            if (!_beam.enabled)
-            {
-                return;
-            }
+            UpdateLaser();
+        }
 
-            Ray ray = new Ray(_muzzlePoint.position, _muzzlePoint.forward);
+        private void UpdateLaser()
+        {
+            Vector3 forwardDirection = _muzzlePoint.forward;
+            forwardDirection.y = 0f;
+            Ray ray = new Ray(_muzzlePoint.position, forwardDirection);
             bool cast = Physics.SphereCast(ray, _thickness, out RaycastHit hit, _maxLength, _targetLayerMask);
-            Vector3 hitPoint = _muzzlePoint.position + _muzzlePoint.forward * _maxLength;
-
-            // Visualize the sphere's radius.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.up * _thickness, Color.blue); // Draw the top of the sphere.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.down * _thickness, Color.blue); // Draw the bottom of the sphere.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.left * _thickness, Color.blue); // Draw the left side of the sphere.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.right * _thickness, Color.blue); // Draw the right side of the sphere.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.forward * _thickness, Color.blue); // Draw the front side of the sphere.
-            Debug.DrawLine(_muzzlePoint.position, _muzzlePoint.position + Vector3.back * _thickness, Color.blue); // Draw the back side of the sphere.
-
+            Vector3 hitPoint = _muzzlePoint.position + forwardDirection * _maxLength;
             _damageTimer += Time.fixedDeltaTime;
-
 
             if (cast && (1 << hit.transform.gameObject.layer & _targetLayerMask) == 1 << hit.transform.gameObject.layer)
             {
-                hitPoint = hit.point;
+                float distanceToTarget = Vector3.Distance(_muzzlePoint.position, hit.point);
+                hitPoint = _muzzlePoint.position + distanceToTarget * forwardDirection;
+
+                // resize the texture on the laser
+                Vector2 textureSeizRange = new Vector2(1f, _maxLength / _textureTilingSize);
+                float tilingSize = textureSeizRange.Lerp(Mathf.InverseLerp(0f, _maxLength, distanceToTarget));
+                _material.SetFloat(LENGTH_ID, tilingSize);
 
                 if (_damageTimer >= _damageInterval)
                 {
                     // checks for damagables
-                    if (cast && hit.transform.TryGetComponent<IDamageable>(out IDamageable damagable))
+                    if (cast && hit.transform.TryGetComponent(out IDamageable damagable))
                     {
-                        if (damagable.Invincible) return;
+                        if (damagable.IsInvincible)
+                        {
+                            return;
+                        }
+
                         damagable.TakeDamage(_damageOverTime, Vector3.zero, null, hitPoint);
                     }
+
                     _damageTimer = 0f;
                 }
             }
@@ -131,18 +159,89 @@ namespace TankLike.Combat
             _hitParticles.transform.position = hitPoint;
         }
 
+        public void Deactivate()
+        {
+            if(!_isActive)
+            {
+                return;
+            }
+
+            StartCoroutine(DeactivationProcess());
+        }
+
+        private IEnumerator DeactivationProcess()
+        {
+            StopEffects();
+            _isDealingDamage = false;
+            _damageTimer = _damageInterval;
+
+            float timeElapsed = 0f;
+            StopAudio();
+
+            while (timeElapsed < LASER_FADE_OUT_TIME)
+            {
+                timeElapsed += Time.deltaTime;
+                float t = timeElapsed / LASER_FADE_OUT_TIME;
+                SetMaterialDisolveProperties(t);
+
+                yield return null;
+            }
+
+            ResetBeam();
+            _isActive = false;
+
+            OnReleaseToPool(this);
+            OnRemoveFromActivePoolables(this);
+            gameObject.SetActive(false);
+        }
+
+        private void StopEffects()
+        {
+            _hitParticles.Stop();
+            _muzzleFlashParticles.Stop();
+        }
+
+        private void ResetBeam()
+        {
+            _beam.enabled = false;
+            _beam.SetPosition(0, _muzzlePoint.position);
+            _beam.SetPosition(1, _muzzlePoint.position);
+        }
+
+        private void StopAudio()
+        {
+            if (_audioSource == null)
+            {
+                Debug.LogError($"No audio source attached to {gameObject.name}");
+                return;
+            }
+
+            _audioSource.loop = false;
+            _audioSource.Stop();
+            _audioSource.clip = null;
+        }
+
         public void SetTargetLayerMask(string tag)
         {
             _targetLayerMask = 0;
             _targetLayerMask |= Constants.MutualHittableLayer;
             _targetLayerMask |= Constants.WallLayer;
+
             if (tag == TanksTag.Enemy.ToString())
             {
-                _targetLayerMask |= 1 << Constants.EnemyDamagableLayer;//LayerMask.NameToLayer("Enemy");
+                _targetLayerMask |= 1 << Constants.EnemyDamagableLayer;
             }
             else
             {
-                _targetLayerMask |= 1 << Constants.PlayerDamagableLayer;//LayerMask.NameToLayer("Player");
+                _targetLayerMask |= 1 << Constants.PlayerDamagableLayer;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (_isActive)
+            {
+                TurnOff();
             }
         }
 
@@ -155,6 +254,12 @@ namespace TankLike.Combat
         public override void TurnOff()
         {
             base.TurnOff();
+
+            if(_audioSource != null)
+            {
+                _audioSource.Stop();
+            }
+
             OnReleaseToPool(this);
         }
 
@@ -165,8 +270,8 @@ namespace TankLike.Combat
 
         public override void OnRelease()
         {
-            Activate(false);
-            base.OnRelease();
+            Deactivate();
+            GameManager.Instance.SetParentToSpawnables(gameObject);
 
             if (_laserCoroutine != null)
             {

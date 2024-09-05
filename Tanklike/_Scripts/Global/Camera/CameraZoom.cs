@@ -48,8 +48,7 @@ namespace TankLike.Cam
         {
             float time = 0f;
             float startZoom = _transposer.m_CameraDistance;
-            //GameManager.Instance.CameraManager.PlayerCameraFollow.SetOffsetMultiplier(newZoomValue / startZoom);
-
+            
             while (time < _zoomDuration)
             {
                 time += Time.deltaTime;

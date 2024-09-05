@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace TankLike.Sound
 {
-    [CreateAssetMenu(fileName = "A_", menuName = "TankLike/Audio/Audio file")]
+    [CreateAssetMenu(fileName = "A_", menuName = Directories.MAIN + "Audio/Audio file")]
     public class Audio : ScriptableObject
     {
         private const float PITCH_VALUE = 3f;
@@ -13,6 +13,8 @@ namespace TankLike.Sound
         public AudioClip Clip;
         [Range(0f, 2f)] public float VolumeMultiplier = 1f;
         public bool OneShot;
+        public bool Loop;
+
         // pitch
         public float Pitch
         {

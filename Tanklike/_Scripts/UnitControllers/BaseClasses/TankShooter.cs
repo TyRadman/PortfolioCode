@@ -13,28 +13,34 @@ namespace TankLike.UnitControllers
     public abstract class TankShooter : MonoBehaviour, IController
     {
         public System.Action OnTargetHit;
-        public System.Action OnShoot;
+        public System.Action OnShootStarted;
         public System.Action OnShootFinished;
         protected float _coolDownTime = 3f;
+
+        [Header("Settings")]
+        [SerializeField] protected bool _canShoot;
         [SerializeField] protected float _shootAnimationDelay = 0f;
-        [SerializeField] protected bool _canShoot = true;
-        [SerializeField] protected TankComponents _components;
-        [SerializeField] protected Audio _onShootAudio;
         [SerializeField] protected LayerMask _targetLayers;
+
+        [Header("References")]
+        [SerializeField] protected WeaponHolder _startWeaponHolder;
+        [SerializeField] private Weapon _customShot;
+        [SerializeField] protected Audio _onShootAudio;
 
         protected List<Transform> _shootingPoints;
         protected Animator _turretAnimator;
-
+        protected Transform _turret;
         public List<Transform> ShootingPoints => _shootingPoints;
 
         public bool IsActive { get; protected set; }
 
         // custom shots
-        [SerializeField] private Weapon _customShot;
         // either normal or custom
         private System.Action<Transform, float> ShootingMethod;
-        [SerializeField] protected Weapon _startingWeapon;
+
+        protected TankComponents _components;
         protected Weapon _currentWeapon;
+        protected WeaponHolder _currentWeaponHolder;
         private List<Weapon> _normalShots = new List<Weapon>();
 
         protected List<IPoolable> _activePoolables = new List<IPoolable>();
@@ -43,18 +49,24 @@ namespace TankLike.UnitControllers
 
         protected virtual void Awake()
         {
-            ShootingMethod += DefaultShot;
             _shootWaitForSeconds = new WaitForSeconds(_shootAnimationDelay);
         }
 
         #region Shooting Method Overload
         public virtual void Shoot(bool hasCoolDown = true, Transform shootingPoint = null, float angle = 0f)
         {
-            if (!_canShoot && hasCoolDown) return;
+            if (!_canShoot && hasCoolDown)
+            {
+                return;
+            }
 
-            if (shootingPoint == null) shootingPoint = _shootingPoints[0];
+            if (shootingPoint == null)
+            {
+                shootingPoint = _shootingPoints[0];
+            }
 
-            OnShoot?.Invoke();
+            // TODO: remove it after fixing the air drone shooter
+            OnShootStarted?.Invoke();
             _components.Animation.PlayShootAnimation();
             //PlayShootAudio();
 
@@ -83,7 +95,7 @@ namespace TankLike.UnitControllers
         {
             if (!_canShoot && hasCoolDown) return;
 
-            weapon.OnShot(_components, null, angle);
+            weapon.OnShot(null, angle);
             _components.Animation.PlayShootAnimation(2f); //dirty, get the speed from the weapon
 
             if (hasCoolDown)
@@ -91,34 +103,6 @@ namespace TankLike.UnitControllers
                 _canShoot = false;
                 EnableShooting();
             }
-        }
-        #endregion
-
-        #region Effects
-        public void ShowShootingEffects(ParticleSystemHandler muzzleEffect, Transform shootingPoint = null)
-        {
-            Quaternion rotation = Quaternion.identity;
-            Vector3 position = Vector3.zero;
-
-            
-
-            if(shootingPoint != null)
-            {
-                position = shootingPoint.position;
-                rotation = shootingPoint.rotation;
-            }
-            else
-            {
-                if (_shootingPoints.Count > 0)
-                {
-                    rotation = _shootingPoints[0].rotation;
-                    position = _shootingPoints[0].position;
-                }
-            }
-
-            muzzleEffect.transform.SetPositionAndRotation(position, rotation);
-            muzzleEffect.gameObject.SetActive(true);
-            muzzleEffect.Play();
         }
         #endregion
 
@@ -140,17 +124,24 @@ namespace TankLike.UnitControllers
             TankBodyParts parts = components.TankBodyParts;
 
             var turret = (TankTurret)parts.GetBodyPartOfType(BodyPartType.Turret);
+            _turret = turret.transform;
+
+            _components = components;
             _shootingPoints = new List<Transform>();
             SetupShootingPoints(turret.ShootingPoints);
             _turretAnimator = turret.Animator;
 
-            if (_startingWeapon == null)
+            ShootingMethod = DefaultShot;
+
+            if (_startWeaponHolder == null)
             {
                 Debug.LogWarning("Starting weapon is null for " + gameObject.name);
                 return;
             }
 
-            SetWeapon(_startingWeapon);
+            _canShoot = false;
+
+            SetWeapon(_startWeaponHolder);
         }
 
         private void SetupShootingPoints(Transform[] shootingPoints)
@@ -183,7 +174,7 @@ namespace TankLike.UnitControllers
                 return;
             }
 
-            _currentWeapon.OnShot(_components, shootingPoint, angle);
+            _currentWeapon.OnShot(shootingPoint, angle);
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
         }
 
@@ -192,8 +183,8 @@ namespace TankLike.UnitControllers
         {
             if (_customShot == null) return;
 
-            OnShoot?.Invoke();
-            _customShot.OnShot(_components, shootingPoint, angle);
+            OnShootStarted?.Invoke();
+            _customShot.OnShot(shootingPoint, angle);
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
 
             // return the shooting method to default
@@ -210,79 +201,8 @@ namespace TankLike.UnitControllers
         }
         #endregion
 
-        public void SpawnBullet(Bullet bullet, Transform shootingPoint = null, float angle = 0)
-        {
-            // create the bullet
-            bullet.gameObject.SetActive(true);
-
-            // handle position and rotation
-            Quaternion rotation = Quaternion.identity;
-            Vector3 position = Vector3.zero;
-
-            if (shootingPoint != null)
-            {
-                Vector3 eulerRotation = shootingPoint.eulerAngles;
-                eulerRotation.x = 0;
-                rotation = Quaternion.Euler(eulerRotation);
-                position = shootingPoint.position;
-            }
-            else
-            {
-                if (_shootingPoints.Count > 0)
-                {
-                    Vector3 eulerRotation = _shootingPoints[0].eulerAngles;
-                    eulerRotation.x = 0;
-                    rotation = Quaternion.Euler(eulerRotation);
-                    position = _shootingPoints[0].position;
-                }
-            }
-            
-            if(angle != 0) rotation *= Quaternion.Euler(0f, angle, 0f);
-
-            bullet.transform.SetPositionAndRotation(position, rotation);
-            bullet.StartBullet(_components);
-            bullet.SetTargetLayerMask(Helper.GetOpposingTag(gameObject.tag));
-        }
-
-        public void ShootLaser(Laser laser, Transform shootingPoint = null, float angle = 0)
-        {
-            // create the bullet
-            laser.gameObject.SetActive(true);
-
-            // handle position and rotation
-            Quaternion rotation = Quaternion.identity;
-            Vector3 position = Vector3.zero;
-
-            if (_shootingPoints != null)
-            {
-                rotation = _shootingPoints[0].rotation;
-                position = _shootingPoints[0].position;
-            }
-
-            if (shootingPoint != null)
-            {
-                rotation = shootingPoint.rotation;
-                position = shootingPoint.position;           
-            }
-
-            if (angle != 0) rotation *= Quaternion.Euler(0f, angle, 0f);
-
-            laser.transform.SetPositionAndRotation(position, rotation);
-            laser.transform.parent = shootingPoint == null ?  _shootingPoints[0] : shootingPoint;
-            laser.SetUp(_components, RemoveFromActivePoolables);
-            laser.SetTargetLayerMask(Helper.GetOpposingTag(gameObject.tag));
-            // activate laser
-            laser.Activate(true);
-            _activePoolables.Add(laser);
-        }
 
         #region Extra
-        private void RemoveFromActivePoolables(IPoolable poolable)
-        {
-            if (_activePoolables.Contains(poolable))
-                _activePoolables.Remove(poolable);
-        }
-
         protected virtual void OnShootExitHandler()
         {
             OnShootFinished?.Invoke();
@@ -305,21 +225,24 @@ namespace TankLike.UnitControllers
 
         public void SetWeaponDamage(int damage)
         {
-            if(_startingWeapon != null)
-                _startingWeapon.SetDamage(damage);
+            if (_startWeaponHolder != null)
+            {
+                _startWeaponHolder.Weapon.SetDamage(damage);
+            }
         }
 
-        public virtual void SetWeapon(Weapon weapon)
+        public virtual void SetWeapon(WeaponHolder weaponHolder)
         {
-            if (weapon == null)
+            if (weaponHolder == null)
             {
-                weapon = _currentWeapon;
+                weaponHolder = _currentWeaponHolder;
             }
 
-            var wep = Instantiate(weapon);
-            _currentWeapon = wep;
+            Weapon weapon = Instantiate(weaponHolder.Weapon);
+            _currentWeapon = weapon;
             _coolDownTime = _currentWeapon.CoolDownTime;
             _currentWeapon.SetTargetLayer(_targetLayers);
+            _currentWeapon.SetUp(_components);
 
             if (!_normalShots.Exists(w => w == weapon))
             {
@@ -327,7 +250,10 @@ namespace TankLike.UnitControllers
             }
 
             // set the audio if the bullet has special audios
-            if (_currentWeapon.ShotAudio != null) _onShootAudio = _currentWeapon.ShotAudio;
+            if (_currentWeapon.ShotAudio != null)
+            {
+                _onShootAudio = _currentWeapon.ShotAudio;
+            }
         }
 
         public virtual void AddWeapon(Weapon weapon)
@@ -337,7 +263,7 @@ namespace TankLike.UnitControllers
 
         public void SetWeaponSpeed(float bulletSpeed)
         {
-            _startingWeapon.SetSpeed(bulletSpeed);
+            _startWeaponHolder.Weapon.SetSpeed(bulletSpeed);
         }
 
         public void SetLaserDuration(float duration)
@@ -359,47 +285,24 @@ namespace TankLike.UnitControllers
         #region IController
         public virtual void Activate()
         {
-            //var pubs = _turretAnimator.GetBehaviours<AnimatorEventPublisher>();
-
-            //foreach (AnimatorEventPublisher publisher in pubs)
-            //{
-            //    if (publisher.StateName == "Shoot")
-            //    {
-            //        publisher.OnExit += OnShootExitHandler;
-            //    }
-            //}
+            _canShoot = true;
         }
 
         public virtual void Deactivate()
         {
-            //var pubs = _turretAnimator.GetBehaviours<AnimatorEventPublisher>();
-
-            //foreach (AnimatorEventPublisher publisher in pubs)
-            //{
-            //    if (publisher.StateName == "Shoot")
-            //    {
-            //        publisher.OnExit -= OnShootExitHandler;
-            //    }
-            //}
+            _canShoot = false;
         }
 
         public virtual void Restart()
         {
             _canShoot = true;
-
-            //var pubs = _turretAnimator.GetBehaviours<AnimatorEventPublisher>();
-
-            //foreach (AnimatorEventPublisher publisher in pubs)
-            //{
-            //    if (publisher.StateName == "Shoot")
-            //    {
-            //        publisher.OnExit -= OnShootExitHandler;
-            //    }
-            //}
+            _currentWeapon.DisposeWeapon();
         }
 
         public virtual void Dispose()
         {
+            ShootingMethod -= DefaultShot;
+            _currentWeapon.DisposeWeapon();
         }
         #endregion
     }

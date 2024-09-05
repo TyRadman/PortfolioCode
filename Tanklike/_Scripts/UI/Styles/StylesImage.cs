@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 namespace TankLike.UI.Styles
 {
+    // TODO: we need to remove this class
     public class StylesImage : StyleElement
     {
         [SerializeField] private Image _image;
@@ -12,11 +13,6 @@ namespace TankLike.UI.Styles
         public override void ApplyStyle(StyleSettings selectedStyle)
         {
             return;
-            base.ApplyStyle(selectedStyle);
-
-            StyleSettings_Image style = (StyleSettings_Image)selectedStyle;
-
-            _image.color = style.Color;
         }
 
         public override void SetUp()

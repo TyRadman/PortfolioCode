@@ -12,7 +12,7 @@ namespace TankLike
         private float _height = 0;
         private bool _interpolatePosition = true;
         private List<FollowTarget> _followPoints = new List<FollowTarget>();
-        private List<FollowTarget> _backUpFollowPoints = new List<FollowTarget>();
+        //private List<FollowTarget> _backUpFollowPoints = new List<FollowTarget>();
         private int _playersCount;
         [SerializeField][Range(0f, 20f)] private float _mainTargetFollowSpeed = 4f;
         [SerializeField] private float _totalSpeedMultiplier = 1f;
@@ -30,6 +30,7 @@ namespace TankLike
             public Transform CrossHair;
             public Transform Target;
             public int Index = -1;
+            public bool IsActive = false;
         }
 
         public void SetUp()
@@ -65,9 +66,9 @@ namespace TankLike
 
         private void AddCameraFollowTarget(int playerIndex)
         {
-            if (_backUpFollowPoints.Exists(f => f.Index == playerIndex))
+            if (_followPoints.Exists(f => f.Index == playerIndex))
             {
-                _followPoints.Add(_backUpFollowPoints.Find(f => f.Index == playerIndex));
+                _followPoints.Find(f => f.Index == playerIndex);
                 return;
             }
 
@@ -75,26 +76,32 @@ namespace TankLike
 
             FollowTarget newFollow = new FollowTarget()
             {
-                CrossHair = GameManager.Instance.PlayersManager.GetPlayer(playerIndex).Crosshair.GetCrosshair(),
+                CrossHair = GameManager.Instance.PlayersManager.GetPlayer(playerIndex).Crosshair.GetCrosshairTransform(),
                 Target = target,
-                Index = playerIndex
+                Index = playerIndex,
+                IsActive = true
             };
 
             newFollow.Target.position = GameManager.Instance.PlayersManager.GetPlayer(playerIndex).transform.position;
-            _backUpFollowPoints.Add(newFollow);
+            //_backUpFollowPoints.Add(newFollow);
             _followPoints.Add(newFollow);
             _playersCount = _followPoints.Count;
         }
 
         private void UpdateFollowPointPosition(FollowTarget target)
         {
+            if(!target.IsActive)
+            {
+                return;
+            }
+            
             Vector3 newPosition;
 
             if (_interpolatePosition)
             {
                 float lerpSpeed = _mainTargetFollowSpeed;
                 _followPoints.ForEach(p => lerpSpeed *= p.SpeedMultiplier);
-                lerpSpeed /= _followPoints.Count;
+                lerpSpeed /= _playersCount;
                 lerpSpeed *= Time.deltaTime;
                 newPosition = Vector3.Lerp(target.Target.position, target.CrossHair.position, lerpSpeed);
             }
@@ -112,14 +119,15 @@ namespace TankLike
 
         private void FollowMainTarget()
         {
+            List<FollowTarget> activeFollowees = _followPoints.FindAll(p => p.IsActive);
             Vector3 position = Vector3.zero;
-            _followPoints.ForEach(f => position += f.Target.position);
+            activeFollowees.FindAll(f => f.IsActive).ForEach(f => position += f.Target.position);
             position /= _playersCount;
 
             if (_interpolatePosition)
             {
                 float lerpSpeed = _mainTargetFollowSpeed;
-                _followPoints.ForEach(p => lerpSpeed *= p.SpeedMultiplier);
+                activeFollowees.ForEach(p => lerpSpeed *= p.SpeedMultiplier);
                 lerpSpeed *= Time.deltaTime;
                 position = Vector3.Lerp(_target.position, position, lerpSpeed);
             }
@@ -129,6 +137,7 @@ namespace TankLike
 
         public void SetSpeedMultiplier(float multiplier, int targetIndex)
         {
+            StopAllCoroutines();
             StartCoroutine(ChangeSpeedMultiplierValueProcess(1f + multiplier * _totalSpeedMultiplier, targetIndex));
         }
 
@@ -147,6 +156,7 @@ namespace TankLike
 
         public void ResetSpeedMultiplier(int targetIndex)
         {
+            StopAllCoroutines();
             StartCoroutine(ChangeSpeedMultiplierValueProcess(1f, targetIndex));
         }
 
@@ -154,6 +164,12 @@ namespace TankLike
         {
             _originalLimits.SetValues(limits);
             _currentLimits.ScaleUpValues(_originalLimits, _offset, 1f);
+        }
+
+        // Used for test scenes
+        public void ResetLimits()
+        {
+            _currentLimits.SetValues(_originalLimits);
         }
 
         public void EnableInterpolation(bool enable)
@@ -167,8 +183,8 @@ namespace TankLike
         /// <param name="playerIndex"></param>
         public void RemoveCameraFollow(int playerIndex)
         {
-            _followPoints.Remove(_followPoints.Find(f => f.Index == playerIndex));
-            _playersCount = _followPoints.Count;
+            _followPoints.Find(f => f.Index == playerIndex).IsActive = false;
+            _playersCount = _followPoints.FindAll(f => f.IsActive).Count;
         }
 
         /// <summary>
@@ -177,8 +193,9 @@ namespace TankLike
         /// <param name="playerIndex"></param>
         public void AddCameraFollower(int playerIndex)
         {
-            _followPoints.Add(_backUpFollowPoints.Find(f => f.Index == playerIndex));
-            _playersCount = _followPoints.Count;
+            //_followPoints.Add(_backUpFollowPoints.Find(f => f.Index == playerIndex));
+            _followPoints.Find(f => f.Index == playerIndex).IsActive = true;
+            _playersCount = _followPoints.FindAll(f => f.IsActive).Count;
         }
 
         public void SetOffsetMultiplier(float value)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TankLike.Misc;
 using UnityEngine;
 using static TankLike.IndicatorEffects;
+using static TankLike.PlayersManager;
 
 namespace TankLike.UnitControllers
 {
@@ -19,6 +20,7 @@ namespace TankLike.UnitControllers
 
         protected Coroutine _telegraphCoroutine;
         protected Coroutine _attackCoroutine;
+        protected PlayerTransforms _currentTarget;
 
         public bool IsWayToTargetBlocked(Transform target)
         {
@@ -62,6 +64,21 @@ namespace TankLike.UnitControllers
             }
 
             return rightBlocked || leftBlocked;
+        }
+
+        public void SetCurrentTarget(PlayerTransforms target)
+        {
+            _currentTarget = target;
+        }
+
+        public PlayerTransforms GetCurrentTarget()
+        {
+            return _currentTarget;
+        }
+
+        public void UnsetCurrentTarget()
+        {
+            _currentTarget = null;
         }
 
         public virtual void TelegraphAttack()
@@ -113,7 +130,10 @@ namespace TankLike.UnitControllers
         public void StartAttackRoutine(float duration)
         {
             if (_attackCoroutine != null)
+            {
                 StopCoroutine(_attackCoroutine);
+            }
+
             _attackCoroutine = StartCoroutine(AttackRoutine(duration));
         }
 
@@ -134,9 +154,11 @@ namespace TankLike.UnitControllers
         {
             base.Restart();
             if (_telegraphCoroutine != null)
+            {
                 StopCoroutine(_telegraphCoroutine);
+            }
 
-            if(_activePoolables.Count > 0)
+            if (_activePoolables.Count > 0)
             {
                 _activePoolables.ForEach(e => e.TurnOff());
             }
@@ -144,7 +166,9 @@ namespace TankLike.UnitControllers
             _activePoolables.Clear();
 
             if (_attackCoroutine != null)
+            {
                 StopCoroutine(_attackCoroutine);
+            }
         }
         #endregion
     }

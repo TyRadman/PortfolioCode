@@ -24,12 +24,17 @@ namespace TankLike.UnitControllers
         [field: SerializeField] public PlayerUIController UIController { get; private set; }
         [field: SerializeField] public PlayerPredictedPosition PredictedPosition { set; get; }
         [field: SerializeField] public PlayerFuel Fuel { set; get; }
+        [field: SerializeField] public PlayerEnergy Energy { set; get; }
+        [field: SerializeField] public PlayerBoostAbility BoostAbility { set; get; }
+        [field: SerializeField] public PlayerAimAssist AimAssist { set; get; }
         [field: SerializeField] public bool IsAlive { set; get; }
-        
-       
+
+        [field: SerializeField, Header("Ability Data")] public AbilitySelectionData AbilityData { set; get; }
+        public System.Action OnPlayerRevived { get; set; }
+
+
         [Header("Audio")]
         [SerializeField] private Audio _onCollectedAudio;
-
         public int PlayerIndex = 0;
 
         public override void GetComponents()
@@ -48,6 +53,9 @@ namespace TankLike.UnitControllers
             UIController = GetComponent<PlayerUIController>();
             PredictedPosition = GetComponent<PlayerPredictedPosition>();
             Fuel = GetComponent<PlayerFuel>();
+            Energy = GetComponent<PlayerEnergy>();
+            BoostAbility = GetComponent<PlayerBoostAbility>();
+            AimAssist = GetComponent<PlayerAimAssist>();
         }
 
         public override void SetUp()
@@ -55,7 +63,7 @@ namespace TankLike.UnitControllers
             base.SetUp();
             SuperAbilities.SetUp(this);
             Upgrades.SetUp(Experience);
-            PlayerInteractions.SetUp();
+            PlayerInteractions.SetUp(this);
             Overheat.SetUp(this);
             Experience.SetUp();
             PlayerBoost.Setup(this);
@@ -66,9 +74,15 @@ namespace TankLike.UnitControllers
             PredictedPosition.SetUp(this);
             Tools.SetUp(this);
             Fuel.Setup(this);
+            Energy.Setup(this);
+            AimAssist.SetUp(this);
 
-            Activate(); //for now
-            Health.OnDeath += OnDeathHandler;
+            if (BoostAbility != null)
+            {
+                BoostAbility.Setup(this);
+            }
+
+            TankBodyParts.InstantiateBodyParts();
         }
 
         public void SetUpSettings()
@@ -78,13 +92,16 @@ namespace TankLike.UnitControllers
 
         public void OnRevived()
         {
+            OnPlayerRevived?.Invoke();
             IsAlive = true;
+            TankBodyParts.InstantiateBodyParts();
+            TankBodyParts.SetTextureForMainMaterial();
             Activate();
         }
 
-        private void OnDeathHandler()
+        public override void OnDeathHandler(TankComponents components)
         {
-
+            base.OnDeathHandler(components);
             Restart();
         }
 
@@ -116,7 +133,6 @@ namespace TankLike.UnitControllers
             base.Activate();
             Upgrades.Activate();
             Experience.Activate();
-            Tools.Activate();
             Overheat.Activate();
             SuperAbilities.Activate();
             SuperRecharger.Activate();
@@ -130,14 +146,20 @@ namespace TankLike.UnitControllers
             ((PlayerMovement)Movement).Activate();
             Tools.Activate();
             Fuel.Activate();
+            Energy.Activate();
+            BoostAbility.Activate();
+            AimAssist.Activate();
         }
 
+        private void ActivateMovement()
+        {
+
+        }
         public override void Deactivate()
         {
             base.Deactivate();
             Upgrades.Deactivate();
             Experience.Deactivate();
-            Tools.Deactivate();
             Overheat.Deactivate();
             SuperAbilities.Deactivate();
             SuperRecharger.Deactivate();
@@ -151,6 +173,9 @@ namespace TankLike.UnitControllers
             ((PlayerMovement)Movement).Deactivate();
             Tools.Deactivate();
             Fuel.Deactivate();
+            Energy.Deactivate();
+            BoostAbility.Deactivate();
+            AimAssist.Deactivate();
         }
 
         public override void Dispose()
@@ -158,7 +183,6 @@ namespace TankLike.UnitControllers
             base.Dispose();
             Upgrades.Dispose();
             Experience.Dispose();
-            Tools.Dispose();
             Overheat.Dispose();
             SuperAbilities.Dispose();
             SuperRecharger.Dispose();
@@ -172,6 +196,9 @@ namespace TankLike.UnitControllers
             ((PlayerMovement)Movement).Dispose();
             Tools.Dispose();
             Fuel.Dispose();
+            Energy.Dispose();
+            BoostAbility.Dispose();
+            AimAssist.Dispose();
         }
 
         public override void Restart()
@@ -179,7 +206,6 @@ namespace TankLike.UnitControllers
             base.Restart();
             Upgrades.Restart();
             Experience.Restart();
-            Tools.Restart();
             Overheat.Restart();
             SuperAbilities.Restart();
             SuperRecharger.Restart();
@@ -193,6 +219,9 @@ namespace TankLike.UnitControllers
             ((PlayerMovement)Movement).Restart();
             Tools.Restart();
             Fuel.Restart();
+            Energy.Restart();
+            BoostAbility.Restart();
+            AimAssist.Restart();
         }
         #endregion
     }

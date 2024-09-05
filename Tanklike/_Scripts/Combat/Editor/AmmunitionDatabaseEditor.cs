@@ -24,6 +24,7 @@ namespace TankLike.Combat.Editor
                     database.AddAmmunition(a);
                 }
 
+                database.FillDictionary();
                 // Mark the database as dirty and save the changes
                 EditorUtility.SetDirty(database);
                 AssetDatabase.SaveAssets();

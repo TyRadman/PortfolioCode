@@ -5,17 +5,17 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
-    [CreateAssetMenu(fileName = "Max Health Boost Skill", menuName = "Skills/Stats/Max Health Boost")]
+    [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "MaxHealthBoost", menuName = MENU_ROOT + "Max Health Boost")]
     public class MaxHealthBoostSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private int _healthPoints = 100;
 
         // what the skill does when it is added to the tank 
-        public override void SetUp(Transform tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
-            tankTransform.GetComponent<PlayerHealth>().AddToMaxHealth(_healthPoints);
+            base.SetUp(components);
+            components.Health.AddToMaxHealth(_healthPoints);
         }
 
     }

@@ -34,8 +34,6 @@ namespace TankLike.UI
         [SerializeField] private Color _enoughCoinsTextColor;
         [SerializeField] private Color _notEnoughCoinsTextColor;
         [SerializeField] private ToolInfo _emptyCellsInfo;
-        [Header("Modifiers")]
-        [SerializeField] private bool _sellable = true;
 
         private const float NOTIFICATION_DISPLAY_DURATION = 3f;
         private const string BUY_TEXT = "Buy";
@@ -52,7 +50,7 @@ namespace TankLike.UI
         public void SetPlayer(PlayerComponents player)
         {
             _player = player;
-            _costText.text = $"0 / {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"0 / {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
         }
 
         /// <summary>
@@ -65,7 +63,7 @@ namespace TankLike.UI
 
             _nameText.text = info.Name;
             _descriptionText.text = info.Description;
-            _costText.text = $"{info.Cost} / {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"{info.Cost} / {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
 
             // set the buy/sell button's text
             _mainButtonText.text = cell.Owner == ShopToolSelectableCellUI.ToolOwner.Shop ? BUY_TEXT : SELL_TEXT;
@@ -75,7 +73,7 @@ namespace TankLike.UI
 
         private void SetCurrenciesColor(ToolInfo info)
         {
-            _costText.color = _currentSelectedToolAmount * info.Cost <= GameManager.Instance.PlayersManager.CoinsAmount ? _enoughCoinsTextColor : _notEnoughCoinsTextColor;
+            _costText.color = _currentSelectedToolAmount * info.Cost <= GameManager.Instance.PlayersManager.Coins.CoinsAmount ? _enoughCoinsTextColor : _notEnoughCoinsTextColor;
         }
 
         public void FillPlayerToolCells(List<ToolPack> tools)
@@ -103,7 +101,7 @@ namespace TankLike.UI
             _mainButtonText.text = $"Amount: {_currentSelectedToolAmount}";
 
             // multiply the price of the tool with its amount
-            _costText.text = $"{_currentSelectedToolAmount * info.Cost} / {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"{_currentSelectedToolAmount * info.Cost} / {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
 
             // change the color
             SetCurrenciesColor(info);
@@ -122,7 +120,7 @@ namespace TankLike.UI
             _mainButtonText.text = $"Amount: {_currentSelectedToolAmount}";
 
             // multiply the price of the tool with its amount
-            _costText.text = $"{_currentSelectedToolAmount * info.Cost} / {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"{_currentSelectedToolAmount * info.Cost} / {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
 
             // change the color
             SetCurrenciesColor(info);
@@ -141,7 +139,7 @@ namespace TankLike.UI
             _mainButtonText.text = $"Amount: {_currentSelectedToolAmount}";
 
             // multiply the price of the tool with its amount
-            _costText.text = $"{Mathf.CeilToInt(info.Cost * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * _currentSelectedToolAmount} + {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"{Mathf.CeilToInt(info.Cost * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * _currentSelectedToolAmount} + {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
         }
 
         public void AddSelectedToolAmountSell(bool increment, ToolInfo info, int maxAmount = int.MaxValue)
@@ -155,7 +153,7 @@ namespace TankLike.UI
             _mainButtonText.text = $"Amount: {_currentSelectedToolAmount}";
 
             // multiply the price of the tool with its amount
-            _costText.text = $"{Mathf.CeilToInt(info.Cost * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * _currentSelectedToolAmount} + {GameManager.Instance.PlayersManager.CoinsAmount}";
+            _costText.text = $"{Mathf.CeilToInt(info.Cost * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * _currentSelectedToolAmount} + {GameManager.Instance.PlayersManager.Coins.CoinsAmount}";
         }
         #endregion
 

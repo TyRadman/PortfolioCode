@@ -17,16 +17,16 @@ namespace TankLike.UnitControllers
         [field: SerializeField] public TankSuperAbilities SuperAbility { private set; get; }
         [field: SerializeField] public TankElementsEffects ElementsEffects { private set; get; }
         [field: SerializeField] public TankVisuals Visuals { private set; get; }
-        [field: SerializeField] public TankData Stats { private set; get; }
+        [field: SerializeField] public UnitData Stats { private set; get; }
         [field: SerializeField] public TankAnimation Animation { private set; get; }
         [field: SerializeField] public TankConstraints Constraints { private set; get; }
         [field: SerializeField] public TankAdditionalInfo AdditionalInfo { private set; get; }
         [field: SerializeField] public TankWiggler TankWiggler { private set; get; }
         [field: SerializeField] public TankBodyParts TankBodyParts { private set; get; }
+        [field: SerializeField] public UnitVisualEffects VisualEffects { private set; get; }
 
         [SerializeField] protected UnitMinimapIcon _minimapIcon;
-        public Action OnTankDeath;
-
+        
         public bool IsActive { get; set; }
 
         public virtual void GetComponents()
@@ -44,17 +44,23 @@ namespace TankLike.UnitControllers
             AdditionalInfo = GetComponent<TankAdditionalInfo>();
             TankWiggler = GetComponent<TankWiggler>();
             TankBodyParts = GetComponent<TankBodyParts>();
+            VisualEffects = GetComponent<UnitVisualEffects>();
         }
 
         public virtual void SetUp()
         {
             // Setups for all components
-            TankBodyParts.SetUp();
+            TankBodyParts.SetUp(Stats);
             Movement.SetUp(this);
             Shooter.SetUp(this);
             Health.SetUp(this);
             Animation.SetUp(this);
             Visuals.Setup(this);
+            
+            if(ElementsEffects != null)
+            {
+                ElementsEffects.Setup(this);
+            }
 
             if(TankWiggler != null)
             {
@@ -64,48 +70,70 @@ namespace TankLike.UnitControllers
             if (TurretController != null)
             {
                 TurretController.SetUp(this);
+            }           
+            
+            if (VisualEffects != null)
+            {
+                VisualEffects.SetUp(this);
             }
+            
+
+            Health.OnDeath += OnDeathHandler;
         }
 
-        public virtual void OnDeath()
+        /// <summary>
+        /// Plays effects, handles minimap icon, and freezes the screen
+        /// </summary>
+        public virtual void OnDeathHandler(TankComponents tank)
         {
-            GameManager.Instance.ScreenFreezer.FreezeScreen(GameManager.Instance.Constants.EnemyDeathFreezeData);
-            OnTankDeath?.Invoke();
-            ElementsEffects.SetCanGetEffects(false);
-            _minimapIcon.KillIcon();
+            // TODO: check this when working on elements
+            //ElementsEffects.SetCanGetEffects(false);
+
+            if (_minimapIcon != null)
+            {
+                _minimapIcon.KillIcon();
+            }
+            else
+            {
+                Debug.LogError($"No minimap on {gameObject.name}");
+            }
         }
 
         #region IController
         public virtual void Activate()
         {
-            // Activate all components
-            ElementsEffects.Activate();
+            // TODO: check this when working on elements
+            //ElementsEffects.Activate();
             Shooter.Activate();
             Animation.Activate();
+            VisualEffects.Activate();
         }
 
         public virtual void Deactivate()
         {
             Movement.Deactivate();
             Shooter.Deactivate();
+            VisualEffects.Deactivate();
         }
 
         public virtual void Restart()
         {
-            // Reset all components
             Movement.Restart();
-            ElementsEffects.Restart();
+            // TODO: check this when working on elements
+            //ElementsEffects.Restart();
             Visuals.Restart();
             Health.Restart();
             Animation.Restart();
             Shooter.Restart();
+            VisualEffects.Restart();
         }
 
         public virtual void Dispose()
         {
-            // Dispose all components
-            ElementsEffects.Dispose();
+            // TODO: check this when working on elements
+            //ElementsEffects.Dispose();
             Movement.Dispose();
+            VisualEffects.Dispose();
         }
         #endregion
     }

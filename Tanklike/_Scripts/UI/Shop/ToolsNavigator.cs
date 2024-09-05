@@ -9,6 +9,8 @@ using static TankLike.UnitControllers.TankTools;
 
 namespace TankLike.UI
 {
+    using Signifiers;
+
     public class ToolsNavigator : Navigatable, IInput
     { 
         // the state of the select button
@@ -17,31 +19,35 @@ namespace TankLike.UI
             Select, Buy, Sell
         }
 
-        // The cell that will be selected by default when the shop is opened
-        private SelectState _shopState = SelectState.Select;
-        private ShopToolSelectableCellUI _activeCell;
-        [Header("References")]
-        [SerializeField] private ShopToolSelectableCellUI _firstCell;
-        //[SerializeField] private List<PlayerShopInfoUI> _playerShopInfos;
-        [SerializeField] private PlayerShopInfoUI _currentPlayerInfo;
-        private PlayerComponents _currentPlayer;
-        [SerializeField] private GameObject _shopParent;
-
-        [SerializeField] private int _toolsToDisplayCount = 5;
-        private List<ToolInfo> _tools;
-        // these are the tools that the shop will display on this level
-        private List<ToolPack> _toolsToDisplay = new List<ToolPack>();
-        [SerializeField] private List<ShopToolSelectableCellUI> _allShopCells;
         [Header("Modifiers")]
+        [SerializeField] private int _toolsToDisplayCount = 5;
         [SerializeField] private bool _showShopItems = true;
         [SerializeField] private bool _canSelect = true;
+
+        [Header("References")]
+        [SerializeField] private ShopToolSelectableCellUI _firstCell;
+        [SerializeField] private PlayerShopInfoUI _currentPlayerInfo;
+        [SerializeField] private GameObject _shopParent;
+        [SerializeField] private UIActionSignifiersController _menuActionSignifiersController;
+        [SerializeField] private List<ShopToolSelectableCellUI> _allShopCells;
+
         [Header("Audio")]
         [SerializeField] private Audio _onSwitchAudio;
         [SerializeField] private Audio _onSelectAudio;
         [SerializeField] private Audio _onErrorAudio;
 
+        // The cell that will be selected by default when the shop is opened
+        private SelectState _shopState = SelectState.Select;
+        private ShopToolSelectableCellUI _activeCell;
+        private List<ToolInfo> _tools;
+        // these are the tools that the shop will display on this level
+        private List<ToolPack> _toolsToDisplay = new List<ToolPack>();
+        private PlayerComponents _currentPlayer;
+
         #region Constants
         private const string INSUFFICIENT_COINS_MESSAGE = "NOT ENOUGH COINS";
+        private const string RETURN_ACTION_TEXT = "Return";
+        private const string SELECT_ACTION_TEXT = "Select";
         #endregion
 
         private void Awake()
@@ -88,10 +94,11 @@ namespace TankLike.UI
         public void SetUpInput(int playerIndex)
         {
             GameManager.Instance.InputManager.DisableInputs((playerIndex + 1) % 2);
-            GameManager.Instance.InputManager.EnableUIInput(true, playerIndex);
+            GameManager.Instance.InputManager.EnableUIInput(playerIndex);
 
             PlayerInputActions c = InputManager.Controls;
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
+
             UIMap.FindAction(c.UI.Navigate_Left.name).performed += NavigateLeft;
             UIMap.FindAction(c.UI.Navigate_Right.name).performed += NavigateRight;
             UIMap.FindAction(c.UI.Navigate_Up.name).performed += NavigateUp;
@@ -99,13 +106,30 @@ namespace TankLike.UI
             UIMap.FindAction(c.UI.Submit.name).performed += SelectItem;
             UIMap.FindAction(c.UI.Cancel.name).performed += CloseShop;
             UIMap.FindAction(c.UI.Exit.name).performed += CloseShop;
+
+            SetUpSignifiers();
+        }
+
+        public override void SetUpSignifiers()
+        {
+            base.SetUpSignifiers();
+
+            PlayerInputActions c = InputManager.Controls;
+
+            int returnActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Cancel.name, PlayerIndex);
+            _menuActionSignifiersController.DisplaySignifier(RETURN_ACTION_TEXT, Helper.GetInputIcon(returnActionIconIndex));
+            _menuActionSignifiersController.SetLastSignifierAsParent();
+
+            int selectActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(c.UI.Submit.name, PlayerIndex);
+            _menuActionSignifiersController.DisplaySignifier(SELECT_ACTION_TEXT, Helper.GetInputIcon(selectActionIconIndex));
+            _menuActionSignifiersController.SetLastSignifierAsParent();
         }
 
         public void DisposeInput(int playerIndex)
         {
-            GameManager.Instance.InputManager.EnablePlayerInput(true);
             PlayerInputActions c = InputManager.Controls;
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
+
             UIMap.FindAction(c.UI.Navigate_Left.name).performed -= NavigateLeft;
             UIMap.FindAction(c.UI.Navigate_Right.name).performed -= NavigateRight;
             UIMap.FindAction(c.UI.Navigate_Up.name).performed -= NavigateUp;
@@ -113,6 +137,10 @@ namespace TankLike.UI
             UIMap.FindAction(c.UI.Submit.name).performed -= SelectItem;
             UIMap.FindAction(c.UI.Cancel.name).performed -= CloseShop;
             UIMap.FindAction(c.UI.Exit.name).performed -= CloseShop;
+  
+            GameManager.Instance.InputManager.EnablePlayerInput();
+
+            _menuActionSignifiersController.ClearAllSignifiers();
         }
 
         public override void NavigateLeft(InputAction.CallbackContext _)
@@ -289,7 +317,7 @@ namespace TankLike.UI
 
             // buying process
             // validating numbers (coins and nodes)
-            if (GameManager.Instance.PlayersManager.CoinsAmount < _activeCell.Info.Cost * shopInfo.GetCurrentToolAmount())
+            if (GameManager.Instance.PlayersManager.Coins.CoinsAmount < _activeCell.Info.Cost * shopInfo.GetCurrentToolAmount())
             {
                 GameManager.Instance.AudioManager.Play(_onErrorAudio);
                 shopInfo.DisplayNotification(INSUFFICIENT_COINS_MESSAGE);
@@ -299,7 +327,7 @@ namespace TankLike.UI
             GameManager.Instance.AudioManager.Play(_onSelectAudio);
 
             // deduct coins. We deduct the nodes from the PlayerTools directly as not all the tools will be bought through the shop
-            GameManager.Instance.PlayersManager.AddCoins(-_activeCell.Info.Cost * shopInfo.GetCurrentToolAmount());
+            GameManager.Instance.PlayersManager.Coins.AddCoins(-_activeCell.Info.Cost * shopInfo.GetCurrentToolAmount());
             // add item to the inventory
             _currentPlayer.Tools.AddTool(_activeCell.Info, shopInfo.GetCurrentToolAmount());
             // if all goes well, deactivate the currently active tool
@@ -312,7 +340,7 @@ namespace TankLike.UI
             PlayerShopInfoUI shopInfo = _currentPlayerInfo;
 
             // deduct the coins based on the amount of tools sold with an interest
-            GameManager.Instance.PlayersManager.AddCoins(Mathf.CeilToInt(_activeCell.Info.Cost  * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * shopInfo.GetCurrentToolAmount());
+            GameManager.Instance.PlayersManager.Coins.AddCoins(Mathf.CeilToInt(_activeCell.Info.Cost  * Constants.SHOP_SELL_ITEMS_PRICE_MULTIPLIER) * shopInfo.GetCurrentToolAmount());
 
             // remove the tools
             _currentPlayer.Tools.RemoveToolByTag(_activeCell.Info.ToolReference.GetTag(), shopInfo.GetCurrentToolAmount());

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TankLike.ItemsSystem;
 using UnityEngine;
 
 namespace TankLike.Environment.LevelGeneration
@@ -7,7 +8,7 @@ namespace TankLike.Environment.LevelGeneration
     [System.Serializable]
     public class DropChance
     {
-        public CollectableTag DropTag;
+        public CollectableType DropType;
         /*[HideInInspector]*/
         public float Chance = 0.5f;
         [Range(0f, 1f)] public float OriginalChance = 1f;

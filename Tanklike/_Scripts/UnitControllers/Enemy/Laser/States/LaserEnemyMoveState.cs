@@ -10,9 +10,6 @@ namespace TankLike.UnitControllers.States
     public class LaserEnemyMoveState : MoveState
     {
         [SerializeField] private Vector2 _movementDistanceRange;
-        private Vector3 _targetPoint;
-        private bool _targetPointFound;
-        private int _pointFinderCounter;
 
         public override void SetUp(StateMachine<EnemyStateType> stateMachine, EnemyComponents enemyComponents)
         {
@@ -25,17 +22,18 @@ namespace TankLike.UnitControllers.States
             //Debug.Log("MOVE STATE");
             _isActive = true;
 
-            //get random point and move to it
-            float angle = Random.Range(0.0f, Mathf.PI * 2);
-            Vector3 dir = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
-
-            dir *= Random.Range(_movementDistanceRange.x, _movementDistanceRange.y);
-            dir.y = 0.5f;
             _pointFinderCounter = 0;
             _targetPointFound = false;
 
             while (!_targetPointFound && _pointFinderCounter < 50)
             {
+                //get random point and move to it
+                float angle = Random.Range(0.0f, Mathf.PI * 2);
+                Vector3 dir = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
+
+                dir *= Random.Range(_movementDistanceRange.x, _movementDistanceRange.y);
+                dir.y = 0.5f;
+
                 MoveToTarget(_movement.transform.position + dir);
                 _pointFinderCounter++;
             }
@@ -58,20 +56,6 @@ namespace TankLike.UnitControllers.States
         public override void OnDispose()
         {
             _movement.OnTargetReached -= OnTargetReachedHandler;
-        }
-
-        private bool MoveToTarget(Vector3 target)
-        {
-            NavMeshHit hit;
-            if (NavMesh.SamplePosition(target, out hit, 10.0f, NavMesh.AllAreas))
-            {
-                _targetPoint = hit.position;
-                _targetPointFound = true;
-                _movement.SetTargetPosition(_targetPoint);
-                return true;
-            }
-
-            return false;
         }
 
         private void OnTargetReachedHandler()

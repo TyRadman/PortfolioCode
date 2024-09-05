@@ -190,6 +190,23 @@ namespace TankLike.UnitControllers
             _points = new List<Vector3>(_path.corners);
         }
 
+        public float GetPathLength(NavMeshPath path)
+        {
+            float length = 0f;
+
+            if (path.corners.Length < 2)
+            {
+                return length;
+            }
+
+            for (int i = 1; i < path.corners.Length; i++)
+            {
+                length += Vector3.Distance(path.corners[i - 1], path.corners[i]);
+            }
+
+            return length;
+        }
+
         public float GetCurrentSpeed()
         {
             return CurrentSpeed;
@@ -469,7 +486,7 @@ namespace TankLike.UnitControllers
 
         private void DetermineMovementDirection()
         {
-            if (_points.Count <= 0)
+            if (_points.Count <= 1)
                 return;
 
             //Debug.Log("Determine Derection");
@@ -535,68 +552,68 @@ namespace TankLike.UnitControllers
             #region Front Detectors
 
             //front-center
-            if (Physics.Raycast(_body.position, _body.forward, out RaycastHit frontHit, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position, _body.forward, out RaycastHit frontHit, _obstacleDetectionDistance, _obstacleLayers))
             {
                 _obstacleNormal = frontHit.normal;
                 _frontObstacle = true;
-                Debug.DrawRay(_body.position, _body.forward * _obstacleDetectionDistance, Color.red);
+                Debug.DrawRay(transform.position, _body.forward * _obstacleDetectionDistance, Color.red);
             }
             else
             {
                 
                 _frontObstacle = false;
-                Debug.DrawRay(_body.position, _body.forward * _obstacleDetectionDistance, Color.green);
+                Debug.DrawRay(transform.position, _body.forward * _obstacleDetectionDistance, Color.green);
             }
             //front-right
-            if (Physics.Raycast(_body.position + _body.right * _sideSensorOffset, _body.forward, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position + _body.right * _sideSensorOffset, _body.forward, _obstacleDetectionDistance, _obstacleLayers))
             {
                 _frontRightObstacle = true;
-                Debug.DrawRay(_body.position + _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.red);
+                Debug.DrawRay(transform.position + _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.red);
             }
             else
             {
 
                 _frontRightObstacle = false;
-                Debug.DrawRay(_body.position + _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.green);
+                Debug.DrawRay(transform.position + _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.green);
             } 
             //front-left
-            if (Physics.Raycast(_body.position - _body.right * _sideSensorOffset, _body.forward, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position - _body.right * _sideSensorOffset, _body.forward, _obstacleDetectionDistance, _obstacleLayers))
             {
                 _frontLeftObstacle = true;
-                Debug.DrawRay(_body.position - _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.red);
+                Debug.DrawRay(transform.position - _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.red);
             }
             else
             {
 
                 _frontLeftObstacle = false;
-                Debug.DrawRay(_body.position - _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.green);
+                Debug.DrawRay(transform.position - _body.right * _sideSensorOffset, _body.forward * _obstacleDetectionDistance, Color.green);
             }
 
             ////DIAGONAL
             //front-diagonal-right
-            if (Physics.Raycast(_body.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized, _obstacleDetectionDistance, _obstacleLayers))
             {
                 _frontDiagnoalRightObstacle = true;
-                Debug.DrawRay(_body.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.red);
+                Debug.DrawRay(transform.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.red);
             }
             else
             {
 
                 _frontDiagnoalRightObstacle = false;
-                Debug.DrawRay(_body.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.green);
+                Debug.DrawRay(transform.position + _body.right * _sideSensorOffset, (_body.forward + _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.green);
             }
 
             //front-diagonal-left
-            if (Physics.Raycast(_body.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized, _obstacleDetectionDistance, _obstacleLayers))
             {
                 _frontDiagnoalLeftObstacle = true;
-                Debug.DrawRay(_body.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.red);
+                Debug.DrawRay(transform.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.red);
             }
             else
             {
 
                 _frontDiagnoalLeftObstacle = false;
-                Debug.DrawRay(_body.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.green);
+                Debug.DrawRay(transform.position - _body.right * _sideSensorOffset, (_body.forward - _body.right * 0.5f).normalized * _obstacleDetectionDistance, Color.green);
             }
 
             #endregion
@@ -607,29 +624,29 @@ namespace TankLike.UnitControllers
             var targetRightDir = (_nextPoint - (_body.position + _body.right));
             targetRightDir.y = 0.5f;
             targetRightDir.Normalize();
-            if (Physics.Raycast(_body.position + _body.right, targetRightDir, out RaycastHit obstacle, _obstacleDetectionDistance, _obstacleLayers)) 
+            if (Physics.Raycast(transform.position + _body.right, targetRightDir, out RaycastHit obstacle, _obstacleDetectionDistance, _obstacleLayers)) 
             {
                 //Debug.Log("OBSTACLE -> " + obstacle.collider.name);
                 //_obstacleNormal = frontHit.normal;
                 pointRight = true;
-                Debug.DrawRay(_body.position + _body.right, targetRightDir * Vector3.Distance(_body.position + _body.right, _nextPoint), Color.red);
+                Debug.DrawRay(transform.position + _body.right, targetRightDir * Vector3.Distance(_body.position + _body.right, _nextPoint), Color.red);
             }
             else
             {
 
                 pointRight = false;
-                Debug.DrawRay(_body.position + _body.right, targetRightDir * Vector3.Distance(_body.position + _body.right, _nextPoint), Color.cyan);
+                Debug.DrawRay(transform.position + _body.right, targetRightDir * Vector3.Distance(_body.position + _body.right, _nextPoint), Color.cyan);
             }
 
             //point_left
             var targetLeftDir = (_nextPoint - (_body.position - _body.right));
             targetLeftDir.y = 0.5f;
             targetLeftDir.Normalize();
-            if (Physics.Raycast(_body.position - _body.right, targetLeftDir, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position - _body.right, targetLeftDir, _obstacleDetectionDistance, _obstacleLayers))
             {
 
                 pointLeft = true;
-                Debug.DrawRay(_body.position - _body.right, targetLeftDir * Vector3.Distance(_body.position - _body.right, _nextPoint), Color.red);
+                Debug.DrawRay(transform.position - _body.right, targetLeftDir * Vector3.Distance(_body.position - _body.right, _nextPoint), Color.red);
                 
                 //Debug.Log("OBSTACLE -> " + obstacle.collider.name);
                 //_obstacleNormal = frontHit.normal;
@@ -639,7 +656,7 @@ namespace TankLike.UnitControllers
             {
 
                 pointLeft = false;
-                Debug.DrawRay(_body.position - _body.right, targetLeftDir * Vector3.Distance(_body.position - _body.right, _nextPoint), Color.cyan);
+                Debug.DrawRay(transform.position - _body.right, targetLeftDir * Vector3.Distance(_body.position - _body.right, _nextPoint), Color.cyan);
             }
 
             bool targetRight = false;
@@ -648,13 +665,13 @@ namespace TankLike.UnitControllers
             var pointRightDir = (_targetPosition - (_body.position + _body.right));
             pointRightDir.y = 0.5f;
             pointRightDir.Normalize();
-            if (Physics.Raycast(_body.position + _body.right, pointRightDir, out RaycastHit targetObstacleRight, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position + _body.right, pointRightDir, out RaycastHit targetObstacleRight, _obstacleDetectionDistance, _obstacleLayers))
             {
                 //Debug.Log("OBSTACLE -> " + targetObstacleRight.collider.name);
                 if(targetObstacleRight.collider.transform.root != transform)
                 {
                     targetRight = true;
-                    Debug.DrawRay(_body.position + _body.right, pointRightDir * Vector3.Distance(_body.position + _body.right, _targetPosition), Color.red);
+                    Debug.DrawRay(transform.position + _body.right, pointRightDir * Vector3.Distance(_body.position + _body.right, _targetPosition), Color.red);
                 }
                 //_obstacleNormal = frontHit.normal;
 
@@ -662,27 +679,27 @@ namespace TankLike.UnitControllers
             else
             {
                 targetRight = false;
-                Debug.DrawRay(_body.position + _body.right, pointRightDir * Vector3.Distance(_body.position + _body.right, _targetPosition), Color.yellow);
+                Debug.DrawRay(transform.position + _body.right, pointRightDir * Vector3.Distance(_body.position + _body.right, _targetPosition), Color.yellow);
             }
 
             //target_left
             var pointLeftDir = (_targetPosition - (_body.position - _body.right));
             pointLeftDir.y = 0.5f;
             pointLeftDir.Normalize();
-            if (Physics.Raycast(_body.position - _body.right, pointLeftDir, out RaycastHit targetObstacleLeft, _obstacleDetectionDistance, _obstacleLayers))
+            if (Physics.Raycast(transform.position - _body.right, pointLeftDir, out RaycastHit targetObstacleLeft, _obstacleDetectionDistance, _obstacleLayers))
             {
                 //Debug.Log("OBSTACLE -> " + obstacle.collider.name);
                 //_obstacleNormal = frontHit.normal;
                 if (targetObstacleLeft.collider.transform.root != transform)
                 {
                     targetLeft = true;
-                    Debug.DrawRay(_body.position - _body.right, pointLeftDir * Vector3.Distance(_body.position - _body.right, _targetPosition), Color.red);
+                    Debug.DrawRay(transform.position - _body.right, pointLeftDir * Vector3.Distance(_body.position - _body.right, _targetPosition), Color.red);
                 }
             }
             else
             {
                 targetLeft = false;
-                Debug.DrawRay(_body.position - _body.right, pointLeftDir * Vector3.Distance(_body.position - _body.right, _targetPosition), Color.yellow);
+                Debug.DrawRay(transform.position - _body.right, pointLeftDir * Vector3.Distance(_body.position - _body.right, _targetPosition), Color.yellow);
             }
 
             _wayToTargetBlocked = targetLeft || targetRight;
