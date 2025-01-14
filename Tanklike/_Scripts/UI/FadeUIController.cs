@@ -5,45 +5,73 @@ using UnityEngine.UI;
 
 namespace TankLike.UI
 {
-    public class FadeUIController : MonoBehaviour
+    public class FadeUIController : MonoBehaviour, IManager
     {
         [SerializeField] private Image _fadeOutImage;
         [field: SerializeField, Range(0.1f, 5f)] public float FadeOutDuration { get; private set; } = 1f;
         [field: SerializeField, Range(0.1f, 5f)] public float FadeInDuration { get; private set; } = 1f;
         [SerializeField] private CanvasGroup _canvasGroup;
         [SerializeField] private Color _fadeOutStartColor;
-        [SerializeField] private Animation _animation;
-        [SerializeField] private AnimationClip _fadeInAnimationClip;
-        [SerializeField] private AnimationClip _fadeOutAnimationClip;
+        [SerializeField] private Animator _animator;
 
-        private void Start()
+        private readonly int _idleInHash = Animator.StringToHash("Idle");
+        private readonly int _fadeInHash = Animator.StringToHash("FadeIn");
+        private readonly int _fadeOutHash = Animator.StringToHash("FadeOut");
+
+        public bool IsActive { get; private set; }
+
+        #region IManager
+        public void SetUp()
         {
+            IsActive = true;
+
+            _animator.speed = 1;
             _fadeOutImage.color = _fadeOutStartColor;
             _canvasGroup.alpha = 0f;
         }
 
+        public void Dispose()
+        {
+            IsActive = false;
+        }
+        #endregion
+
         [ContextMenu("FadeOut")]
         public void StartFadeOut()
         {
-            PlayAnimation(_fadeOutAnimationClip, FadeOutDuration);
+            //Debug.Log("Fade out");
+
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            PlayAnimation(_fadeOutHash, FadeOutDuration);
         }
 
         [ContextMenu("FadeIn")]
         public void StartFadeIn()
         {
-            PlayAnimation(_fadeInAnimationClip, FadeInDuration);
-        }
-
-        private void PlayAnimation(AnimationClip clip, float duration = 1f)
-        {
-            if (_animation.isPlaying)
+            if (!IsActive)
             {
-                _animation.Stop();
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
             }
 
-            _animation.clip = clip;
-            _animation[clip.name].speed = 1 / duration;
-            _animation.Play();
+            PlayAnimation(_fadeInHash, FadeInDuration);
+        }
+
+        private void PlayAnimation(int hash, float duration = 1f)
+        {
+            _animator.speed = 1 / duration;
+            _animator.Play(hash, -1, 0f);
+        }
+
+        public void ResetFadeController()
+        {
+            _canvasGroup.alpha = 0f;
+            _animator.speed = 1;
         }
     }
 }

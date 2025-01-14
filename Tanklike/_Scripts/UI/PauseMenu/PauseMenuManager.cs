@@ -1,17 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace TankLike.UI.PauseMenu
 {
     using TankLike.Sound;
+    using TankLike.UnitControllers;
     using TankLike.Utils;
     using UI.Signifiers;
     using UnityEngine.SceneManagement;
 
-    public class PauseMenuManager : MonoBehaviour, ISignifiersDisplayer
+    public class PauseMenuManager : MonoBehaviour, IManager, ISignifiersDisplayer
     {
+        public System.Action OnPaused;
+        public System.Action OnResumed;
+
         [SerializeField] private GameObject _content;
         [SerializeField] private List<GameObject> _panels;
         [SerializeField] private MenuSelectable _firstSelectedItem;
@@ -23,22 +26,37 @@ namespace TankLike.UI.PauseMenu
         private bool _isPaused = false;
         private int _currentPlayerIndex = -1;
 
+        public bool IsActive { get; private set; }
         public ISignifierController SignifierController { get; set; }
 
         private const string RETURN_ACTION_TEXT = "Return";
         private const string SUBMIT_ACTION_TEXT = "Select";
 
-        private void Awake()
+        public void SetReferences()
         {
             _lastTimeScale = 1f;
             EnableFirstPanel();
             _content.SetActive(false);
         }
 
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             SignifierController = _menuActionSignifiersController;
         }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            _content.SetActive(false);
+
+            _isPaused = false;
+            _menuActionSignifiersController.ClearAllSignifiers();
+        }
+        #endregion
 
         public void Select()
         {
@@ -96,23 +114,43 @@ namespace TankLike.UI.PauseMenu
 
             // disable pausing for the other player if there is another player
             GameManager.Instance.PlayersManager.EnablePauseInputForSecondPlayer(playerIndex, false);
+
             // set the current player index to all the panels
             SetPlayerIndex(playerIndex);
             SetUpActionSignifiers(SignifierController);
 
             EnableFirstPanel();
-            // stop time
-            GameManager.Instance.ScreenFreezer.PauseFreeze();
-            _lastTimeScale = Time.timeScale;
-            Time.timeScale = 0f;
+
+            PauseGameplay();
+
             // show the pause menu
             _content.SetActive(true);
 
             // hide HUD
-            GameManager.Instance.HUDController.EnableHUD(false);
+            GameManager.Instance.HUDController.HideHUD();
+
             // disable player input and enable UI input
             GameManager.Instance.InputManager.EnableUIInput();
             _isPaused = true;
+            OnPaused?.Invoke();
+        }
+
+        /// <summary>
+        /// Freezes the gameplay
+        /// </summary>
+        public void PauseGameplay()
+        {
+            // stop time
+            GameManager.Instance.ScreenFreezer.PauseFreeze();
+            _lastTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+        }
+
+        public void UnpauseGameplay()
+        {
+            // resume the time scale the way it was before 
+            Time.timeScale = _lastTimeScale;
+            GameManager.Instance.ScreenFreezer.ResumeFreeze();
         }
 
         public void ResumeGame()
@@ -122,26 +160,26 @@ namespace TankLike.UI.PauseMenu
                 return;
             }
 
-            // resume the time scale the way it was before 
-            Time.timeScale = _lastTimeScale;
-            GameManager.Instance.ScreenFreezer.ResumeFreeze();
+            UnpauseGameplay();
+
             // hide the pause menu content
             _content.SetActive(false);
             // show HUD
             //FIX HUD handling
-            GameManager.Instance.HUDController.EnableHUD(true);
+            GameManager.Instance.HUDController.DisplayHUD();
             // hide the pause menu content
             _content.SetActive(false);
             // enable the player input and disable the UI input
             GameManager.Instance.InputManager.EnablePlayerInput();
             _isPaused = false;
             _menuActionSignifiersController.ClearAllSignifiers();
+            OnResumed?.Invoke();
         }
 
         public void GoToMainMenu()
         {
             GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnablePauseMenuController(false);
-            GameManager.Instance.ConfirmPanel.Init(_currentPlayerIndex, LoadFirstScene, OnConfirmPanelClose, "Go to main menu?");
+            GameManager.Instance.ConfirmPanel.Init(_currentPlayerIndex, LoadMainMenuScene, OnConfirmPanelClose, "Go to main menu?");
         }
 
         public void OnConfirmPanelClose()
@@ -149,32 +187,25 @@ namespace TankLike.UI.PauseMenu
             GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnablePauseMenuController(true);
         }
 
-        public void LoadFirstScene()
+        public void LoadMainMenuScene()
         {
-            Time.timeScale = _lastTimeScale;
-            GameManager.Instance.ScreenFreezer.ResumeFreeze();
-
-            StartCoroutine(LoadFirstSceneRoutine());
+            StartCoroutine(LoadMainMenuSceneRoutine());
         }
 
-        private IEnumerator LoadFirstSceneRoutine()
+        private IEnumerator LoadMainMenuSceneRoutine()
         {
-            GameManager.Instance.FadeUIController.StartFadeIn();
-            yield return new WaitForSeconds(GameManager.Instance.FadeUIController.FadeInDuration);
+            // Wait a frame until the confirm panel is closed
+            yield return null;
 
             for (int i = 0; i < PlayersManager.PlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Restart();
+                PlayerComponents player = GameManager.Instance.PlayersManager.GetPlayer(i);
+                player.Deactivate();
+                player.Dispose();
             }
 
-            if (DontDestroy.i != null)
-            {
-                DontDestroy.i.ResetInputParent();
-            }
-
-            SceneManager.LoadScene(1);
-
-            GameManager.Instance.ChangeGameState(GameStateType.MainMenu);
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(SceneManager.GetActiveScene().name, Scenes.MAIN_MENU);
         }
 
         #endregion
@@ -182,7 +213,7 @@ namespace TankLike.UI.PauseMenu
             /// <summary>
             /// Displays the first panel by default (resume, settings, exit)
             /// </summary>
-            private void EnableFirstPanel()
+        private void EnableFirstPanel()
         {
             _panels.ForEach(p => p.SetActive(false));
             _panels[0].SetActive(true);

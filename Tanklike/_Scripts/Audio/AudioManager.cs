@@ -26,11 +26,15 @@ namespace TankLike.Sound
         #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             _pooler.SetUpPools();
         }
 
         public void Dispose()
         {
+            IsActive = false;
+
             _pooler.Dispose();
         }
         #endregion
@@ -38,6 +42,12 @@ namespace TankLike.Sound
 
         public AudioSource Play(Audio audioFile)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return null;
+            }
+
             if (audioFile == null)
             {
                 return null;
@@ -57,13 +67,52 @@ namespace TankLike.Sound
             return source;
         }
 
-        private AudioSource PlayAudio(Audio audio)
+        /// <summary>
+        /// Play audio within a playback duration 
+        /// </summary>
+        public AudioSource Play(Audio audioFile, float duration)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return null;
+            }
+
+            if (audioFile == null)
+            {
+                return null;
+            }
+
+            AudioSource source = null;
+
+            if (!audioFile.OneShot)
+            {
+                source = PlayAudio(audioFile, duration);
+            }
+            else
+            {
+                PlayOneShotAudio(audioFile);
+            }
+
+            return source;
+        }
+
+        private AudioSource PlayAudio(Audio audio, float duration = 0f)
         {
             AudioSource source = _pooler.GetAvailableSource();
             source.loop = audio.Loop;
             source.clip = audio.Clip;
             source.volume = audio.VolumeMultiplier;
-            source.pitch = audio.Pitch;
+
+            float pitch = audio.Pitch;
+
+            // If we pass a playback duration, use it to control the pitch
+            if (duration > 0)
+            {
+                pitch = source.clip.length / duration;
+            }
+
+            source.pitch = pitch;
             source.Play();
 
             return source;
@@ -76,6 +125,12 @@ namespace TankLike.Sound
 
         public void SwitchBGMusic(Audio audio)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             AudioSource source = _bgMusicSource;
             source.clip = audio.Clip;
             source.volume = audio.VolumeMultiplier;
@@ -83,17 +138,40 @@ namespace TankLike.Sound
             source.Play();
         }
 
+        public void StopBGMusic()
+        {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            _bgMusicSource.Stop();
+        }
+
         public void FadeOutBGMusic()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             StartCoroutine(StartFade(_mainAudioMixer, BG_MUSIC_VOLUME, FADE_OUT_DURATION, 0f));
         }
 
         public void FadeInBGMusic()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             StartCoroutine(StartFade(_mainAudioMixer, BG_MUSIC_VOLUME, FADE_IN_DURATION, 1f));
         }
 
-        public static IEnumerator StartFade(AudioMixer audioMixer, string exposedParam, float duration, float targetVolume)
+        private IEnumerator StartFade(AudioMixer audioMixer, string exposedParam, float duration, float targetVolume)
         {
             float currentTime = 0;
             float currentVol;

@@ -1,28 +1,32 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Cam;
-using TankLike.Environment;
-using TankLike.UI;
 using UnityEngine;
 
 namespace TankLike
 {
+    using UnitControllers;
+    using Cam;
+    using Environment;
+
     public class RoomsManager : MonoBehaviour, IManager
     {
+        public bool IsActive { get; private set; }
+        public List<Room> SpecialVisitedRooms { get; private set; } = new List<Room>();
         [field: SerializeField] public List<Room> Rooms { get; private set; }
         [field: SerializeField] public Room CurrentRoom { get; private set; }
+
         public System.Action<Room> OnRoomEntered;
-        private const float SWITCH_ROOMS_DURATION = 0.5f;
+
+
+        [SerializeField] private AbilityConstraint _onSwitchRoomsConstraints;
 
         [Header("References")]
         [SerializeField] private GameObject _roomsCoverPrefab;
 
-
-        public bool IsActive { get; private set; }
-        public List<Room> SpecialVisitedRooms { get; private set; } = new List<Room>();
-
         private GameObject _roomsCover;
+        private ParticleSystem _weatherParticles;
 
+        private const float SWITCH_ROOMS_DURATION = 0.5f;
 
         #region IManager
         public void SetUp()
@@ -30,12 +34,17 @@ namespace TankLike
             IsActive = true;
 
             _roomsCover = Instantiate(_roomsCoverPrefab);
+            _roomsCover.SetActive(false);
+
+            _weatherParticles = Instantiate(GameManager.Instance.LevelGenerator.LevelData.WeatherVFX);
         }
+
         public void Dispose()
         {
             IsActive = false;
 
             _roomsCover = null;
+            _weatherParticles = null;
         }
         #endregion
 
@@ -47,13 +56,24 @@ namespace TankLike
         public void SetCurrentRoom(Room room)
         {
             CurrentRoom = room;
+            CurrentRoom.SetWasVisited(true);
 
-            if(_roomsCover != null)
+            //if(_roomsCover != null)
+            //{
+            //    _roomsCover.transform.position = room.transform.position;
+            //}
+
+            if (_weatherParticles != null)
             {
-                _roomsCover.transform.position = room.transform.position;
+                _weatherParticles.transform.position = room.transform.position;
             }
 
             GameManager.Instance.TeleportationManager.SetDestinationRoom(room);
+        }
+
+        public void SetupRooms()
+        {
+            Rooms.ForEach(r => r.SetUpRoom());
         }
 
         public void SwitchRoom(Room nextRoom, RoomGate enterGate = null)
@@ -66,22 +86,23 @@ namespace TankLike
             }
             else
             {
-                NormalRoom nextNormalRoom = (NormalRoom)nextRoom;
-
-                if (nextNormalRoom.HasEnemies && !nextNormalRoom.SpawnedEnemies)
+                if (nextRoom is NormalRoom nextNormalRoom)
                 {
-                    GameManager.Instance.EnemiesManager.GetEnemies(nextNormalRoom);
+                    nextNormalRoom.SetWaves();
+                }
+                else
+                {
+                    Debug.LogError("The room is not a normal room");
                 }
             }
         }
 
-        public void SetupRooms()
-        {
-            Rooms.ForEach(r => r.SetUpRoom());
-        }
-
         private IEnumerator SwitchRoomRoutine(Room nextRoom, RoomGate enterGate)
         {
+            //List<UnitComponents> activePlayers = GameManager.Instance.PlayersManager.GetPlayers(true);
+            List<UnitComponents> activePlayers = GameManager.Instance.PlayersManager.GetAllActivePlayerControllers();
+            int activePlayersCount = activePlayers.Count;
+
             // disable the gates first to avoid having this be triggered by the second player before the room unloads
             CurrentRoom.DisableGates();
 
@@ -92,9 +113,10 @@ namespace TankLike
             GameManager.Instance.MinimapManager.PositionMinimapAtRoom(nextRoom.transform, nextRoom.RoomDimensions);
 
             // Deactivate players
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            for (int i = 0; i < activePlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Deactivate();
+                activePlayers[i].Deactivate();
+                //GameManager.Instance.PlayersManager.GetPlayer(i).Constraints.ApplyConstraints(true, _onSwitchRoomsConstraints);
             }
 
             // Deactivate summons
@@ -103,7 +125,7 @@ namespace TankLike
                 GameManager.Instance.SummonsManager.GetSummon(i).Deactivate();
             }
 
-            GameManager.Instance.InputManager.DisableInputs();
+            //GameManager.Instance.InputManager.DisableInputs();
             GameManager.Instance.BulletsManager.DeactivateBullets();
 
             CurrentRoom.UnloadRoom();
@@ -112,29 +134,34 @@ namespace TankLike
 
             // disable camera interpolation so that the players don't see our level's guts
             GameManager.Instance.CameraManager.EnableCamerasInterpolation(false);
-            GameManager.Instance.OffScreenIndicator.Enable(false);
+
+            GameManager.Instance.HUDController.OffScreenIndicator.Enable(false);
 
             // Respawn players
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            for (int i = 0; i < activePlayersCount; i++)
             {
-                Transform point = nextRoom.Spawner.SpawnPoints.GetRandomSpawnPoint(); 
-                
-                if(enterGate != null)
+                Transform point = nextRoom.Spawner.SpawnPoints.GetRandomSpawnPoint();
+
+                if (enterGate != null)
                 {
                     point = enterGate.StartPoints[i];
                 }
 
-                Vector3 position = point.position;
-                position.y = 1f;
-                Quaternion rotation = Quaternion.LookRotation(point.forward);
-                GameManager.Instance.PlayersManager.GetPlayer(i).transform.SetPositionAndRotation(position, Quaternion.identity);
-                ((UnitControllers.PlayerMovement)GameManager.Instance.PlayersManager.GetPlayer(i).Movement).SetBodyRotation(rotation);
+                activePlayers[i].PositionUnit(point);
+                //Vector3 position = point.position;
+                //position.y = 1f;
+                //Quaternion rotation = Quaternion.LookRotation(point.forward);
+                //activePlayers[i].transform.SetPositionAndRotation(position, Quaternion.identity);
+                //((PlayerMovement)activePlayers[i].Movement).SetBodyRotation(rotation);
             }
 
+            yield return new WaitForSeconds(SWITCH_ROOMS_DURATION);
+
+            
             // Reactivate players
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            for (int i = 0; i < activePlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Activate();
+                activePlayers[i].Activate();
             }
 
             // Reactivate summons
@@ -143,18 +170,18 @@ namespace TankLike
                 GameManager.Instance.SummonsManager.GetSummon(i).Activate();
             }
 
-            yield return new WaitForSeconds(SWITCH_ROOMS_DURATION);
             GameManager.Instance.FadeUIController.StartFadeOut();
-            GameManager.Instance.InputManager.EnablePlayerInput();
+            //GameManager.Instance.InputManager.EnablePlayerInput();
+
             OnRoomEntered?.Invoke(CurrentRoom);
+
             // change the camera constraints
-            CameraLimits limits = new CameraLimits();
-            limits.SetValues(nextRoom.CameraLimits);
-            limits.AddOffset(nextRoom.transform.position);
-            GameManager.Instance.CameraManager.SetCamerasLimits(limits);
+            GameManager.Instance.CameraManager.SetCamerasLimits(nextRoom.CameraLimits);
+
             yield return new WaitForSeconds(GameManager.Instance.FadeUIController.FadeOutDuration);
+
             GameManager.Instance.CameraManager.EnableCamerasInterpolation(true);
-            GameManager.Instance.OffScreenIndicator.Enable(true);
+            GameManager.Instance.HUDController.OffScreenIndicator.Enable(true);
         }
 
         public void TeleportToRoom(Room nextRoom, RoomGate enterGate = null)
@@ -164,6 +191,9 @@ namespace TankLike
 
         private IEnumerator TeleportToRoomRoutine(Room nextRoom, RoomGate enterGate)
         {
+            List<UnitComponents> activePlayers = GameManager.Instance.PlayersManager.GetAllActivePlayerControllers();
+            int activePlayersCount = activePlayers.Count;
+
             // disable the gates first to avoid having this be triggered by the second player before the room unloads
             CurrentRoom.DisableGates();
 
@@ -174,9 +204,9 @@ namespace TankLike
             GameManager.Instance.MinimapManager.PositionMinimapAtRoom(nextRoom.transform, nextRoom.RoomDimensions);
 
             // Deactivate players
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            for (int i = 0; i < activePlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Deactivate();
+                activePlayers[i].Deactivate();
             }
 
             // Deactivate summons
@@ -194,10 +224,10 @@ namespace TankLike
 
             // disable camera interpolation so that the players don't see our level's guts
             GameManager.Instance.CameraManager.EnableCamerasInterpolation(false);
-            GameManager.Instance.OffScreenIndicator.Enable(false);
+            GameManager.Instance.HUDController.OffScreenIndicator.Enable(false);
 
             // Respawn players
-            for (int i = 0; i < PlayersManager.PlayersCount; i++)
+            for (int i = 0; i < activePlayersCount; i++)
             {
                 Transform point = nextRoom.Spawner.SpawnPoints.GetRandomSpawnPoint();
 
@@ -206,24 +236,18 @@ namespace TankLike
                     point = enterGate.StartPoints[i];
                 }
 
-                Vector3 position = point.position;
-                position.y = 1f;
-                Quaternion rotation = Quaternion.LookRotation(point.forward);
-                GameManager.Instance.PlayersManager.GetPlayer(i).transform.SetPositionAndRotation(position, Quaternion.identity);
-                ((UnitControllers.PlayerMovement)GameManager.Instance.PlayersManager.GetPlayer(i).Movement).SetBodyRotation(rotation);
+                activePlayers[i].PositionUnit(point);
             }
 
             yield return new WaitForSeconds(SWITCH_ROOMS_DURATION);
             GameManager.Instance.FadeUIController.StartFadeOut();
             OnRoomEntered?.Invoke(CurrentRoom);
-            // change the camera constraints
-            CameraLimits limits = new CameraLimits();
-            limits.SetValues(nextRoom.CameraLimits);
-            limits.AddOffset(nextRoom.transform.position);
-            GameManager.Instance.CameraManager.SetCamerasLimits(limits);
+
+            GameManager.Instance.CameraManager.SetCamerasLimits(nextRoom.CameraLimits);
+
             yield return new WaitForSeconds(GameManager.Instance.FadeUIController.FadeOutDuration);
             GameManager.Instance.CameraManager.EnableCamerasInterpolation(true);
-            GameManager.Instance.OffScreenIndicator.Enable(true);
+            GameManager.Instance.HUDController.OffScreenIndicator.Enable(true);
         }
 
         public void OpenAllRooms()
@@ -234,10 +258,11 @@ namespace TankLike
         // Used for the testing scene only
         public void LoadBossRoom()
         {
-            ((BossRoom)CurrentRoom).SetBossData(GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().BossData);
-            ((BossRoom)CurrentRoom).SetBossSpawnPoint(CurrentRoom.transform);
-            (CurrentRoom).LoadRoom();
-            (CurrentRoom).OnRoomEnteredHandler();
+            BossRoom bossRoom = (BossRoom)CurrentRoom;
+            bossRoom.SetBossData(GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().BossData);
+            bossRoom.SetBossSpawnPoint(CurrentRoom.transform);
+            bossRoom.LoadRoom();
+            bossRoom.OnRoomEnteredHandler();
         }
     }
 

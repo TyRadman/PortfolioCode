@@ -1,32 +1,31 @@
 using System;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using UnitControllers;
+
     [RequireComponent(typeof(Collider))]
     public class InteractableArea : MonoBehaviour
     {
+        [field: SerializeField] public Action OnInteractorExit { get; set; }
+        
         [SerializeField] protected Transform _displayInteractionTextParent;
         [SerializeField] protected string _interactionText;
-        protected PlayerInteractions _currentInteractor;
-        [SerializeField] protected bool _isActive;
         [SerializeField] private AbilityConstraint _onEnterConstraints;
-        [field: SerializeField] public Action OnInteractorExit { get; set; }
-        private Collider _collider;
+        [SerializeField] protected bool _isActive;
+        [SerializeField] private Collider _collider;
+        
+        protected PlayerInteractions _currentInteractor;
         protected bool _hasInteractor = false;
         protected int _currentPlayerIndex;
-
-        private void Awake()
-        {
-            _collider = GetComponent<Collider>();
-        }
 
         public virtual void SetUp()
         {
 
         }
 
+        #region On Enter
         protected virtual void OnTriggerEnter(Collider other)
         {
             // only add the player as an interactor if the interaction area doesn't have an interactor
@@ -43,22 +42,27 @@ namespace TankLike.Environment
                 return;
             }
 
-            _hasInteractor = true;
             PlayerComponents player = other.GetComponent<PlayerComponents>();
 
-            if(player == null)
+            if (player == null)
             {
-                Debug.LogError($"No player component at {gameObject.name}");
                 return;
             }
 
-            // stop the hold action
-            player.OnHold.ForceStopHoldAction();
-            _currentInteractor = player.PlayerInteractions;
-            _currentInteractor.OnInteractionAreaEnter(
-                this, _displayInteractionTextParent, _interactionText, _onEnterConstraints);
-        }
+            _hasInteractor = true;
 
+            // stop the hold action
+            //player.OnHold.ForceStopHoldAction();
+            _currentInteractor = player.PlayerInteractions;
+            _currentInteractor.OnInteractionAreaEnter(this, _displayInteractionTextParent, _interactionText, _onEnterConstraints);
+
+            // display input
+            string inputName = InputManager.Controls.Player.Jump.name;
+            player.InGameUIController.DisplayInput(inputName);
+        }
+#endregion
+
+        #region On Exit
         protected virtual void OnTriggerExit(Collider other)
         {
             if (other.CompareTag("Player"))
@@ -69,7 +73,14 @@ namespace TankLike.Environment
 
         protected virtual void OnAreaLeft(Collider other)
         {
-            if (_currentInteractor == other.GetComponent<PlayerInteractions>())
+            PlayerComponents player = other.GetComponent<PlayerComponents>();
+
+            if (player == null)
+            {
+                return;
+            }
+
+            if (_currentInteractor == player.PlayerInteractions)
             {
                 _hasInteractor = false;
                 OnInteractorExit?.Invoke();
@@ -77,8 +88,11 @@ namespace TankLike.Environment
                 StopInteraction();
 
                 RefreshCollider();
+
+                player.InGameUIController.HideInput();
             }
         }
+        #endregion
 
         private void RefreshCollider()
         {
@@ -96,18 +110,19 @@ namespace TankLike.Environment
             if (_currentInteractor != null)
             {
                 _currentInteractor.OnInteractionAreaExit(_onEnterConstraints);
+                _currentInteractor.GetComponent<PlayerComponents>().InGameUIController.HideInput();
                 _currentInteractor = null;
             }
         }
 
         public virtual void EnableInteraction(bool value)
         {
-            GetComponent<Collider>().enabled = value;
+            _collider.enabled = value;
         }
 
         public virtual void Deactivate()
         {
-            GetComponent<Collider>().enabled = false;
+            _collider.enabled = false;
         }
 
         public virtual void Interact(int playerIndex)

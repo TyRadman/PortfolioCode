@@ -21,6 +21,8 @@ namespace TankLike
         public void Dispose()
         {
             IsActive = false;
+
+            CoinsAmount = 0;
         }
         #endregion
 

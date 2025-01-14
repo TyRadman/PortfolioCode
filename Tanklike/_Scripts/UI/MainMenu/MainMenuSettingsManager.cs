@@ -10,7 +10,7 @@ namespace TankLike.UI.MainMenu
     public class MainMenuSettingsManager : SubMenu
     {
         private const float DIFFICULTY_INCREMENT = 0.5f;
-        [SerializeField] private PlayerTempInfoSaver _gameData;
+        [SerializeField] private GameEditorData _gameData;
         [Header("Difficulty")]
         [SerializeField] private Image _difficultyBar;
         private float _difficulty = 0f;
@@ -21,7 +21,7 @@ namespace TankLike.UI.MainMenu
         private void Awake()
         {
             // get the current difficulty
-            _difficulty = _gameData.GameDifficulty;
+            _difficulty = _gameData.Difficulty;
             _difficultyBar.fillAmount = _difficulty;
             // get the current start room
             _startRoomType = _gameData.StartRoomType;
@@ -36,7 +36,7 @@ namespace TankLike.UI.MainMenu
             print(_difficulty);
             _difficultyBar.fillAmount = _difficulty;
             // update difficulty
-            _gameData.SetDifficulty(_difficulty);
+            _gameData.Difficulty = _difficulty;
         }
 
         public void OnStartRoomChanged(bool isNextRoom)
@@ -47,7 +47,7 @@ namespace TankLike.UI.MainMenu
             _startRoomType = (RoomType)currentRoom;
             string text = Regex.Replace(_startRoomType.ToString(), "(?<!^)([A-Z])", " $1");
             _startRoomText.text = text;
-            _gameData.SetStartRoom(_startRoomType);
+            _gameData.StartRoomType = _startRoomType;
         }
     }
 }

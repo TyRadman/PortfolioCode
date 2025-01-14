@@ -10,11 +10,12 @@ namespace TankLike.Misc
     {
         [SerializeField] private float _lifetime;
         public Action<IPoolable> OnReleaseToPool { get; private set; }
+
         private Coroutine _turnOffCoroutine;
         private WaitForSeconds _turnOffWaitForseconds;
         private ParticleSystem _particles;
         private ParticleSystem[] _childParticles;
-
+        private Vector3 _originalScale;
         public ParticleSystem Particles => _particles;
 
         private void Awake()
@@ -33,12 +34,14 @@ namespace TankLike.Misc
 
             _particles.Stop();
             _turnOffWaitForseconds = new WaitForSeconds(_lifetime);
+            _originalScale = transform.localScale;
         }
 
         public void OnRelease()
         {
             gameObject.SetActive(false);
             GameManager.Instance.SetParentToSpawnables(gameObject);
+            transform.localScale = _originalScale;
             Stop();
         }
 
@@ -58,10 +61,13 @@ namespace TankLike.Misc
             var mainModule = _particles.main;
             mainModule.simulationSpeed = speed;
 
-            foreach (ParticleSystem childParticleSystem in _childParticles)
+            if(_childParticles.Length > 0)
             {
-                var childMainModule = childParticleSystem.main;
-                childMainModule.simulationSpeed = speed;
+                foreach (ParticleSystem childParticleSystem in _childParticles)
+                {
+                    var childMainModule = childParticleSystem.main;
+                    childMainModule.simulationSpeed = speed;
+                }
             }
 
             _particles.Play();

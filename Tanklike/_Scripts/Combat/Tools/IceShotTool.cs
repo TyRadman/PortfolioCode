@@ -25,7 +25,7 @@ namespace TankLike.Combat
         {
             base.UseTool();
 
-            _playerShooter.SetCustomShot(_shot);
+            //_playerShooter.SetCustomShot(_shot);
         }
 
         public override void ResetValues(Transform tankTransform)

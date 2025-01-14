@@ -11,6 +11,7 @@ namespace TankLike.UnitControllers.States
     public class ThreeCannonBossGroundPoundState : BossAttackState
     {
         [SerializeField] private AOEWeapon _groundPoundWeapon;
+        [SerializeField] private IndicatorEffects.IndicatorType _indicatorType;
         [SerializeField] private float _groundPoundAttackDuration = 1;
         [SerializeField] protected LayerMask _groundPoundTargetLayers;
 
@@ -31,7 +32,8 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
-            Debug.Log("SIDE MACHINE GUNS ATTACK STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             _target = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
@@ -85,13 +87,13 @@ namespace TankLike.UnitControllers.States
 
             ((ThreeCannonBossAnimations)_animations).Animator.speed = 1 / _groundPoundAttackDuration;
 
-            if (_groundPoundWeapon.IndicatorType != IndicatorEffects.IndicatorType.None)
+            if (_indicatorType != IndicatorEffects.IndicatorType.None)
             {
                 Vector3 indicatorSize = new Vector3(_groundPoundWeapon.ExplosionRadius * 2, 0f, _groundPoundWeapon.ExplosionRadius * 2);
-                _indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_groundPoundWeapon.IndicatorType);
+                _indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_indicatorType);
                 _indicator.gameObject.SetActive(true);
                 var pos = _attackController.transform.position;
-                pos.y = 0.52f;
+                pos.y = Constants.GroundHeight;
                 _indicator.transform.position = pos;
                 _indicator.transform.rotation = Quaternion.identity;
                 _indicator.transform.localScale = indicatorSize;

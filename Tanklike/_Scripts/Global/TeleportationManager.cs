@@ -14,23 +14,40 @@ namespace TankLike
         public string DestinationName;
     }
 
-    public class TeleportationManager : MonoBehaviour
+    public class TeleportationManager : MonoBehaviour, IManager
     {
         [SerializeField] private List<TeleportationDestination> _teleportationDestinations = new List<TeleportationDestination>();
         [SerializeField] private Audio _teleportAudio;
 
+        public bool IsActive { get; private set; }
         public Dictionary<TeleportationDestination, Room> VisitedDestination { get; private set; } = new Dictionary<TeleportationDestination, Room>();
 
         private const float TELEPORTATION_EFFECT_DELAY = 0.5f;
         private const float REACTIVATE_PLAYERS_DELAY = 0.6f;
 
+        #region IManager
         public void SetUp()
         {
-
+            IsActive = true;
         }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            VisitedDestination.Clear();
+        }
+        #endregion
 
         public bool IsSpecialRoom(RoomType type)
         {
+
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return false;
+            }
+
             var destination = _teleportationDestinations.Find(r => r.RoomType == type);
             
             return destination != null;
@@ -38,6 +55,12 @@ namespace TankLike
 
         public void SetDestinationRoom(Room room)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             var destination = _teleportationDestinations.Find(r => r.RoomType == room.RoomType);
 
             if(destination != null)
@@ -58,6 +81,12 @@ namespace TankLike
 
         public void Teleport(Room room)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             StartCoroutine(TeleportationRoutine(room));
         }
 
@@ -75,15 +104,10 @@ namespace TankLike
                 player.Deactivate();
 
                 // Spawn effect
-                var vfx = GameManager.Instance.VisualEffectsManager.Misc.PlayerSpawning;
-                vfx.transform.SetPositionAndRotation(position, Quaternion.identity);
-                vfx.gameObject.SetActive(true);
-                vfx.Play();
+                effectDuration = GameManager.Instance.VisualEffectsManager.Misc.PlayPlayerSpawnVFX(position);
 
                 // play audio
                 GameManager.Instance.AudioManager.Play(_teleportAudio);
-
-                effectDuration = vfx.Particles.main.startLifetime.constant / 2;
             }
 
             yield return new WaitForSeconds(effectDuration);

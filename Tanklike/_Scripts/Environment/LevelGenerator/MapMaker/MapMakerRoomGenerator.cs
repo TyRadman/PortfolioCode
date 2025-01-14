@@ -1,13 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using TankLike.Combat.Destructible;
-using TankLike.Environment.LevelGeneration;
-using TankLike.LevelGeneration;
 using UnityEngine;
 
 namespace TankLike.Environment.MapMaker
 {
+    using Combat.Destructible;
+    using Environment.LevelGeneration;
+    using LevelGeneration;
+
     public class MapMakerRoomGenerator : MonoBehaviour, IRoomGenerator
     {
         private MapMakerManager _manager;
@@ -21,30 +22,30 @@ namespace TankLike.Environment.MapMaker
         public void BuildRoom(MapTiles_SO map, LevelData level, Room room, BuildConfigs configs = null)
         {
             // remove previous tile
-            for (int i = 0; i < _manager.AllTiles.GetLength(0); i++)
-            {
-                for (int j = 0; j < _manager.AllTiles.GetLength(1); j++)
-                {
-                    Destroy(_manager.AllTiles[i, j].TileObject);
-                }
-            }
+            //for (int i = 0; i < _manager.AllTiles.GetLength(0); i++)
+            //{
+            //    for (int j = 0; j < _manager.AllTiles.GetLength(1); j++)
+            //    {
+            //        Destroy(_manager.AllTiles[i, j].TileObject);
+            //    }
+            //}
 
-            _manager.Overlays.ClearOverlays();
+            //_manager.Overlays.ClearOverlays();
+            
+            _manager.Selector.UpdateLevelDimensionsWithoutBuildingRoom(map.Size);
+            room = _manager.Room;
 
-            int xDimension = map.Tiles.Max(t => t.Dimension.x) + 1;
-            int yDimension = map.Tiles.Max(t => t.Dimension.y) + 1;
 
-            Vector3 startingPosition = new Vector3(-MapMakerSelector.TILE_SIZE * xDimension / 2f + MapMakerSelector.TILE_SIZE / 2,
-                0f, -MapMakerSelector.TILE_SIZE * yDimension / 2f + MapMakerSelector.TILE_SIZE / 2);
-            // set the 2D array dimensions
-            _manager.AllTiles = new TileData[xDimension, yDimension];
-            List<List<DestructableTag>> overlays = new List<List<DestructableTag>>();
+            //int xDimension = map.Size.x;
+            //int yDimension = map.Size.y;
+            //float startPositionX = -((float)MapMakerSelector.TILE_SIZE * (float)xDimension / 2f + (float)MapMakerSelector.TILE_SIZE / 2f);
+            //float startPositionY = -((float)MapMakerSelector.TILE_SIZE * (float)yDimension / 2f + (float)MapMakerSelector.TILE_SIZE / 2f);
+            Vector3 startingPosition = _manager.Selector.GetStartingPositionForTiles();//new Vector3(startPositionX, 0f, startPositionY);
 
             for (int i = 0; i < map.Tiles.Count; i++)
             {
                 Tile tile = map.Tiles[i];
                 GameObject tileToBuildPrefab = level.Styler.GetTile(tile.Tag);
-                // create the tile as a child to the room
 
                 if (tileToBuildPrefab == null)
                 {
@@ -53,23 +54,27 @@ namespace TankLike.Environment.MapMaker
                 }
 
                 GameObject tileToBuild = Instantiate(tileToBuildPrefab, room.transform);
+
+                // rename it
+                string tileName = $"{tile.Dimension.x},{tile.Dimension.y} ({tile.Tag})";
+                tileToBuild.name = tileName;
+
+                tileToBuild.transform.position = startingPosition + new Vector3(tile.Dimension.x, 0f, tile.Dimension.y) * MapMakerSelector.TILE_SIZE;
+
                 TileData tileData = new TileData();
                 tileData.SetTileObject(tileToBuild, tile.Tag);
 
-                // rename it
-                tileToBuild.name = $"{tile.Dimension.x},{tile.Dimension.y}";
                 // set the position of the tile
-                tileToBuild.transform.position = startingPosition + new Vector3(tile.Dimension.x, 0f, tile.Dimension.y) * MapMakerSelector.TILE_SIZE;
                 tileData.Dimension = tile.Dimension;
                 // set the tile rotation
                 tileToBuild.transform.eulerAngles += Vector3.up * tile.Rotation;
                 // assign it to the 2D array
                 _manager.AllTiles[tile.Dimension.x, tile.Dimension.y] = tileData;
+
                 SetAssigner(tileData);
 
                 if (tile.Overlays.Count > 0)
                 {
-                    overlays.Add(tile.Overlays);
                     //Selector.SetOverLayToBuild(tile.Overlay);
                     tile.Overlays.ForEach(o => _manager.Overlays.PlaceTile(ref _manager.AllTiles, tile.Dimension.x, tile.Dimension.y, o));
                 }
@@ -82,15 +87,15 @@ namespace TankLike.Environment.MapMaker
 
             if (tileTag >= 0 && tileTag <= 3)
             {
-                tile.Arranger = _manager.GroundArranger;
+                tile.SetArranger(_manager.GroundArranger);
             }
             else if (tileTag >= 1 && tileTag <= 6)
             {
-                tile.Arranger = _manager.GroundArranger;
+                tile.SetArranger(_manager.GroundArranger);
             }
             else if (tileTag == (int)TileTag.Gate)
             {
-                tile.Arranger = _manager.GateArranger;
+                tile.SetArranger(_manager.GateArranger);
             }
         }
     }

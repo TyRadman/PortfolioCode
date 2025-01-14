@@ -53,7 +53,7 @@ namespace TankLike.UnitControllers.States
 
             if (_startAttack)
             {
-                _shooter.TelegraphAttack();
+                _shooter.StartTelegraph();
                 _startAttack = false;
             }
 

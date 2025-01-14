@@ -11,15 +11,16 @@ namespace TankLike.LevelGeneration.Quests
 
         public virtual void SetUp(LevelQuestSettings settings)
         {
-
+            IsActive = true;
+            IsNew = true;
         }
 
         /// <summary>
         /// This is a raw method, every child of this class must implement a custom OnProgress that calls this one at the end
         /// </summary>
-        public void OnProgress()
+        public void OnProgress(Quest_SO quest)
         {
-            GameManager.Instance.QuestsManager.ReportProgress(this);
+            GameManager.Instance.QuestsManager.ReportProgress(quest);
 
             if (IsCompleted())
             {

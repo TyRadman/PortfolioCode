@@ -33,7 +33,7 @@ namespace TankLike.LevelGeneration.Quests
 
             _currentDestroyedEnemiesCount++;
 
-            OnProgress();
+            OnProgress(this);
         }
 
         public override void OnCompletion()

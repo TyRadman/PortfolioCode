@@ -19,10 +19,7 @@ namespace TankLike.UI
 
         public void SetupHealthBar()
         {
-            if (_healthBarFill == null)
-            {
-                return;
-            }
+            if (_healthBarFill == null) return;
 
             _healthBarFill.fillAmount = 1f;
             _damageBarImage.fillAmount = 1f;

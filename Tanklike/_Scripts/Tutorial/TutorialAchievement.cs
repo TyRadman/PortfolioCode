@@ -16,7 +16,7 @@ namespace TankLike.Tutorial
         public virtual void SetUp(WaypointMarker marker)
         {
             _waypointMarker = marker;
-            _tutorialManager = marker.TutorialManager;
+            _tutorialManager = marker.Manager;
         }
     }
 }

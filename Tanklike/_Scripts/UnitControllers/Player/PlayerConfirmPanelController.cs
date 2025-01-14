@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TankLike.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,13 +8,21 @@ namespace TankLike.UnitControllers
 {
     public class PlayerConfirmPanelController : MonoBehaviour, IInput, IController
     {
-        private PlayerComponents _component;
-
         public bool IsActive { get; private set; }
 
-        public void SetUp(PlayerComponents components)
+        private PlayerComponents _playerComponents;
+
+        public void SetUp(IController controller)
         {
-            _component = components;
+            PlayerComponents components = controller as PlayerComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = components;
         }
 
         #region Input
@@ -79,20 +88,21 @@ namespace TankLike.UnitControllers
         #region IController
         public void Activate()
         {
+            IsActive = true;
         }
 
         public void Deactivate()
         {
+            IsActive = false;
         }
 
         public void Restart()
         {
-            DisposeInput(_component.PlayerIndex);
         }
 
         public void Dispose()
         {
-            DisposeInput(_component.PlayerIndex);
+            DisposeInput(_playerComponents.PlayerIndex);
         }
         #endregion
     }

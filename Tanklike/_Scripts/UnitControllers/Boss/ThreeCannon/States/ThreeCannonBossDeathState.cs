@@ -14,7 +14,8 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
-            Debug.Log("DEATH STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             _timer = 0f;

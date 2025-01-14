@@ -2,83 +2,61 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Minimap;
 
 namespace TankLike.UnitControllers
 {
-    public abstract class TankComponents : MonoBehaviour, IController
+    using Utils;
+    using Minimap;
+    using TankLike.Attributes;
+
+    [SelectionBase]
+    public abstract class TankComponents : UnitComponents
     {
-        [field: SerializeField] public CharacterController CharacterController { private set; get; }
-        [field: SerializeField] public TanksTag Tag { private set; get; }
-        [field: SerializeField] public TankTurretController TurretController { private set; get; }
-        [field: SerializeField] public TankShooter Shooter { private set; get; }
-        [field: SerializeField] public TankHealth Health { private set; get; }
-        [field: SerializeField] public TankMovement Movement { private set; get; }
-        [field: SerializeField] public TankSuperAbilities SuperAbility { private set; get; }
-        [field: SerializeField] public TankElementsEffects ElementsEffects { private set; get; }
-        [field: SerializeField] public TankVisuals Visuals { private set; get; }
+        [field: SerializeField, InSelf] public PlayerStatsController StatsController { private set; get; }
+        [field: SerializeField, InSelf] public KnockBackController KnockBackController { private set; get; }
+        [field: SerializeField, InSelf] public CharacterController CharacterController { private set; get; }
+        [field: SerializeField, InSelf] public TankTurretController TurretController { private set; get; }
+        [field: SerializeField, InSelf] public TankShooter Shooter { private set; get; }
+        [field: SerializeField, InSelf] public TankHealth Health { private set; get; }
+        [field: SerializeField, InSelf] public TankMovement Movement { private set; get; }
+        [field: SerializeField, InSelf] public TankSuperAbilities SuperAbility { private set; get; }
+        [field: SerializeField, InSelf] public TankElementsEffects ElementsEffects { private set; get; }
+        [field: SerializeField, InSelf] public TankVisuals Visuals { private set; get; }
         [field: SerializeField] public UnitData Stats { private set; get; }
-        [field: SerializeField] public TankAnimation Animation { private set; get; }
-        [field: SerializeField] public TankConstraints Constraints { private set; get; }
-        [field: SerializeField] public TankAdditionalInfo AdditionalInfo { private set; get; }
-        [field: SerializeField] public TankWiggler TankWiggler { private set; get; }
-        [field: SerializeField] public TankBodyParts TankBodyParts { private set; get; }
-        [field: SerializeField] public UnitVisualEffects VisualEffects { private set; get; }
+        [field: SerializeField, InSelf] public TankAnimation Animation { private set; get; }
+        [field: SerializeField, InSelf] public TankConstraints Constraints { private set; get; }
+        [field: SerializeField, InSelf] public TankAdditionalInfo AdditionalInfo { private set; get; }
+        [field: SerializeField, InSelf] public TankWiggler TankWiggler { private set; get; }
+        [field: SerializeField, InSelf] public TankBodyParts TankBodyParts { private set; get; }
+        [field: SerializeField, InSelf] public UnitVisualEffects VisualEffects { private set; get; }
+        [field: SerializeField, InSelf] public TankSpecialPartsAnimation SpecialPartsAnimation { set; get; }
 
         [SerializeField] protected UnitMinimapIcon _minimapIcon;
-        
-        public bool IsActive { get; set; }
 
-        public virtual void GetComponents()
+
+        protected List<IController> _components = new List<IController>();
+
+        protected void SetUpController(IController controller, Type fallBackType = null)
         {
-            CharacterController = GetComponent<CharacterController>();
-            Movement = GetComponent<TankMovement>();
-            TurretController = GetComponent<TankTurretController>();
-            Shooter = GetComponent<TankShooter>();
-            Health = GetComponent<TankHealth>();
-            SuperAbility = GetComponent<TankSuperAbilities>();
-            Animation = GetComponent<TankAnimation>();
-            ElementsEffects = GetComponent<TankElementsEffects>();
-            Visuals = GetComponent<TankVisuals>();
-            Constraints = GetComponent<TankConstraints>();
-            AdditionalInfo = GetComponent<TankAdditionalInfo>();
-            TankWiggler = GetComponent<TankWiggler>();
-            TankBodyParts = GetComponent<TankBodyParts>();
-            VisualEffects = GetComponent<UnitVisualEffects>();
+            // Check for null and set fall back type for logging
+            if(controller == null)
+            {
+                Helper.LogSetUpNullReferences(fallBackType);
+                return;
+            }
+
+            controller.SetUp(this);
         }
 
-        public virtual void SetUp()
+        protected void AddComponentToList<T>(T controller) where T : IController
         {
-            // Setups for all components
-            TankBodyParts.SetUp(Stats);
-            Movement.SetUp(this);
-            Shooter.SetUp(this);
-            Health.SetUp(this);
-            Animation.SetUp(this);
-            Visuals.Setup(this);
-            
-            if(ElementsEffects != null)
+            if (controller == null)
             {
-                ElementsEffects.Setup(this);
+                Helper.LogSetUpNullReferences(typeof(T));
+                return;
             }
 
-            if(TankWiggler != null)
-            {
-                TankWiggler.SetUp(this);
-            }
-
-            if (TurretController != null)
-            {
-                TurretController.SetUp(this);
-            }           
-            
-            if (VisualEffects != null)
-            {
-                VisualEffects.SetUp(this);
-            }
-            
-
-            Health.OnDeath += OnDeathHandler;
+            _components.Add(controller);
         }
 
         /// <summary>
@@ -99,42 +77,22 @@ namespace TankLike.UnitControllers
             }
         }
 
-        #region IController
-        public virtual void Activate()
+        public override T GetUnitComponent<T>()
         {
-            // TODO: check this when working on elements
-            //ElementsEffects.Activate();
-            Shooter.Activate();
-            Animation.Activate();
-            VisualEffects.Activate();
+            foreach (IController component in _components)
+            {
+                if (component is T)
+                {
+                    return (T)component;
+                }
+            }
+
+            return default;
         }
 
-        public virtual void Deactivate()
+        public void SetAlignment(TankAlignment alignment)
         {
-            Movement.Deactivate();
-            Shooter.Deactivate();
-            VisualEffects.Deactivate();
+            Alignment = alignment;
         }
-
-        public virtual void Restart()
-        {
-            Movement.Restart();
-            // TODO: check this when working on elements
-            //ElementsEffects.Restart();
-            Visuals.Restart();
-            Health.Restart();
-            Animation.Restart();
-            Shooter.Restart();
-            VisualEffects.Restart();
-        }
-
-        public virtual void Dispose()
-        {
-            // TODO: check this when working on elements
-            //ElementsEffects.Dispose();
-            Movement.Dispose();
-            VisualEffects.Dispose();
-        }
-        #endregion
     }
 }

@@ -30,6 +30,17 @@ namespace TankLike.UnitControllers
 
         public bool IsActive { get; set; }
 
+        public void SetUp(IController controller)
+        {
+            if (controller == null || controller is not TankComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            TankComponents components = (TankComponents)controller;
+        }
+
         public void SetSummoner(TankComponents summoner)
         {
             _summoner = summoner;

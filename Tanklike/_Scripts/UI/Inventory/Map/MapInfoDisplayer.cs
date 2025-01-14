@@ -10,12 +10,6 @@ namespace TankLike.Minimap
     {
         [SerializeField] private List<MapIconInfo> _iconInfos;
 
-        // temporarily disabled
-        //private void Start()
-        //{
-        //    FillIconsNamings();
-        //}
-
         private void FillIconsNamings()
         {
             List<MinimapManager.MinimapIcon> icons = GameManager.Instance.MinimapManager.GetMinimapIcons().FindAll(i => i.Type != MinimapIconType.Wall && i.Type != MinimapIconType.Gate);

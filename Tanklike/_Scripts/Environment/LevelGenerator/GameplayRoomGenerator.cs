@@ -1,126 +1,105 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using TankLike.Cam;
-using TankLike.Combat.Destructible;
-using TankLike.Environment;
-using TankLike.Environment.LevelGeneration;
-using TankLike.Environment.MapMaker;
-using TankLike.Utils;
 using UnityEngine;
-using static TankLike.Environment.MapMaker.MapTileStyler;
 
-namespace TankLike.LevelGeneration
+namespace TankLike.Environment.LevelGeneration
 {
+    using Cam;
+    using Environment.MapMaker;
+    using Attributes;
+
     /// <summary>
     /// Builds an individual room
     /// </summary>
-    public class GameplayRoomGenerator : MonoBehaviour, IRoomGenerator
+    public class GameplayRoomGenerator : MonoBehaviour, IRoomGenerator, IManager
     {
-        [SerializeField] private RoomGate _gateToBuild;
-        private Room _currentRoom;
+        /// <summary>
+        /// The types of painters that can be used to paint the room
+        /// </summary>
+        [System.Flags]
+        public enum PainterType
+        {
+            BaseTiles = 1,
+            Droppers = 2,
+            Grass = 4,
+            Explosives = 8,
+            DestructibleWalls = 16,
+        }
+
+        public bool IsActive { get; private set; }
+
+        [SerializeField] private PainterType _typesToPerform;
+        [SerializeField, InSelf] private ExplosivesPainter _explosivesPainter;
+        [SerializeField, InSelf] private DroppersPainter _droppersPainter;
+        [SerializeField, InSelf] private GrassPainter _grassPainter;
+        [SerializeField, InSelf] private DestructibleWallsPainter _destructibleWallsPainter;
+        [SerializeField, InSelf] private BaseTilesPainter _baseTilesPainter;
+
+        private Dictionary<PainterType, RoomPainter> _roomPainters;
+        private Dictionary<PainterType, RoomPainter> _bossRoomPainters;
+
+        #region IManager
+        public void SetUp()
+        {
+            _explosivesPainter.SetUp();
+            _droppersPainter.SetUp();
+            _grassPainter.SetUp();
+            _destructibleWallsPainter.SetUp();
+            _baseTilesPainter.SetUp();
+
+            _roomPainters = new Dictionary<PainterType, RoomPainter>()
+            {
+                { PainterType.BaseTiles, _baseTilesPainter},
+                { PainterType.Explosives, _explosivesPainter},
+                { PainterType.Droppers, _droppersPainter},
+                { PainterType.Grass, _grassPainter},
+                { PainterType.DestructibleWalls, _destructibleWallsPainter},
+            };
+
+            _bossRoomPainters = new Dictionary<PainterType, RoomPainter>()
+            {
+                { PainterType.BaseTiles, _baseTilesPainter},
+                { PainterType.Grass, _grassPainter},
+            };
+        }
+
+        public void Dispose()
+        {
+            _explosivesPainter.Dispose();
+            _droppersPainter.Dispose();
+            _grassPainter.Dispose();
+            _destructibleWallsPainter.Dispose();
+            _baseTilesPainter.Dispose();
+        }
+        #endregion
 
         public void BuildRoom(MapTiles_SO map, LevelData level, Room room, BuildConfigs configs = null)
         {
-            int xDimension = map.Tiles.Max(t => t.Dimension.x) + 1;
-            int yDimension = map.Tiles.Max(t => t.Dimension.y) + 1;
-            room.RoomDimensions = new Vector2Int(xDimension, yDimension);
-            _currentRoom = room;
-            Vector3 startingPosition = new Vector3(-MapMakerSelector.TILE_SIZE * xDimension / 2f + MapMakerSelector.TILE_SIZE / 2,
-                0f, -MapMakerSelector.TILE_SIZE * yDimension / 2f + MapMakerSelector.TILE_SIZE / 2);
-            List<Vector2Int> overlayIndices = new List<Vector2Int>();
-            // rename the room to the map's name
-            room.gameObject.name = map.name;
-            Transform tilesParent = new GameObject("Tiles").transform;
-            tilesParent.parent = room.transform;
-            Transform gatesParent = new GameObject("Gates").transform;
-            gatesParent.parent = room.transform; 
-            Transform spawnPointsParent = new GameObject("SpawnPoints").transform;
-            spawnPointsParent.parent = room.transform;
+            MapTiles_SO mapClone = Instantiate(map);
+            Dictionary<PainterType, RoomPainter> _painters;
 
-            // variables for adding the gates
-            int maxXIndex = map.Tiles.OrderByDescending(t => t.Dimension.x).First().Dimension.x;
-            int maxYIndex = map.Tiles.OrderByDescending(t => t.Dimension.y).First().Dimension.y;
-
-            for (int i = 0; i < map.Tiles.Count; i++)
+            if(room is BossRoom)
             {
-                Tile currentTile = map.Tiles[i];
-                // get the corresponding tile from the styler
-                GameObject tileToBuildPrefab;
-
-                if (currentTile.Tag != TileTag.Gate)
-                {
-                    if (configs != null)
-                    {
-                        if (configs.IgnoreTileTags.Exists(t => t == currentTile.Tag))
-                        {
-                            continue;
-                        }
-                    }
-
-                    tileToBuildPrefab = level.Styler.GetRandomTileByTag(currentTile.Tag);
-                }
-                else
-                {
-                    // build a ground for the gap
-                    tileToBuildPrefab = level.Styler.GetRandomTileByTag(TileTag.Ground);
-
-                    GameObject gate = Instantiate(_gateToBuild.gameObject, gatesParent);
-
-                    GateInfo info = new GateInfo()
-                    {
-                        Gate = gate.GetComponent<RoomGate>(),
-                    };
-
-                    GateDirection direction = GetGateDirection(maxXIndex, maxYIndex, currentTile.Dimension);
-                    info.SetDirection(direction);
-                    // we set the local direction because as the room rotates during the level generation, the main direction is change, and this results in a loss of the gates' original index in relation to the room's initial direction
-                    info.SetLocalDirection(direction);
-                    info.Gate.Direction = info.Direction;
-                    room.GatesInfo.Gates.Add(info);
-
-                    gate.name = $"{currentTile.Dimension.x},{currentTile.Dimension.y}";
-                    // set the position of the tile
-                    Vector3 gatePosition = startingPosition + new Vector3(currentTile.Dimension.x, 0f, currentTile.Dimension.y) * MapMakerSelector.TILE_SIZE;
-                    gate.transform.position = gatePosition;
-                    // set the tile rotation
-                    gate.transform.eulerAngles += Vector3.up * currentTile.Rotation;
-                }
-
-                // create the tile as a child to the room
-                if (tileToBuildPrefab == null)
-                {
-                    Debug.LogError($"Tile of type {currentTile.Tag} doesn't exist in {level.Styler.name} styler");
-                }
-
-                // instantiate the tile
-                GameObject tileToBuild = Instantiate(tileToBuildPrefab, tilesParent);
-                // rename it
-                tileToBuild.name = $"{currentTile.Dimension.x},{currentTile.Dimension.y}";
-                // set the position of the tile
-                Vector3 position = startingPosition + new Vector3(currentTile.Dimension.x, 0f, currentTile.Dimension.y) * MapMakerSelector.TILE_SIZE;
-                tileToBuild.transform.position = position;
-                // set the tile rotation
-                tileToBuild.transform.eulerAngles += Vector3.up * currentTile.Rotation;
-
-                if (currentTile.Overlays.Exists(o => o == DestructableTag.SpawnPoint))
-                {
-                    room.Spawner.SpawnPoints.AddSpawnPoint(position, spawnPointsParent);
-                    continue;
-                }
-
-                if(currentTile.Overlays.Exists(o => o == DestructableTag.BossSpawnPoint))
-                {
-                    GameObject spawnPoint = new GameObject("Boss Spawn Point");
-                    ((BossRoom)room).SetBossSpawnPoint(spawnPoint.transform);
-                    continue;
-                }
+                _painters = _bossRoomPainters;
+            }
+            else
+            {
+                _painters = _roomPainters;
             }
 
-            // create the droppers
-            CreateDroppers(map.Tiles, level, startingPosition, room);
-            // set camera limits
-            SetLevelLimits(map, room);
+            if(_typesToPerform.HasFlag(PainterType.BaseTiles))
+            {
+                _baseTilesPainter.SetConfigurations(configs);
+            }
+
+            foreach (var kvp in _painters)
+            {
+                if (_typesToPerform.HasFlag(kvp.Key))
+                {
+                    kvp.Value.PaintRoom(mapClone, room);
+                }
+            }
 
             // sort the gates' list
             room.GatesInfo.SortGates();
@@ -134,43 +113,37 @@ namespace TankLike.LevelGeneration
             else return GateDirection.South;
         }
 
-        public void SetLevelLimits(MapTiles_SO map, Room room)
+        public void SetLevelCameraLimits(MapTiles_SO map, Room room)
         {
             CameraLimits limits = new CameraLimits();
-            float leftLimit = (map.Size.x * MapMakerSelector.TILE_SIZE) / 2;
-            float rightLimit = (map.Size.x * MapMakerSelector.TILE_SIZE) / 2;
-            float downLimit = (map.Size.x * MapMakerSelector.TILE_SIZE) / 2;
-            float upLimit = (map.Size.x * MapMakerSelector.TILE_SIZE) / 2;
-            limits.HorizontalLimits = new Vector2(-leftLimit, rightLimit);
-            limits.VerticalLimits = new Vector2(-downLimit, upLimit);
-            room.SetCameraLimits(limits);
-        }
 
-        private void CreateDroppers(List<Tile> tiles, LevelData level, Vector3 startingPosition, Room room)
-        {
-            // create a parent for the droppers (like crates, rocks, etc)
-            Transform droppersParent = new GameObject("Droppers").transform;
-            // set the droppers parent as a child of the room
-            droppersParent.parent = _currentRoom.transform;
-            // find tiles that have droppers in them
-            List<Tile> dropTiles = tiles.FindAll(t => t.Overlays.Count > 0 && !t.Overlays.Contains(DestructableTag.SpawnPoint));
-            // shuffle them to add randomness
-            dropTiles.Shuffle();
-            int dropCount = Mathf.Clamp(Random.Range(level.DroppersRange.x, level.DroppersRange.y), 0, dropTiles.Count);
+            float roomRotation = (room.transform.eulerAngles.y + 360f) % 360f;
+            float width;
+            float height;
 
-            for (int i = 0; i < dropCount; i++)
+            if (roomRotation is not 0f and not 180)
             {
-                Tile currentTile = dropTiles[i];
-                Vector3 position = startingPosition + new Vector3(currentTile.Dimension.x, 0f, currentTile.Dimension.y) * MapMakerSelector.TILE_SIZE;
-                GameObject dropper = GetOverlay(level.Styler.OverlayReferences, currentTile.Overlays.RandomItem());
+                width = map.Size.y;
+                height = map.Size.x;
 
-                if (dropper != null)
-                {
-                    Transform spawnedDropper = Instantiate(dropper, position, Quaternion.identity, droppersParent).transform;
-                    GameManager.Instance.DestructiblesManager.SetDestructibleValues(spawnedDropper.GetComponent<IDropper>());
-                    room.AddDropper(spawnedDropper);
-                }
             }
+            else
+            {
+                width = map.Size.x;
+                height = map.Size.y;
+            }
+
+            float leftLimit = -(width * MapMakerSelector.TILE_SIZE) / 2;
+            float rightLimit = (width * MapMakerSelector.TILE_SIZE) / 2;
+
+            float downLimit = -(height * MapMakerSelector.TILE_SIZE) / 2;
+            float upLimit = (height * MapMakerSelector.TILE_SIZE) / 2;
+
+            limits.HorizontalLimits = new Vector2(leftLimit, rightLimit);
+            limits.VerticalLimits = new Vector2(downLimit, upLimit);
+
+            limits.AddOffset(room.transform.position);
+            room.SetCameraLimits(limits);
         }
 
         public void ReplaceGateWithBossGate(BossRoomGate bossGate, GateInfo gateToReplace, Room room)
@@ -188,16 +161,6 @@ namespace TankLike.LevelGeneration
 #else
             Destroy(gate.gameObject);
 #endif
-        }
-
-        public GameObject GetOverlay(List<OverLays> overlays, DestructableTag tag)
-        {
-            if (!overlays.Exists(o => o.Tag == tag))
-            {
-                return null;
-            }
-
-            return overlays.Find(o => o.Tag == tag).OverlayObject;
         }
     }
 

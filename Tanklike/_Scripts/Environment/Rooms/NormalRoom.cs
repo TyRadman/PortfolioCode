@@ -1,17 +1,15 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Cam;
-using TankLike.Sound;
 using UnityEngine;
-using UnityEngine.AI;
 
 namespace TankLike.Environment
 {
     public class NormalRoom : Room
     {
         [field: SerializeField, Header("Settings")] public int SpawningCapacity { get; private set; }
-        [field: SerializeField] public bool HasEnemies { get; private set; } = true;
-        public bool SpawnedEnemies = false;
+        public bool HasEnemies { get; private set; } = true;
+        public bool SpawnedEnemies { get; set; } = false;
 
         public override void SetUpRoom()
         {
@@ -21,6 +19,8 @@ namespace TankLike.Environment
             {
                 gate.Gate.Setup(HasEnemies, this);
             }
+
+            Spawner.SetParticleWait(GameManager.Instance.VisualEffectsManager.Misc.EnemySpawning.Particles.main.startLifetime.constant);
         }
 
         public override void LoadRoom()
@@ -45,26 +45,37 @@ namespace TankLike.Environment
             // Close every gate in the room
             foreach (var gate in GatesInfo.Gates)
             {
-                //gate.Gate.OnRoomEntered -= OnRoomEnteredHandler;
                 gate.Gate.CloseGate();
             }
 
-            if (Spawner.CanHaveKeys())
-            {
-                Spawner.AddKeyHolder();
-            }
+            Spawner.CheckAndAddKeyHolder();
 
             Spawner.ActivateSpawnedEnemies();
+
             GameManager.Instance.AudioManager.Play(_closeGateAudios);
             GameManager.Instance.CameraManager.Zoom.SetToFightZoom();
             GameManager.Instance.EnemiesManager.SetFightActivated(true);
-            //GameManager.Instance.RoomsManager.SetCurrentRoom(this);
 
         }
 
         public void SetHasEnemies(bool hasEnemies)
         {
             HasEnemies = hasEnemies;
+        }
+
+        internal void SetWaves()
+        {
+            if (HasEnemies && !SpawnedEnemies)
+            {
+                List<EnemyWave> waves = GameManager.Instance.EnemiesManager.GetWaves();
+                Spawner.SetRoomEnemyWaves(waves);
+                SpawnedEnemies = true;
+            }
+        }
+
+        public void FlagAsKeyHolder()
+        {
+            Spawner.HasKey = true;
         }
     }
 }

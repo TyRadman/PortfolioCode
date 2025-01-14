@@ -1,24 +1,28 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
-using TankLike.UI.Inventory;
 
 namespace TankLike.UI.Workshop
 {
     using Signifiers;
+    using Environment;
+    using TankLike.UnitControllers;
 
     public class ResurrectionNavigatable : Navigatable, IInput
     {
-        [SerializeField] private Image _processBar;
         [SerializeField] private float _loadDuration = 3f;
-        [SerializeField] private TextMeshProUGUI _coinsText;
         [SerializeField] private Color _sufficientCoinsColor;
         [SerializeField] private Color _insufficientCoinsColor;
+
+        [Header("References")]
+        [SerializeField] private Image _processBar;
+        [SerializeField] private TextMeshProUGUI _coinsText;
         [SerializeField] private TextMeshProUGUI _resurrectionActionText;
         [SerializeField] private TextMeshProUGUI _coinsWarningText;
+        [SerializeField] private TextMeshProUGUI _detailsText;
+
         private const float WARNING_DURATION = 1.5f;
         private const string REVIVE_TEXT = "Revive player ";
         private const string REVIVE_ACTION_TEXT = " - Hold ";
@@ -27,10 +31,23 @@ namespace TankLike.UI.Workshop
         private string _actionKey;
         private bool _revived = false;
         private UIActionSignifiersController _actionSignifiersController;
+        private Workshop_InteractableArea _workshopInteractableArea;
 
         private void Start()
         {
             _coinsWarningText.enabled = false;
+        }
+
+        public override void SetUp()
+        {
+            base.SetUp();
+
+            _workshopInteractableArea = GameManager.Instance.WorkshopController.WorkShopArea;
+
+            if(_workshopInteractableArea == null)
+            {
+                Debug.LogError("Workshop interactable area is not set.");
+            }
         }
 
         #region Open and Close
@@ -38,11 +55,13 @@ namespace TankLike.UI.Workshop
         {
             if (!IsPlayerDead())
             {
+                _detailsText.enabled = false;
                 // do other things to indicate the page is not available like changing the font color
                 _resurrectionActionText.text = NO_REVIVAL_MESSAGE;
                 return;
             }
 
+            _detailsText.enabled = true;
             // set the text that will display the message to the player "Revive player 2 - hold Q" for instance
             SetReviveText();
             base.Open(playerIndex);
@@ -60,7 +79,6 @@ namespace TankLike.UI.Workshop
                 return;
             }
 
-            _revived = false;
             base.Close(playerIndex);
             SetPlayerIndex(-1);
             DisposeInput(playerIndex);
@@ -123,13 +141,13 @@ namespace TankLike.UI.Workshop
         {
             StopAllCoroutines();
 
-            if (!PlayerHasEnoughCoins())
-            {
-                CancelInvoke();
-                _coinsWarningText.enabled = true;
-                Invoke(nameof(DisableCoinsWarningText), WARNING_DURATION);
-                return;
-            }
+            //if (!PlayerHasEnoughCoins())
+            //{
+            //    CancelInvoke();
+            //    _coinsWarningText.enabled = true;
+            //    Invoke(nameof(DisableCoinsWarningText), WARNING_DURATION);
+            //    return;
+            //}
 
             if(!IsPlayerDead())
             {
@@ -157,23 +175,42 @@ namespace TankLike.UI.Workshop
                 yield return null;
             }
 
+            OnPlayerRevived();
+        }
+
+        private int _healthAmount;
+
+        private void OnPlayerRevived()
+        {
             _revived = true;
             _resurrectionActionText.text = NO_REVIVAL_MESSAGE;
+            _detailsText.enabled = false;
             _processBar.fillAmount = 0f;
+
             // deduct cash
-            GameManager.Instance.PlayersManager.Coins.AddCoins(-Constants.REVIVAL_COST);
-            _coinsText.text = GameManager.Instance.PlayersManager.Coins.CoinsAmount.ToString();
+            //GameManager.Instance.PlayersManager.Coins.AddCoins(-Constants.REVIVAL_COST);
+            //_coinsText.text = GameManager.Instance.PlayersManager.Coins.CoinsAmount.ToString();
+            PlayerHealth playerHealth = GameManager.Instance.PlayersManager.GetPlayers(true)[0].Health as PlayerHealth;
+            int currentHP = playerHealth.GetHealthAmount();
+            _healthAmount = Mathf.CeilToInt(currentHP / 2f);
+            playerHealth.SetHealthAmount(_healthAmount);
+
             // subscribe so that the effect takes place only when the workshop is exitted
-            GameManager.Instance.ShopsManager.WorkShopArea.OnInteractorExit += RevivePlayer;
+            _workshopInteractableArea.OnInteractorExit += RevivePlayer;
         }
 
         public void RevivePlayer()
         {
+            _revived = false;
             // revive player
-            Vector3 respawnPosition = GameManager.Instance.ShopsManager.WorkShopArea.transform.position;
+            //Vector3 respawnPosition = _workshopInteractableArea.transform.position;
             int deadPlayerIndex = GameManager.Instance.PlayersManager.GetInactivePlayerIndex();
-            GameManager.Instance.PlayersManager.PlayerSpawner.RevivePlayer(deadPlayerIndex, respawnPosition);
-            GameManager.Instance.ShopsManager.WorkShopArea.OnInteractorExit -= RevivePlayer;
+            PlayerComponents deadPlayer = GameManager.Instance.PlayersManager.GetPlayers(false)[deadPlayerIndex];
+            
+            Vector3 respawnPosition = deadPlayer.MiniPlayerSpawner.GetMiniPlayerTransform().position;
+
+            GameManager.Instance.PlayersManager.PlayerSpawner.RevivePlayer(deadPlayerIndex, respawnPosition, _healthAmount);
+            _workshopInteractableArea.OnInteractorExit -= RevivePlayer;
         }
 
         private void StopResurrectionLoading(InputAction.CallbackContext _)
@@ -198,7 +235,7 @@ namespace TankLike.UI.Workshop
 
         private bool IsPlayerDead()
         {
-            return PlayersManager.PlayersCount == 2 && PlayersManager.ActivePlayersCount == 1 && !_revived;
+            return GameManager.Instance.PlayersManager.HasDeadPlayers() && !_revived;
         }
     }
 }

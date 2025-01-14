@@ -4,29 +4,47 @@ using UnityEngine;
 
 namespace TankLike
 {
-    public class ObstaclesVanisher : MonoBehaviour
+    public class ObstaclesVanisher : MonoBehaviour, IManager
     {
-        private Transform _camera;
         [SerializeField] private LayerMask _wallsLayermask;
         [SerializeField] private List<Transform> _players = new List<Transform>();
         [SerializeField] [Range(0f, 1f)] private float _minAlphaValue = 0f;
+
+        public bool IsActive { get; private set; }
+
+        private Transform _camera;
         private VanishingWall _previousWall;
 
+        // Call in the GameManager if needed
+        public void SetReferences()
+        {
+            _camera = Camera.main.transform;
+        }
+
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             var players = GameManager.Instance.PlayersManager.GetPlayerProfiles();
             players.ForEach(p => _players.Add(p.transform));
         }
 
-        private void Awake()
+        public void Dispose()
         {
-            _camera = Camera.main.transform;
-
+            IsActive = false;
         }
+        #endregion
 
         private void Update()
         {
-            if(_players.Count <= 0)
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            if (_players.Count <= 0)
             {
                 return;
             }

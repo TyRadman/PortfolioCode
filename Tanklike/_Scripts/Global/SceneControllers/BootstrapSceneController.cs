@@ -22,13 +22,8 @@ namespace TankLike
             {
                 Debug.Log("SETUP BOOTSTRAP SCENE");
 
-                GameManager.Instance.ChangeGameState(GameStateType.SplashScreen);
                 StartCoroutine(LoadingSceneProcess());
             }
-        }
-
-        public override void StarterSetUp()
-        {
         }
 
         private IEnumerator LoadingSceneProcess()
@@ -43,6 +38,11 @@ namespace TankLike
 
         protected override void SetUpManagers()
         {
+        }
+
+        public override void Dispose()
+        {
+            Debug.Log("DISPOSE BOOTSTRAP SCENE");
         }
     }
 }

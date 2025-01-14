@@ -6,36 +6,35 @@ namespace TankLike.UI.InGame
 {
     public class Crosshair : MonoBehaviour
     {
-        private Transform _camera;
+        [field: SerializeField] public bool IsActive { set; get; }
         [field: SerializeField] public CrossHairVisuals Visuals { get; private set; }
         [SerializeField] private Transform _cursorChild;
-        [field: SerializeField] public bool IsActive { set; get; }
+        private Transform _camera;
+        private bool _isColliding = false;
 
-        private void Awake()
+        public void SetUp()
         {
             _camera = Camera.main.transform;
         }
 
-        public void SetUp()
+        public void ResetValues()
         {
-            gameObject.SetActive(false);
+            //gameObject.SetActive(false);
             transform.parent = null;
 
             Visuals.SetUp();
         }
 
-        public void Enable(bool enable)
+        public void Enable()
         {
-            if (enable)
-            {
-                StartCoroutine(LookAtCameraProcess());
-                Visuals.ShowCrossHair();
-            }
-            else
-            {
-                Visuals.HideCrossHair();
-                StopAllCoroutines();
-            }
+            StartCoroutine(LookAtCameraProcess());
+            Visuals.ShowCrossHair();
+        }
+
+        public void Disable()
+        {
+            Visuals.HideCrossHair();
+            StopAllCoroutines();
         }
 
         private IEnumerator LookAtCameraProcess()
@@ -51,9 +50,19 @@ namespace TankLike.UI.InGame
             }
         }
 
+        private void OnTriggerEnter(Collider other)
+        {
+            _isColliding = true;
+        }
+
+        private void OnTriggerExit(Collider other)
+        {
+            _isColliding = false;
+        }
+
         public void SetColor(Color color)
         {
-            Visuals.SetColor(color);
+            Visuals.SetColor(color, Color.red);
         }
     }
 }

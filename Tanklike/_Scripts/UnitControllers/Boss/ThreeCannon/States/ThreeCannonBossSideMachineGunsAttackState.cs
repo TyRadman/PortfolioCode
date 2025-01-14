@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using TankLike.Combat;
+using TankLike.Misc;
 using TankLike.Utils;
 using UnityEngine;
 
@@ -13,6 +14,10 @@ namespace TankLike.UnitControllers.States
         [SerializeField] private Weapon _sideMachineGunsWeapon;
         [SerializeField] private float _sideMachineGunsShootingDuration;
         [SerializeField] private float _sideMachineGunsShotsNumber;
+
+        [Header("Telegraph")]
+        [SerializeField] private float _telegraphEffectOffset;
+        [SerializeField] private float _telegraphEffectSizeMultiplier;
 
         [Header("Machine Gun Animation")]
         [SerializeField] private float _machineGunAnimationMaxSpeed;
@@ -40,7 +45,8 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
-            Debug.Log("SIDE MACHINE GUNS ATTACK STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             // Chance to attack a random target vs closest target
@@ -115,6 +121,9 @@ namespace TankLike.UnitControllers.States
 
             float elapsedTime = 0f;
             float t = 0;
+
+            _attackController.StartCoroutine(TelegraphRoutine(_attackController.RightMachineGunShootingPoint));
+            _attackController.StartCoroutine(TelegraphRoutine(_attackController.LeftMachineGunShootingPoint));
 
             while (t < 1)
             {
@@ -212,6 +221,24 @@ namespace TankLike.UnitControllers.States
 
             if (targetAngle != 0f)
                 _closeTurrets = true;
+        }
+
+        private IEnumerator TelegraphRoutine(Transform shootingPoint)
+        {
+            ParticleSystemHandler vfx = GameManager.Instance.VisualEffectsManager.Telegraphs.EnemyTelegraph;
+            vfx.transform.parent = shootingPoint;
+            vfx.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            vfx.transform.position += vfx.transform.forward * _telegraphEffectOffset;
+            vfx.transform.localScale = Vector3.one * _telegraphEffectSizeMultiplier;
+            vfx.gameObject.SetActive(true);
+            vfx.Play(vfx.Particles.main.duration / _machineGunAccelerationAnimationDuration);
+
+            _attackController.AddToActivePooables(vfx);
+
+            yield return new WaitForSeconds(_machineGunAccelerationAnimationDuration);
+
+            vfx.TurnOff();
+            _attackController.RemoveFromActivePooables(vfx);
         }
         #endregion
     }

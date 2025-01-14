@@ -31,6 +31,18 @@ namespace TankLike.UI.Inventory
             GameManager.Instance.QuestsManager.OnQuestProgressed += OnQuestProgressed;
         }
 
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            _currentLevelQuests.Clear();
+
+            // unsubscribe to the quests managers
+            GameManager.Instance.QuestsManager.OnQuestAdded -= OnQuestAdded;
+            GameManager.Instance.QuestsManager.OnQuestCompleted -= OnQuestCompleted;
+            GameManager.Instance.QuestsManager.OnQuestProgressed -= OnQuestProgressed;
+        }
+
         public override void Close(int playerIndex = 0)
         {
             base.Close(playerIndex);

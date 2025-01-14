@@ -11,12 +11,11 @@ namespace TankLike
     {
         public System.Action<Quest_SO> OnQuestAdded;
         public System.Action<Quest_SO> OnQuestCompleted;
-        public System.Action<Quest_SO> OnQuestProgressed;
+        public System.Action<Quest_SO> OnQuestProgressed { get; set; }
 
         [SerializeField] private LevelQuestSettings _settings;
         [SerializeField] private List<Quest_SO> _questTypes;
         [SerializeField] private List<Quest_SO> _activeQuests;
-        [SerializeField] private int _questsCount = 3;
 
         public bool IsActive { get; private set; }
 
@@ -32,7 +31,6 @@ namespace TankLike
             IsActive = false;
 
             _activeQuests.Clear();
-            _activeQuests = null;
         }
         #endregion
 
@@ -46,16 +44,20 @@ namespace TankLike
 
         private void AddQuest(Quest_SO quest)
         {
-            Quest_SO newQuest = (Quest_SO)ScriptableObject.CreateInstance(quest.GetType());
+            //Quest_SO newQuest = (Quest_SO)ScriptableObject.CreateInstance(quest.GetType());
+
             // copies the values of the cached quest to the newly created one
-            quest.CopyValuesTo(newQuest);
-            _activeQuests.Add(newQuest);
+            //quest.CopyValuesTo(newQuest);
+            _activeQuests.Add(quest);
+
             // set up the quest type
-            newQuest.SetUp(_settings);
+            quest.SetUp(_settings);
+
             // show it in the notifications
-            GameManager.Instance.NotificationsManager.PushQuestNotification(newQuest.GetQuestString(), QuestState.Started);
+            GameManager.Instance.NotificationsManager.PushQuestNotification(quest.GetQuestString(), QuestState.Started);
+
             // invoke the event for the quest navigator (inventory) to add the quest as well
-            OnQuestAdded?.Invoke(newQuest);
+            OnQuestAdded?.Invoke(quest);
         }
 
         public void ReportProgress(Quest_SO quest)
@@ -66,7 +68,7 @@ namespace TankLike
                 return;
             }
 
-            OnQuestProgressed(quest);
+            OnQuestProgressed?.Invoke(quest);
         }
 
         public void MarkQuestAsCompleted(Quest_SO quest)

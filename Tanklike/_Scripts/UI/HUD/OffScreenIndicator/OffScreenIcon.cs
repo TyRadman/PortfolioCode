@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,6 +15,8 @@ namespace TankLike.UI.HUD
         [SerializeField] private AnimationClip _showClip;
         [SerializeField] private AnimationClip _hideClip;
         [SerializeField] private Image _indicatorImage;
+        [SerializeField] private Image _indicatorTriangleImage;
+        [SerializeField] private Image _iconImage;
 
         public void ShowIcon()
         {
@@ -32,7 +35,7 @@ namespace TankLike.UI.HUD
                 _animation.Stop();
             }
 
-            if(speed != 1f)
+            if (speed != 1f)
             {
                 _animation[clip.name].speed = speed;
             }
@@ -41,9 +44,16 @@ namespace TankLike.UI.HUD
             _animation.Play();
         }
 
-        public void SetColor(Color color)
+        public void SetData(Color color, Sprite iconSprite)
         {
             _indicatorImage.color = color;
+            _indicatorTriangleImage.color = color;
+            _iconImage.sprite = iconSprite; 
+        }
+
+        internal void ResetIconRotation()
+        {
+            _iconImage.transform.eulerAngles = Vector3.zero;
         }
     }
 }

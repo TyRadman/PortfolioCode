@@ -1,10 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Combat.Destructible;
 using UnityEngine;
 
 namespace TankLike.Environment.MapMaker
 {
+    using Combat.Destructible;
+    using Utils;
+
     public class OverlaysArranger : MonoBehaviour
     {
         [System.Serializable]
@@ -19,8 +21,7 @@ namespace TankLike.Environment.MapMaker
         public class Overlay
         {
             public List<DestructableTag> CurrentOverlayTypes = new List<DestructableTag>();
-            public Color OverlayColor;
-            public Vector2Int Dimension;
+            [field: SerializeField] public Vector2Int Dimension { get; private set; }
             public List<OverlayInfo> Info = new List<OverlayInfo>();
 
             public void SetModel(List<OverlayInfo> info, Transform parent, Vector3 position)
@@ -28,9 +29,13 @@ namespace TankLike.Environment.MapMaker
                 for (int i = 0; i < info.Count; i++)
                 {
                     float offset = MapMakerSelector.TILE_SIZE / 2f;
+
                     Vector3 modelPosition = position - new Vector3(offset, 0f, offset);
-                    modelPosition += new Vector3(TILE_SIZE + info[i].PositionIndex.x * TILE_SIZE, 0f, 
-                        TILE_SIZE + info[i].PositionIndex.y * TILE_SIZE);
+
+                    float x = TILE_SIZE + info[i].PositionIndex.x * TILE_SIZE;
+                    float y = TILE_SIZE + info[i].PositionIndex.y * TILE_SIZE;
+
+                    modelPosition += new Vector3(x, 0f, y);
 
                     OverlayInfo overlayInfo = new OverlayInfo();
                     overlayInfo.Model = Instantiate(info[i].Model, modelPosition, Quaternion.identity, parent);
@@ -40,11 +45,14 @@ namespace TankLike.Environment.MapMaker
                 }
             }
 
-            public void ActivateVisual(DestructableTag tag)
+            public void ShowVisual(DestructableTag tag)
             {
                 Info.Find(t => t.Tag == tag).Model.SetActive(true);
 
-                if (!CurrentOverlayTypes.Exists(t => t == tag)) CurrentOverlayTypes.Add(tag);
+                if (!CurrentOverlayTypes.Exists(t => t == tag))
+                {
+                    CurrentOverlayTypes.Add(tag);
+                }
             }
 
             public GameObject GetDisplayTile(DestructableTag tag)
@@ -55,44 +63,58 @@ namespace TankLike.Environment.MapMaker
             public void DisableVisuals()
             {
                 CurrentOverlayTypes = new List<DestructableTag>();
-                Info.ForEach(t => t.Model.SetActive(false));
+                Info.ForEach(t => t.Model.SetActive(false)); 
+            }
+
+            public void SetDimension(int x, int y)
+            {
+                Dimension = new Vector2Int(x, y);
             }
         }
 
         public const float TILE_SIZE = 0.5f;
         [SerializeField] private List<OverlayInfo> OverlayInfos;
-        private List<Overlay> CurrentOverlays = new List<Overlay>();
+        [SerializeField] private List<Overlay> CurrentOverlays = new List<Overlay>();
         private Overlay DisplayOverlay = new Overlay();
         [SerializeField] private MapMakerManager _manager;
         [SerializeField] private GameObject _overlayBoxPrefab;
         public DestructableTag CurrentOverlayType;
         private Transform _parent;
 
-        private void Start()
+        public void SetPointer(Transform parent)
         {
-            SetUpOverlayBoxes();
-            CreateDisplayTiles();
+            return;
+            _parent = parent;
         }
 
-        /// <summary>
-        /// Should be called once only. When the scene starts.
-        /// </summary>
-        private void SetUpOverlayBoxes()
+        public void SetUpOverlayBoxes()
         {
             int xNum = _manager.Selector.LevelDimensions.x;
             int yNum = _manager.Selector.LevelDimensions.y;
+
             Vector3 startingPosition = _manager.Selector.GetStartingPositionForTiles();
-            _parent = new GameObject("Overlays").transform;
+
+            if (_parent == null)
+            {
+                _parent = new GameObject("Overlays").transform;
+            }
+
+            if (CurrentOverlays != null)
+            {
+                CurrentOverlays.ForEach(o => o.Info.ForEach(i => Destroy(i.Model)));
+            }
+
+            CurrentOverlays.Clear();
 
             for (int i = 0; i < xNum; i++)
             {
                 for (int j = 0; j < yNum; j++)
                 {
-                    Vector3 position = startingPosition + new Vector3(j, 0f, i) * MapMakerSelector.TILE_SIZE;
-                    Overlay overlay = new Overlay
-                    {
-                        Dimension = new Vector2Int(j, i),
-                    };
+                    Vector3 position = startingPosition + new Vector3(i, 0f, j) * MapMakerSelector.TILE_SIZE;
+
+                    Overlay overlay = new Overlay();
+
+                    overlay.SetDimension(i, j);
 
                     overlay.SetModel(OverlayInfos, _parent, position);
                     CurrentOverlays.Add(overlay);
@@ -100,17 +122,20 @@ namespace TankLike.Environment.MapMaker
             }
         }
 
-        private void CreateDisplayTiles()
+        public void CreateDisplayTiles()
         {
             Overlay overlay = new Overlay();
-            overlay.SetModel(OverlayInfos, _parent, Vector3.zero);
+            overlay.SetModel(OverlayInfos, _manager.Selector.GetPointer(), Vector3.zero);
             DisplayOverlay = overlay;
         }
 
         public void PlaceTile(ref TileData[,] tiles, int x, int y, DestructableTag tag)
         {
+            bool isGroundTile = MapMakerManager.TagEquals(tiles[x, y].Tag, TileType.Ground);
+            bool isPartOfGate = tiles[x, y].GatePart != TileData.GatePartType.None;
+
             // if the tile we're setting as the one having a destructible is not a ground tile, then stop
-            if(!MapMakerManager.TagEquals(tiles[x, y].Tag, TileType.Ground) || tiles[x, y].GatePart != TileData.GatePartType.None)
+            if (!isGroundTile || isPartOfGate)
             {
                 _manager.UI.DisplayMessage($"Can only place {tag}s on ground tiles");
                 return;
@@ -118,15 +143,23 @@ namespace TankLike.Environment.MapMaker
 
             Overlay overlayToShow = CurrentOverlays.Find(t => t.Dimension.x == x && t.Dimension.y == y);
 
-            if(overlayToShow.CurrentOverlayTypes.Exists(o => o == DestructableTag.SpawnPoint)
-                && tag != DestructableTag.SpawnPoint)
+            if(overlayToShow == null)
+            {
+                Debug.Log($"No overlay at {x}, {y}".Color(Colors.Red));
+                return;
+            }
+
+            bool tileHasSpawnPoint = overlayToShow.CurrentOverlayTypes.Exists(o => o == DestructableTag.SpawnPoint);
+            bool isNewOverlaySpawnPoint = tag == DestructableTag.SpawnPoint;
+
+            if (tileHasSpawnPoint && !isNewOverlaySpawnPoint)
             {
                 _manager.UI.DisplayMessage($"Can't place {tag} on a spawn point");
                 return;
             }
 
             // set the tile as one having a destructible
-            overlayToShow.ActivateVisual(tag);
+            overlayToShow.ShowVisual(tag);
         }
 
         public void RemoveTile(int x, int y)
@@ -138,13 +171,23 @@ namespace TankLike.Environment.MapMaker
 
         public bool IsEmptyOverlay(int x, int y)
         {
+            if(CurrentOverlays == null)
+            {
+                Debug.Log("Why");
+            }
+
+            if (CurrentOverlays.Find(t => t.Dimension.x == x && t.Dimension.y == y) == null)
+            {
+                Debug.Log($"No overlays at {x} && {y}");
+            }
+
             return CurrentOverlays.Find(t => t.Dimension.x == x && t.Dimension.y == y).CurrentOverlayTypes.Count == 0;
         }
 
         public GameObject GetDisplayTile(DestructableTag tag)
         {
             DisplayOverlay.DisableVisuals();
-            DisplayOverlay.ActivateVisual(tag);
+            DisplayOverlay.ShowVisual(tag);
             return DisplayOverlay.GetDisplayTile(tag);
         }
 

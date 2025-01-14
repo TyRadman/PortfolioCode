@@ -10,6 +10,10 @@ namespace TankLike.Cam
         public Vector2 HorizontalLimits;
         public Vector2 VerticalLimits;
 
+        /// <summary>
+        /// Adds the limit values to this set of limit values.
+        /// </summary>
+        /// <param name="limits">Limits to add the values of.</param>
         public void AddOffset(Vector3 offset)
         {
             HorizontalLimits.x += offset.x;
@@ -18,21 +22,23 @@ namespace TankLike.Cam
             VerticalLimits.y += offset.z;
         }
 
+        /// <summary>
+        /// Set this set of limit values to the provided limits.
+        /// </summary>
+        /// <param name="limits">Limit values to set to.</param>
         public void SetValues(CameraLimits limits)
         {
             HorizontalLimits = limits.HorizontalLimits;
             VerticalLimits = limits.VerticalLimits;
         }
 
-        public void AddValues(CameraLimits limits)
-        {
-            HorizontalLimits.x += limits.HorizontalLimits.x;
-            HorizontalLimits.y -= limits.HorizontalLimits.y;
-            VerticalLimits.x += limits.VerticalLimits.x;
-            VerticalLimits.y -= limits.VerticalLimits.y;
-        }
-
-        public void ScaleUpValues(CameraLimits originalLimits, CameraLimits offsetLimits, float multiplier)
+        /// <summary>
+        /// Sets new values to the camera limits with an offset and a multiplier to the offset so that the offset scales with different zoom levels.
+        /// </summary>
+        /// <param name="originalLimits">Limit values to set this limits to.</param>
+        /// <param name="offsetLimits">Limit values that act as offset values.</param>
+        /// <param name="multiplier">The multiplier by which the offset values are multiplied.</param>
+        public void SetValuesWithOffset(CameraLimits originalLimits, CameraLimits offsetLimits, float multiplier = 1f)
         {
             // set the original limts, the ones of the room's position
             HorizontalLimits = originalLimits.HorizontalLimits;
@@ -56,5 +62,13 @@ namespace TankLike.Cam
                 VerticalLimits = Vector2.one * middlePoint;
             }
         }
+
+
+        #region Debug
+        public void PrintValues(string name = "")
+        {
+            Debug.Log($"{name}\nHorizontal Limits: {HorizontalLimits}\nVertical Limits:{VerticalLimits}");
+        }
+        #endregion
     }
 }

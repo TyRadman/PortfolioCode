@@ -14,13 +14,13 @@ namespace TankLike.Elements
         public override void TakeEffect(TankComponents tank)
         {
             base.TakeEffect(tank);
-            tank.Movement.SetSpeedMultiplier(_speedMultiplier);
+            //tank.Movement.SetSpeedMultiplier(_speedMultiplier);
         }
 
         public override void StopEffect(TankComponents tank)
         {
             base.StopEffect(tank);
-            tank.Movement.SetSpeedMultiplier(1f);
+            //tank.Movement.SetSpeedMultiplier(1f);
         }
     }
 }

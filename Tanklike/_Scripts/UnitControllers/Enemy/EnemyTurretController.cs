@@ -15,10 +15,13 @@ namespace TankLike.UnitControllers
             _debugMode = value;
         }
 
-        private void Update()
+        private IEnumerator UpdateRoutine()
         {
-            if(_debugMode)
+            while (true)
+            {
                 HandleTurretRotation(_aimTarget);
+                yield return null;
+            }
         }
 
         //public void RotateToTarget(Vector3 targetPosition, bool interrupt = true)
@@ -55,5 +58,15 @@ namespace TankLike.UnitControllers
         //        // maybe send a message to shoot
         //    }
         //}
+
+        public override void Activate()
+        {
+            base.Activate();
+
+            if (_debugMode)
+            {
+                StartCoroutine(UpdateRoutine());
+            }
+        }
     }
 }

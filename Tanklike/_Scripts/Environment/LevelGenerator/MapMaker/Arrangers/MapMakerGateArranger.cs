@@ -27,9 +27,13 @@ namespace TankLike.Environment.MapMaker
 
         public override void PlaceTile(ref TileData[,] tiles, int x, int y)
         {
-            if (!TileIsValid(tiles, x, y)) return;
+            if (!TileIsValid(tiles, x, y))
+            {
+                return;
+            }
 
             base.PlaceTile(ref tiles, x, y);
+
             // create the gate 
             ReplaceTileWithTileType(ref tiles, x, y);
 

@@ -1,18 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.ItemsSystem
 {
+    using TankLike.UnitControllers;
+    using TankLike.Utils;
+
     public class CollectableAttractor : MonoBehaviour
     {
+        [SerializeField] private SphereCollider _collider;
+        [SerializeField] private float _attractionDuration = 1f;
+
         private bool _canBeCollected = false;
         private bool _isAttracting = false;
         private Transform _target;
-        [SerializeField] private SphereCollider _collider;
-        [SerializeField] private float _attractionDuration = 1f;
         private Collectable _collectable;
 
         public void SetUpAttractor(float attractionRadius, Collectable collectable)

@@ -26,11 +26,14 @@ namespace TankLike.LevelGeneration.Quests
 
         public void OnProgress(Collectable collectable, int playerIndex)
         {
-            if (collectable.Type != _collectableType) return;
+            if (collectable.Type != _collectableType)
+            {
+                return;
+            }
 
             _currentlyCollectedItems++;
 
-            OnProgress();
+            OnProgress(this);
         }
 
         public override string GetQuestString()

@@ -1,15 +1,17 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    /// <summary>
+    /// Holds information about the enemy to spawn such as the type of enemy, whether they can hold a key, and whether they're holding a key.
+    /// </summary>
     [System.Serializable]
     public class EnemySpawnProfile
     {
         public EnemyType Enemy;
-        public bool HasKey;
+        public bool HasKey { get; set; }
         public bool CanHaveKey = true;
 
         public EnemySpawnProfile(EnemyType enemy)

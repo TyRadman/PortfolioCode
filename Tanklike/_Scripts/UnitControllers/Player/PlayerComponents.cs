@@ -1,88 +1,119 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.ItemsSystem;
-using TankLike.Combat;
-using TankLike.Sound;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerComponents : TankComponents
+    using Attributes;
+
+    public class PlayerComponents : TankComponents, IPlayerController
     {
         public GameplaySettings PlayerSettings;
-        [field: SerializeField] public PlayerUpgrades Upgrades { get; private set; }
-        [field: SerializeField] public PlayerExperience Experience { get; private set; }
-        [field: SerializeField] public PlayerTools Tools { get; private set; }
-        [field: SerializeField] public PlayerOverHeat Overheat { get; private set; }
-        [field: SerializeField] public PlayerSuperAbilities SuperAbilities { get; private set; }
-        [field: SerializeField] public PlayerSuperAbilityRecharger SuperRecharger { get; private set; }
-        [field: SerializeField] public PlayerInteractions PlayerInteractions { get; private set; }
-        [field: SerializeField] public PlayerBoost PlayerBoost { get; private set; }
-        [field: SerializeField] public PlayerHoldAction OnHold { get; private set; }
-        [field: SerializeField] public PlayerJump Jump { get; private set; }
-        [field: SerializeField] public PlayerCrosshairController Crosshair { get; private set; }
-        [field: SerializeField] public PlayerUIController UIController { get; private set; }
-        [field: SerializeField] public PlayerPredictedPosition PredictedPosition { set; get; }
-        [field: SerializeField] public PlayerFuel Fuel { set; get; }
-        [field: SerializeField] public PlayerEnergy Energy { set; get; }
-        [field: SerializeField] public PlayerBoostAbility BoostAbility { set; get; }
-        [field: SerializeField] public PlayerAimAssist AimAssist { set; get; }
+        public UnitComponents ComponentsController => this;
+
+        [field: SerializeField, InSelf] public PlayerShield Shield { get; private set; }
+        [field: SerializeField, InSelf] public PlayerUpgrades Upgrades { get; private set; }
+        [field: SerializeField, InSelf] public PlayerExperience Experience { get; private set; }
+        [field: SerializeField, InSelf] public PlayerTools Tools { get; private set; }
+        [field: SerializeField, InSelf] public PlayerOverHeat Overheat { get; private set; }
+        [field: SerializeField, InSelf] public PlayerSuperAbilities SuperAbilities { get; private set; }
+        [field: SerializeField, InSelf] public PlayerSuperAbilityRecharger SuperRecharger { get; private set; }
+        [field: SerializeField, InSelf] public PlayerInteractions PlayerInteractions { get; private set; }
+        [field: SerializeField, InSelf] public PlayerBoost PlayerBoost { get; private set; }
+        [field: SerializeField, InSelf] public PlayerHoldAction ChargeAttack { get; private set; }
+        [field: SerializeField, InSelf] public PlayerJump Jump { get; private set; }
+        [field: SerializeField, InSelf] public PlayerCrosshairController CrosshairController { get; private set; }
+        [field: SerializeField, InSelf] public PlayerUIController UIController { get; private set; }
+        [field: SerializeField, InSelf] public PlayerPredictedPosition PredictedPosition { set; get; }
+        [field: SerializeField, InSelf] public PlayerFuel Fuel { set; get; }
+        [field: SerializeField, InSelf] public PlayerEnergy Energy { set; get; }
+        [field: SerializeField, InSelf] public PlayerBoostAbility BoostAbility { set; get; }
+        [field: SerializeField, InSelf] public PlayerAimAssist AimAssist { set; get; }
+        [field: SerializeField, InSelf] public PlayerDropsCollector DropsCollector { set; get; }
+        [field: SerializeField, InSelf] public PlayerSkillsController SkillsController { set; get; }
+        [field: SerializeField, InSelf] public PlayerInGameUIController InGameUIController { set; get; }
+        [field: SerializeField, InSelf] public PlayerWeaponSwapper PlayerWeaponSwapper { set; get; }
+        [field: SerializeField, InSelf] public MiniPlayerSpawner MiniPlayerSpawner { set; get; }
         [field: SerializeField] public bool IsAlive { set; get; }
 
         [field: SerializeField, Header("Ability Data")] public AbilitySelectionData AbilityData { set; get; }
         public System.Action OnPlayerRevived { get; set; }
 
+        public int PlayerIndex { get; private set; } = 0;
 
-        [Header("Audio")]
-        [SerializeField] private Audio _onCollectedAudio;
-        public int PlayerIndex = 0;
+        public bool StartWithDefaultSkills { get; set; }
 
-        public override void GetComponents()
+        [Header("Debug")]
+        public Transform TestingSphere;
+
+        private bool _isDisposed = false;
+
+        /// <summary>
+        /// For events that need to take place after the player is activated.
+        /// </summary>
+        public System.Action OnPlayerActivated { get; set; }
+        /// <summary>
+        /// For events that need to take place only once after the player is activated.
+        /// </summary>
+        public System.Action OnPlayerActivatedOnce { get; set; }
+
+        public override void SetUp(IController controller = null)
         {
-            base.GetComponents();
-            Tools = GetComponent<PlayerTools>();
-            Experience = GetComponent<PlayerExperience>();
-            Upgrades = GetComponent<PlayerUpgrades>();
-            Overheat = GetComponent<PlayerOverHeat>();
-            SuperAbilities = GetComponent<PlayerSuperAbilities>();
-            PlayerInteractions = GetComponent<PlayerInteractions>();
-            PlayerBoost = GetComponent<PlayerBoost>();
-            OnHold = GetComponent<PlayerHoldAction>();
-            Jump = GetComponent<PlayerJump>();
-            Crosshair = GetComponent<PlayerCrosshairController>();
-            UIController = GetComponent<PlayerUIController>();
-            PredictedPosition = GetComponent<PlayerPredictedPosition>();
-            Fuel = GetComponent<PlayerFuel>();
-            Energy = GetComponent<PlayerEnergy>();
-            BoostAbility = GetComponent<PlayerBoostAbility>();
-            AimAssist = GetComponent<PlayerAimAssist>();
-        }
+            _isDisposed = false;
+            AddComponentToList(TankBodyParts);
+            AddComponentToList(AdditionalInfo);
 
-        public override void SetUp()
-        {
-            base.SetUp();
-            SuperAbilities.SetUp(this);
-            Upgrades.SetUp(Experience);
-            PlayerInteractions.SetUp(this);
-            Overheat.SetUp(this);
-            Experience.SetUp();
-            PlayerBoost.Setup(this);
-            Jump.SetUp(this);
-            Crosshair.SetUp();
-            OnHold.SetUp();
-            UIController.SetUp(this);
-            PredictedPosition.SetUp(this);
-            Tools.SetUp(this);
-            Fuel.Setup(this);
-            Energy.Setup(this);
-            AimAssist.SetUp(this);
+            // Movement
+            AddComponentToList(Movement);
+            AddComponentToList(TurretController);
+            AddComponentToList(Jump);
+            AddComponentToList(PlayerBoost);
+            AddComponentToList(PredictedPosition);
 
-            if (BoostAbility != null)
-            {
-                BoostAbility.Setup(this);
-            }
+            // Combat
+            AddComponentToList(Overheat);
+            AddComponentToList(Shooter);
+            AddComponentToList(CrosshairController);
+            AddComponentToList(AimAssist);
+            AddComponentToList(ElementsEffects);
+            AddComponentToList(SkillsController);
 
-            TankBodyParts.InstantiateBodyParts();
+            // Visuals
+            AddComponentToList(Animation);
+            AddComponentToList(Visuals);
+            AddComponentToList(TankWiggler);
+            AddComponentToList(VisualEffects);
+
+            // Stats
+            AddComponentToList(Health);
+            AddComponentToList(Fuel);
+            AddComponentToList(Energy);
+            AddComponentToList(Experience);
+            AddComponentToList(Upgrades);
+            AddComponentToList(DropsCollector);
+
+            // Abilities
+            AddComponentToList(Shield);
+            AddComponentToList(SuperRecharger);
+            AddComponentToList(SuperAbilities);
+            AddComponentToList(ChargeAttack);
+            AddComponentToList(BoostAbility);
+            AddComponentToList(Tools);
+
+            // UI
+            AddComponentToList(UIController);
+            AddComponentToList(InGameUIController);
+
+            // Other
+            AddComponentToList(Constraints);
+            AddComponentToList(PlayerInteractions);
+            AddComponentToList(PlayerWeaponSwapper);
+            AddComponentToList(StatsController);
+            AddComponentToList(KnockBackController);
+            AddComponentToList(MiniPlayerSpawner);
+
+            // set up all the components
+            _components.ForEach(c => c.SetUp(this));
         }
 
         public void SetUpSettings()
@@ -90,138 +121,121 @@ namespace TankLike.UnitControllers
             ApplySettings(PlayerSettings);
         }
 
-        public void OnRevived()
+        public void OnRevived(int reviveHealthAmount)
         {
+            _isDisposed = false;
             OnPlayerRevived?.Invoke();
+
             IsAlive = true;
-            TankBodyParts.InstantiateBodyParts();
-            TankBodyParts.SetTextureForMainMaterial();
+
+            Restart();
             Activate();
+
+            if (reviveHealthAmount > 0)
+            {
+                Health.SetHealthAmount(reviveHealthAmount);
+            }
+
+            SpawnMinimapIcon();
+            MiniPlayerSpawner.DespawnMiniPlayer();
+            GameManager.Instance.HUDController.PlayerHUDs[PlayerIndex].SwitchToPlayerHUD();
+            PositionUnit(MiniPlayerSpawner.GetMiniPlayerTransform());
+        }
+
+        public void SetIndex(int index)
+        {
+            PlayerIndex = index;
         }
 
         public override void OnDeathHandler(TankComponents components)
         {
             base.OnDeathHandler(components);
-            Restart();
-        }
 
-        private void OnTriggerEnter(Collider other)
-        {
-            if (other.TryGetComponent(out Collectable collectable))
-            {
-                //print($"{other.name} has collectable script at {Time.time}");
-
-                if (collectable.CanBeCollected)
-                {
-                    //print($"Collected {other.name} at {Time.time}");
-                    collectable.OnCollected(this);
-                    GameManager.Instance.AudioManager.Play(_onCollectedAudio);
-                    GameManager.Instance.ReportManager.ReportCollection(collectable, PlayerIndex);
-                }
-            }
+            Deactivate();
+            Dispose();
         }
 
         public void ApplySettings(GameplaySettings settings)
         {
             // apply settings here
-            Crosshair.SetAimSensitivity(settings.AimSensitivity);
+            CrosshairController.SetAimSensitivity(settings.AimSensitivity);
         }
+
+        public void SpawnMinimapIcon()
+        {
+            _minimapIcon.SpawnIcon();
+        }
+
+        public void RemoveComponent(System.Type componentType)
+        {
+            IController component = _components.Find(c => c.GetType() == componentType);
+
+            if(component == null)
+            {
+                Debug.Log($"No component of type {componentType.Name}");
+                return;
+            }
+
+            component.Dispose();
+
+            _components.Remove(component);
+        }
+
+        #region Utilities
+        public override UnitShooter GetShooter()
+        {
+            return Shooter;
+        }
+
+        public override void PositionUnit(Transform point)
+        {
+            Vector3 position = point.position;
+            position.y = 1f;
+            Quaternion rotation = Quaternion.LookRotation(point.forward);
+            transform.SetPositionAndRotation(position, Quaternion.identity);
+            Movement.SetBodyRotation(rotation);
+        }
+        #endregion
 
         #region IController
         public override void Activate()
         {
-            base.Activate();
-            Upgrades.Activate();
-            Experience.Activate();
-            Overheat.Activate();
-            SuperAbilities.Activate();
-            SuperRecharger.Activate();
-            PlayerInteractions.Activate();
-            PlayerBoost.Activate();
-            OnHold.Activate();
-            Jump.Activate();
-            Crosshair.Activate();
-            UIController.Activate();
-            PredictedPosition.Activate();
-            ((PlayerMovement)Movement).Activate();
-            Tools.Activate();
-            Fuel.Activate();
-            Energy.Activate();
-            BoostAbility.Activate();
-            AimAssist.Activate();
+            _components.ForEach(c => c.Activate());
+            OnPlayerActivated?.Invoke();
+
+            if (OnPlayerActivatedOnce != null)
+            {
+                OnPlayerActivatedOnce.Invoke();
+                OnPlayerActivatedOnce = null;
+            }
+
+            // TODO: check this when working on elements
+            //ElementsEffects.Activate();
         }
 
-        private void ActivateMovement()
-        {
-
-        }
         public override void Deactivate()
         {
-            base.Deactivate();
-            Upgrades.Deactivate();
-            Experience.Deactivate();
-            Overheat.Deactivate();
-            SuperAbilities.Deactivate();
-            SuperRecharger.Deactivate();
-            PlayerInteractions.Deactivate();
-            PlayerBoost.Deactivate();
-            OnHold.Deactivate();
-            Jump.Deactivate();
-            Crosshair.Deactivate();
-            UIController.Deactivate();
-            PredictedPosition.Deactivate();
-            ((PlayerMovement)Movement).Deactivate();
-            Tools.Deactivate();
-            Fuel.Deactivate();
-            Energy.Deactivate();
-            BoostAbility.Deactivate();
-            AimAssist.Deactivate();
-        }
-
-        public override void Dispose()
-        {
-            base.Dispose();
-            Upgrades.Dispose();
-            Experience.Dispose();
-            Overheat.Dispose();
-            SuperAbilities.Dispose();
-            SuperRecharger.Dispose();
-            PlayerInteractions.Dispose();
-            PlayerBoost.Dispose();
-            OnHold.Dispose();
-            Jump.Dispose();
-            Crosshair.Dispose();
-            UIController.Dispose();
-            PredictedPosition.Dispose();
-            ((PlayerMovement)Movement).Dispose();
-            Tools.Dispose();
-            Fuel.Dispose();
-            Energy.Dispose();
-            BoostAbility.Dispose();
-            AimAssist.Dispose();
+            _components.ForEach(c => c.Deactivate());
         }
 
         public override void Restart()
         {
-            base.Restart();
-            Upgrades.Restart();
-            Experience.Restart();
-            Overheat.Restart();
-            SuperAbilities.Restart();
-            SuperRecharger.Restart();
-            PlayerInteractions.Restart();
-            PlayerBoost.Restart();
-            OnHold.Restart();
-            Jump.Restart();
-            Crosshair.Restart();
-            UIController.Restart();
-            PredictedPosition.Restart();
-            ((PlayerMovement)Movement).Restart();
-            Tools.Restart();
-            Fuel.Restart();
-            Energy.Restart();
-            BoostAbility.Restart();
-            AimAssist.Restart();
+            _components.ForEach(c => c.Restart());
+            // TODO: check this when working on elements
+            //ElementsEffects.Restart();
+        }
+
+        public override void Dispose()
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
+            _components.ForEach(c => c.Dispose());
+            // TODO: check this when working on elements
+            //ElementsEffects.Dispose();
         }
         #endregion
     }

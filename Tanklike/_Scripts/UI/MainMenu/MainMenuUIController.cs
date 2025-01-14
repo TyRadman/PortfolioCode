@@ -19,12 +19,12 @@ namespace TankLike.UI.MainMenu
         [SerializeField] private List<GameObject> _panels;
         [SerializeField] private MenuSelectable _firstSelectedItem;
         [SerializeField] private UIActionSignifiersController _menuActionSignifiersController;
+        [SerializeField] private MainMenuInputManager _inputManager;
+        [SerializeField] private PlayerInputManager _playerInputManager;
 
         [Header("Panels")]
         [SerializeField] private MainMenuSettingsManager _settingsPanel;
-        
-           
-        private MainMenuInputManager _inputManager;
+                   
         private MenuSelectable _currentSelectable;
         private PlayerInputActions _controls;
         private string _currentControlScheme;
@@ -38,7 +38,7 @@ namespace TankLike.UI.MainMenu
         private const string MAIN_MENU_SCENE = "S_MainMenu";
         private const string ABILITY_SELECTION_SCENE = "S_AbilitySelection";
 
-        public void SetUp(MainMenuInputManager inputManager)
+        public void SetUp()
         {
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
@@ -46,8 +46,6 @@ namespace TankLike.UI.MainMenu
             //// Get reference to the MainMenuInputManager from the scene
             //_inputManager = FindObjectOfType<MainMenuInputManager>();
             //_inputManager.SetUp(this);
-
-            _inputManager = inputManager;
 
             EnableFirstPanel();
             _currentSelectable.Highlight(true);
@@ -57,6 +55,7 @@ namespace TankLike.UI.MainMenu
             _currentControlScheme = KEYBOARD_SCHEME;
             SignifierController = _menuActionSignifiersController;
             SetUpActionSignifiers(SignifierController);
+            //_playerInputManager.EnableJoining();
         }
 
         private void EnableFirstPanel()
@@ -69,6 +68,16 @@ namespace TankLike.UI.MainMenu
         #region Input
         public void SetUpInputForInputHandler(PlayerInputHandler inputHandler)
         {
+            if(inputHandler == null)
+            {
+                Debug.Log("input handler is null");
+            }
+
+            if (_controls == null)
+            {
+                Debug.Log("_controls is null");
+            }
+
             InputActionMap lobbyActionMap = inputHandler.Playerinputs.actions.FindActionMap(_controls.Lobby.Get().name);
             lobbyActionMap.FindAction(_controls.Lobby.Navigation_Up.name).performed += OnNavigationUp;
             lobbyActionMap.FindAction(_controls.Lobby.Navigation_Down.name).performed += OnNavigationDown;
@@ -80,6 +89,26 @@ namespace TankLike.UI.MainMenu
             _currentControlScheme = inputHandler.Playerinputs.currentControlScheme;
             _menuActionSignifiersController.ClearAllSignifiers();
             SetUpActionSignifiers(SignifierController);
+        }
+
+        public void DisposeInputForInputHandler(PlayerInputHandler inputHandler)
+        {
+            if (inputHandler == null)
+            {
+                Debug.Log("input handler is null");
+            }
+
+            if (_controls == null)
+            {
+                Debug.Log("_controls is null");
+            }
+
+            InputActionMap lobbyActionMap = inputHandler.Playerinputs.actions.FindActionMap(_controls.Lobby.Get().name);
+            lobbyActionMap.FindAction(_controls.Lobby.Navigation_Up.name).performed -= OnNavigationUp;
+            lobbyActionMap.FindAction(_controls.Lobby.Navigation_Down.name).performed -= OnNavigationDown;
+            lobbyActionMap.FindAction(_controls.Lobby.Navigation_Left.name).performed -= OnNavigationLeft;
+            lobbyActionMap.FindAction(_controls.Lobby.Navigation_Right.name).performed -= OnNavigationRight;
+            lobbyActionMap.FindAction(_controls.Lobby.Submit.name).performed -= Submit;
         }
 
         private void OnNavigationUp(InputAction.CallbackContext _)
@@ -118,6 +147,7 @@ namespace TankLike.UI.MainMenu
         public void Navigate(Direction direction)
         {
             // Play navigate menu audio
+            Debug.Log("Play audio");
             AudioManager audioManager = GameManager.Instance.AudioManager;
             audioManager.Play(audioManager.UIAudio.NavigateMenuAudio);
 
@@ -136,30 +166,33 @@ namespace TankLike.UI.MainMenu
         public void OnStartGame()
         {
             // remove the input profiles
-            if(_inputManager != null)
+            if (_inputManager != null)
             {
                 _inputManager.RemoveInputHandlers();
             }
 
             // load the next scene
-            StartCoroutine(LoadingSceneProcess());
+            GameManager.Instance.DisposeCurrentSceneController();
+            //GameManager.Instance.SceneLoadingManager.SwitchScene(Scenes.MAIN_MENU, Scenes.LOBBY);
+            GameManager.Instance.SceneLoadingManager.SwitchScene(Scenes.MAIN_MENU, Scenes.GAMEPLAY, true);
         }
 
-        private IEnumerator LoadingSceneProcess()
+        public void OnTutorial()
         {
-            AsyncOperation loadOperation = SceneManager.LoadSceneAsync(ABILITY_SELECTION_SCENE, LoadSceneMode.Additive);
-
-            while (!loadOperation.isDone)
+            // remove the input profiles
+            if (_inputManager != null)
             {
-                yield return null;
+                _inputManager.RemoveInputHandlers();
             }
 
-            AsyncOperation unloadOperation = SceneManager.UnloadSceneAsync(MAIN_MENU_SCENE);
+            // load the next scene
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(Scenes.MAIN_MENU, Scenes.TUTORIAL);
+        }
 
-            while (!unloadOperation.isDone)
-            {
-                yield return null;
-            }
+        public void OnExitGame()
+        {
+            Application.Quit();
         }
         #endregion
 

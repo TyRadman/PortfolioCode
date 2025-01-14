@@ -5,92 +5,144 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
-    using Combat;
+    using Combat.SkillTree;
+    using Combat.Abilities;
     using TankLike.Utils;
+    using System;
 
-    public class PlayerBoostAbility : MonoBehaviour, IController, IInput, IDisplayedInput
+    public class PlayerBoostAbility : MonoBehaviour, IController, IDisplayedInput, ISkill
     {
-        [SerializeField] private BoostAbilityHolder _abilityToAdd;
+        [SerializeField] private SkillProfile _abilityToAdd;
         public bool IsActive { get; set; }
-        private PlayerComponents _components;
+        private PlayerComponents _playerComponents;
         private Ability _currentAbility;
         private BoostAbilityHolder _currentAbilityHolder;
+        private Dictionary<BoostAbilityHolder, BoostAbilityHolder> _abilityHolders = new Dictionary<BoostAbilityHolder, BoostAbilityHolder>();
         private float _updateDistance = 1f;
         private PlayerBoost _boost;
-        private bool _isDoubleBoostActivated = false;
+        private bool _abilityIsPerformed = false;
 
-        #region Input
-        public void SetUpInput(int playerIndex)
+        [Header("Debug")]
+        [SerializeField] private bool _usePlayerDataAbility = false;
+
+        public void SetUp(IController controller)
         {
-            PlayerInputActions c = InputManager.Controls;
-            InputActionMap playerMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            playerMap.FindAction(c.Player.DoubleBoost.name).performed += DoubleBoost;
-        }
-
-        public void DisposeInput(int playerIndex)
-        {
-            PlayerInputActions c = InputManager.Controls;
-            InputActionMap playerMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            playerMap.FindAction(c.Player.DoubleBoost.name).performed -= DoubleBoost;
-        }
-        #endregion
-
-        private void DoubleBoost(InputAction.CallbackContext _)
-        {
-            _isDoubleBoostActivated = true;
-        }
-
-        public void Setup(PlayerComponents components)
-        {
-            _components = components;
-            _boost = _components.PlayerBoost;
-
-            if (_components.AbilityData != null)
+            if (controller is not PlayerComponents playerComponents)
             {
-                AddAbility(_components.AbilityData.GetBoostAbility());
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
-            else
-            {
-                AddAbility(_abilityToAdd);
-            }
+
+            _playerComponents = playerComponents;
+            _boost = _playerComponents.PlayerBoost;
+
+            _abilityToAdd.EquipSkill(_playerComponents);
         }
 
-        public void AddAbility(BoostAbilityHolder ability)
+        public void AddSkill(SkillHolder abilityHolder)
         {
+            if (abilityHolder == null)
+            {
+                Debug.LogError($"No boost ability passed to {gameObject.name}");
+                return;
+            }
+
+            if(abilityHolder is not BoostAbilityHolder boostAbilityHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(BoostAbilityHolder).Name, abilityHolder.GetType().Name);
+                return;
+            }
+
             // set up the ability
-            _currentAbilityHolder = Instantiate(ability);
-            _currentAbility = Instantiate(_currentAbilityHolder.Ability);
-            _currentAbilityHolder.Ability = _currentAbility;
-            _currentAbilityHolder.Ability.SetUp(_components);
+            BoostAbilityHolder newAbilityHolder = Instantiate(boostAbilityHolder);
+
+            Ability newAbility = Instantiate(newAbilityHolder.Ability);
+
+            newAbilityHolder.SetAbility(newAbility);
+
+            _abilityHolders.Add(boostAbilityHolder, newAbilityHolder);
+
+            if(_currentAbilityHolder == null)
+            {
+                EquipSkill(boostAbilityHolder);
+            }
+        }
+
+        public void EquipSkill(SkillHolder abilityHolder)
+        {
+            if (abilityHolder == null)
+            {
+                Debug.LogError($"No boost ability passed to {gameObject.name}");
+                return;
+            }
+
+            if (abilityHolder is not BoostAbilityHolder boostAbilityHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(BoostAbilityHolder).Name, abilityHolder.GetType().Name);
+                return;
+            }
+
+            if (!_abilityHolders.ContainsKey(boostAbilityHolder))
+            {
+                AddSkill(boostAbilityHolder);
+            }
+
+            _currentAbilityHolder = _abilityHolders[boostAbilityHolder];
+
+            _currentAbility = _currentAbilityHolder.Ability;
+
+            _currentAbilityHolder.Ability.SetUp(_playerComponents);
+
             _updateDistance = _currentAbilityHolder.DistancePerActivation;
 
             // set up the UI
-            UpdateInputDisplay(_components.PlayerIndex);
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
+
+            ApplyBoostModifiers();
 
             // subscribe the ability to the playerBoost events
-            _components.PlayerBoost.OnBoostStart += StartAbility;
-            _components.PlayerBoost.OnBoostUpdate += UpdateAbility;
-            _components.PlayerBoost.OnBoostEnd += EndAbility;
+            _playerComponents.PlayerBoost.OnBoostStart += StartAbility;
+            _playerComponents.PlayerBoost.OnBoostUpdate += UpdateAbility;
+            _playerComponents.PlayerBoost.OnBoostEnd += EndAbility;
+        }
+
+        public void ReEquipSkill()
+        {
+            EquipSkill(_currentAbilityHolder);
+        }
+
+        public void UpdateInputDisplay(int playerIndex)
+        {
+            // set the input key for the boost ability
+            string boostActionName = InputManager.Controls.Player.Boost.name;
+            int boostActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(boostActionName, playerIndex);
+            string keyIcon = Helper.GetInputIcon(boostActionIconIndex);
+
+            Sprite abilityIcon = _currentAbilityHolder.GetIcon();
+
+            GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetBoostInfo(abilityIcon, keyIcon);
+        }
+
+        private void ApplyBoostModifiers()
+        {
+            _boost.SetStartConsumptionRate(_currentAbilityHolder.FuelStartConsumptionRate);
+            _boost.SetConsumptionRate(_currentAbilityHolder.FuelConsumptionRate);
+            _boost.SetSpeedMultiplier(_currentAbilityHolder.SpeedMultiplier);
         }
 
         private void StartAbility()
         {
-            if(!_isDoubleBoostActivated)
+            if(_abilityIsPerformed)
             {
                 return;
             }
 
-            ApplyBoostModifiers();
+            _abilityIsPerformed = true;
             _currentAbility.PerformAbility();
         }
 
         private void UpdateAbility()
         {
-            if (!_isDoubleBoostActivated)
-            {
-                return;
-            }
-
             if (_boost.DistanceTravelled > _updateDistance)
             {
                 _boost.ResetDistanceCalculator();
@@ -100,52 +152,65 @@ namespace TankLike.UnitControllers
 
         private void EndAbility()
         {
-            ResetBoostModifiers();
-            _isDoubleBoostActivated = false;
+            _abilityIsPerformed = false;
         }
 
-        private void ApplyBoostModifiers()
+        public BoostAbilityHolder GetAbilityHolder()
         {
-            _boost.MultiplyStartBoostConsumptionRate(_currentAbilityHolder.FuelStartConsumptionRateMultiplier);
-            _boost.MultiplyBoostConsumptionRate(_currentAbilityHolder.FuelConsumptionRateMultiplier);
-            _boost.MultiplySpeedMultiplier(_currentAbilityHolder.SpeedMultiplier);
+            return _currentAbilityHolder;
         }
 
-        private void ResetBoostModifiers()
+        public List<BoostAbilityHolder> GetAbilityHolders()
         {
-            _boost.ResetAllBoostFuelConsumptionRates();
-            _boost.ResetSpeedMultiplier();
-        }
+            List<BoostAbilityHolder> abilities = new List<BoostAbilityHolder>();
 
+            foreach (KeyValuePair<BoostAbilityHolder, BoostAbilityHolder> holder in _abilityHolders)
+            {
+                abilities.Add(holder.Value);
+            }
+
+            return abilities;
+        }
 
         #region IController
         public void Activate()
         {
-            SetUpInput(_components.PlayerIndex);
+            IsActive = true;
         }
 
         public void Deactivate()
+        {
+            IsActive = false;
+        }
+
+        public void Restart()
         {
 
         }
 
         public void Dispose()
         {
-
+            EndAbility();
         }
 
-        public void Restart()
+        public void SetActiveAbility(BoostAbilityHolder boostAbility)
         {
-            DisposeInput(_components.PlayerIndex);
-        }
+            // set up the ability
+            _currentAbilityHolder = boostAbility;
 
-        public void UpdateInputDisplay(int playerIndex)
-        {
-            // set the input key for the boost ability
-            int boostActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(
-                InputManager.Controls.Player.Boost.name, _components.PlayerIndex);
+            _currentAbility = _currentAbilityHolder.Ability;
 
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetBoostInfo(_currentAbilityHolder.GetIcon(), Helper.GetInputIcon(boostActionIconIndex));
+            _currentAbilityHolder.Ability = _currentAbility;
+
+            if (!_currentAbility.IsSetUp)
+            {
+                _currentAbilityHolder.Ability.SetUp(_playerComponents);
+            }
+
+            _updateDistance = _currentAbilityHolder.DistancePerActivation;
+
+            // set up the UI
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
         }
         #endregion
     }

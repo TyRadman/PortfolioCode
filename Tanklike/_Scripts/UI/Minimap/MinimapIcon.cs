@@ -20,12 +20,12 @@ namespace TankLike.Minimap
 
         protected virtual void Start()
         {
-            if (GameManager.Instance == null)
+            if (!CanInitialize())
             {
                 return;
             }
 
-                _minimapTransform = GameManager.Instance.CameraManager.MinimapCameraFollow.transform;
+            _minimapTransform = GameManager.Instance.CameraManager.MinimapCameraFollow.transform;
 
             if (!_getIconInfo)
             {
@@ -34,13 +34,19 @@ namespace TankLike.Minimap
 
             MinimapManager.MinimapIcon info = GameManager.Instance.MinimapManager.GetMinimapIconInfo(_iconType);
 
+            if(info == null)
+            {
+                Debug.LogError($"No info found for minimap icon at {gameObject.name}");
+                return;
+            }
+
             if(_spriteRenderer == null)
             {
                 Debug.LogError($"No sprite renderer at {gameObject.name}");
                 return;
             }
 
-            if(_spriteRenderer.sprite != null)
+            if (_spriteRenderer.sprite != null)
             {
                 _spriteRenderer.sprite = info.Icon;
             }
@@ -72,6 +78,11 @@ namespace TankLike.Minimap
         public void SwitchMeshMaterial(Material material)
         {
             _meshRenderer.material = material;
+        }
+
+        protected bool CanInitialize()
+        {
+            return GameManager.Instance != null && GameManager.Instance.MinimapManager.IsActive;
         }
     }
 }

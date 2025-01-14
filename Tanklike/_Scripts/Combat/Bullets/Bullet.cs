@@ -1,20 +1,23 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UnitControllers;
-using TankLike.Elements;
-using TankLike.Utils;
 using System;
 
 namespace TankLike.Combat
 {
+    using UnitControllers;
+    using Elements;
+    using Utils;
+
     public class Bullet : Ammunition
     {
         [Header("Settings")]
         [SerializeField] protected LayerMask _bumberLayers;
         [SerializeField] protected float _bumberDetectionDistance;
-        [SerializeField] protected bool _useGravity;
-        [SerializeField] protected float _gravityMultiplier;
+        [SerializeField] private float _rotationSpeed = 5f;
+
+        protected bool _useGravity;
+        protected float _gravityMultiplier;
         protected bool _limitedDistance;
         protected float _maxDistance = 3f;
 
@@ -41,7 +44,7 @@ namespace TankLike.Combat
         [field: SerializeField] public OnImpact Impact { set; get; }
         [field: SerializeField] public ElementEffect Element { set; get; }
 
-        public const float ROTATION_SPEED = 5f;
+        public const float ROTATION_SPEED = 30f;
 
         private void Awake()
         {
@@ -55,7 +58,12 @@ namespace TankLike.Combat
             }
         }
 
-        public void SetUp(TankComponents shooter = null)
+        public void SetData(BulletData data)
+        {
+            
+        }
+
+        public void SetUp(UnitComponents shooter = null)
         {
             if (shooter != null)
             {
@@ -90,7 +98,7 @@ namespace TankLike.Combat
             _bullet.SetActive(true);
         }
 
-        public void StartBullet(TankComponents shooter, Vector3? dir = null)
+        public void StartBullet(UnitComponents shooter, Vector3? dir = null)
         {
             EnableBullet(true);
             SetUp(shooter);
@@ -120,10 +128,11 @@ namespace TankLike.Combat
             _isActive = active;
         }
 
+        #region Spline Movement Logic
         public void MoveToPointAlongSpline(Vector3 point, float maxHeightReach, float duration)
         {
-            if (_movementRoutine != null)
-                StopCoroutine(_movementRoutine);
+            this.StopCoroutineSafe(_movementRoutine);
+
             _movementRoutine = StartCoroutine(MoveToPointAlongSplineRoutine(point, maxHeightReach, duration));
         }
 
@@ -149,6 +158,8 @@ namespace TankLike.Combat
                 yield return null;
             }
         }
+        #endregion
+
 
         private IEnumerator MovementRoutine()
         {
@@ -183,7 +194,7 @@ namespace TankLike.Combat
         private void OnLifeTimeEnd()
         {
             IDamageable damagable = null;
-            Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
+            Impact.Impact(transform.position, damagable, Damage, _targetLayerMask, this);
         }
 
         /// <summary>
@@ -201,8 +212,16 @@ namespace TankLike.Combat
             }
 
             transform.position += deltaTime * speed * MovementDir;
+
+            // Rotate the bullet to face the movement direction
+            if (MovementDir != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(MovementDir);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, deltaTime * _rotationSpeed);
+            }
         }
 
+        #region Collision Logic
         private void OnTriggerEnter(Collider other)
         {
             if (!_isActive)
@@ -229,7 +248,7 @@ namespace TankLike.Combat
                     if (!damagable.IsInvincible)
                     {
                         // we need to get the contact point in the future for more accuracy, but this will do for now REWORK_CHECK
-                        Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
+                        Impact.Impact(transform.position, damagable, Damage, _targetLayerMask, this);
                         GameManager.Instance.AudioManager.Play(_impactAudio);
 
                         // checks for affectables??
@@ -244,7 +263,7 @@ namespace TankLike.Combat
                 else
                 {
                     // we need to get the contact point in the future for more accuracy, but this will do for now REWORK_CHECK
-                    Impact.Impact(transform.position, damagable, _damage, _targetLayerMask, this);
+                    Impact.Impact(transform.position, damagable, Damage, _targetLayerMask, this);
                     GameManager.Instance.AudioManager.Play(_impactAudio);
 
                     // checks for affectables??
@@ -260,12 +279,14 @@ namespace TankLike.Combat
 
         private void CheckForDeflection(Collider other)
         {
+            // TODO: check if the tag is needed
             if (_deflectionTags.Exists(t => other.CompareTag(t)) && Deflection != null)
             {
                 // handle deflection
                 Deflection.Deflect(_collider, ref MovementDir, _bumberDetectionDistance, _bumberLayers, other, _deflectionData, this);
             }
         }
+        #endregion
 
         public void DisableBullet()
         {
@@ -304,11 +325,15 @@ namespace TankLike.Combat
         public void PlayImpactEffects()
         {
             var impact = GameManager.Instance.VisualEffectsManager.Bullets.GetImpact(_bulletData.GUID);
-            impact.transform.position = transform.position;
-            var rotation = Quaternion.LookRotation(transform.forward);
-            impact.transform.rotation = rotation;
-            impact.gameObject.SetActive(true);
-            impact.Play();
+
+            if (impact != null)
+            {
+                impact.transform.position = transform.position;
+                var rotation = Quaternion.LookRotation(transform.forward);
+                impact.transform.rotation = rotation;
+                impact.gameObject.SetActive(true);
+                impact.Play();
+            }
         }
 
         private void DeactivateBullet()
@@ -327,7 +352,7 @@ namespace TankLike.Combat
             _targetIndicator = indicator;
         }
 
-        public TankComponents GetInstigator()
+        public UnitComponents GetInstigator()
         {
             return Instigator;
         }
@@ -338,12 +363,6 @@ namespace TankLike.Combat
         }
 
         #region Set Up Methods
-        // for the configurator (not a part of the game
-        public void SetUpDeflection(Deflection deflection)
-        {
-            Deflection = deflection;
-        }
-
         public void SetUpConfigurations()
         {
             if (Deflection != null)
@@ -357,14 +376,15 @@ namespace TankLike.Combat
             _bulletData = bulletData;
         }
 
-        public void SetTargetLayerMask(string tag)
+        public void SetTargetLayerMask(TankAlignment alignment)
         {
             _targetLayerMask = 0;
             _targetLayerMask |= Constants.MutualHittableLayer;
             _targetLayerMask |= Constants.GroundLayer;
             _targetLayerMask |= Constants.WallLayer; 
+            _targetLayerMask |= Constants.DestructibleLayer; 
 
-            if (tag == TanksTag.Enemy.ToString())
+            if (alignment == TankAlignment.ENEMY)
             {
                 _targetLayerMask |= 1 << Constants.EnemyDamagableLayer;
             }
@@ -396,12 +416,30 @@ namespace TankLike.Combat
         /// <param name="speed">The speed at which the bullet travels</param>
         /// <param name="damage">The damage the bullet inflicts to its target</param>
         /// <param name="maxDistance">The max distance the bullet travels. If it's set to 0, then it's assumed to be infinite</param>
-        public void SetValues(float speed, int damage, float maxDistance)
+        //public void SetValues(float speed, int damage, float maxDistance, bool canBeDeflected)
+        //{
+        //    _limitedDistance = maxDistance > 0;
+        //    _maxDistance = maxDistance;
+        //    _currentSpeed = speed;
+        //    Damage = damage;
+        //    CanBeDeflected = canBeDeflected;
+        //}
+
+        public void SetValues(BulletData data)
         {
-            _limitedDistance = maxDistance > 0;
-            _maxDistance = maxDistance;
-            _currentSpeed = speed;
-            _damage = damage;
+            _limitedDistance = data.MaxDistance > 0;
+            _maxDistance = data.MaxDistance;
+            _currentSpeed = data.Speed;
+            Damage = data.Damage;
+            CanBeDeflected = data.CanBeDeflected;
+
+            _useGravity = data.UseGravity;
+            _gravityMultiplier = data.GravityMultiplier;
+
+            if(data.Impact != null)
+            {
+                Impact = data.Impact;
+            }
         }
         #endregion
 
@@ -409,6 +447,11 @@ namespace TankLike.Combat
         public void SetElement(ElementEffect element)
         {
             Element = element;
+        }
+
+        public void SetImpact(OnImpact impact)
+        {
+            Impact = impact;
         }
         #endregion
 

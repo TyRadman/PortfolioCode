@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace TankLike
 {
-    public class BossesManager : MonoBehaviour
+    public class BossesManager : MonoBehaviour, IManager
     {
         [Header("Boss Room")]
         [SerializeField] private Transform _bossRoomCenter;
@@ -16,6 +16,7 @@ namespace TankLike
         private BossesDatabase _bossesDatabase;
         private Dictionary<BossType, Pool<UnitParts>> _bossPartsPools = new Dictionary<BossType, Pool<UnitParts>>();
 
+        public bool IsActive { get; private set; }
         public Transform BossRoomCenter => _bossRoomCenter;
         public Vector3 BossRoomSize => _bossRoomSize;
 
@@ -24,10 +25,21 @@ namespace TankLike
             _bossesDatabase = bossesDatabase;
         }
 
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             InitPools();
         }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            DisposePools();
+        }
+        #endregion
 
         public void SpawnBoss()
         {
@@ -36,32 +48,63 @@ namespace TankLike
 
         public void AddBoss(BossComponents boss)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             _bosses.Add(boss);
             boss.SetUp();
+            boss.Restart();
         }
 
         public void RemoveBoss(TankComponents boss)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             _bosses.Remove((BossComponents)boss);
         }
 
         public BossComponents GetBoss(int index)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return null;
+            }
+
             return _bosses[index];
         }
 
         public UnitParts GetBossPartsByType(BossType type)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return null;
+            }
+
             UnitParts parts = _bossPartsPools[type].RequestObject(Vector3.zero, Quaternion.identity);
             return parts;
         }
 
         public void SwitchBackBGMusic()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             StartCoroutine(SwitchBackBGMusicRoutine());
         }
 
-        public IEnumerator SwitchBackBGMusicRoutine()
+        private IEnumerator SwitchBackBGMusicRoutine()
         {
             GameManager.Instance.AudioManager.FadeOutBGMusic();
             yield return new WaitForSeconds(1f);
@@ -83,6 +126,16 @@ namespace TankLike
                 if (boss.PartsPrefab == null) continue;
                 _bossPartsPools.Add(boss.BossType, CreateBossPartsPool(boss));
             }
+        }
+
+        private void DisposePools()
+        {
+            foreach (KeyValuePair<BossType, Pool<UnitParts>> bossParts in _bossPartsPools)
+            {
+                bossParts.Value.Clear();
+            }
+
+            _bossPartsPools.Clear();
         }
 
         private Pool<UnitParts> CreateBossPartsPool(BossData bossData)

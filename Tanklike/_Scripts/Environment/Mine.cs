@@ -38,6 +38,7 @@ namespace TankLike.UnitControllers
 
         private void OnTriggerEnter(Collider other)
         {
+            // TODO: use alignment instead
             if (_targetTags.Exists(t => other.CompareTag(t)))
             {
                 StartCoroutine(ExplosionProcess());
@@ -86,18 +87,18 @@ namespace TankLike.UnitControllers
 
         public void SetTriggerers(TankComponents user)
         {
-            TanksTag userTag = user.Tag;
+            TankAlignment userTag = user.Alignment;
             _targetTags.Clear();
             // we cache the user of the mines to keep track of scores and level ups if the mine lands any kills
             _minesUser = user;
 
             // set the target according to the user's tankTag
-            if(userTag == TanksTag.Player)
+            if(userTag == TankAlignment.PLAYER)
             {
                 _targetsMask = GameManager.Instance.Constants.EnemiesLayerMask;
                 _targetTags.Add(GameManager.Instance.Constants.EnemyTag);
             }
-            else
+            else if (userTag == TankAlignment.ENEMY)
             {
                 _targetsMask = GameManager.Instance.Constants.PlayersLayerMask;
                 _targetTags.Add(GameManager.Instance.Constants.PlayerTag);

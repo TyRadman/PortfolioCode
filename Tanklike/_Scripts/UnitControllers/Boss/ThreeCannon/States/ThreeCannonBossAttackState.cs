@@ -21,6 +21,8 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
+            base.OnEnter();
+
             _isActive = true;
 
             ChooseAttack();

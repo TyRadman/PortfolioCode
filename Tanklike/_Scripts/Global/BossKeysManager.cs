@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Environment;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike
 {
+    using Environment;
+    using Utils;
     using UI.Notifications;
+    using System.Linq;
 
     public class BossKeysManager : MonoBehaviour, IManager
     {
@@ -29,36 +30,52 @@ namespace TankLike
             IsActive = false;
 
             _collectedKeys = 0;
+
+            GameManager.Instance.HUDController.UpdateKeysCount(_collectedKeys, _requiredKeysCount);
         }
         #endregion
 
-        public void DistributeKeysAcrossRemainingRooms(List<WaveData> waveDatas)
+        public void DistributeKeysAcrossRemainingRooms(List<Room> rooms)
         {
-            if (!IsActive)
+            if (_keysSpawned)
             {
-                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
                 return;
             }
-
-            if (_keysSpawned) return;
 
             _keysSpawned = true;
 
-            List<WaveData> wavesCopy = new List<WaveData>();
-            waveDatas.FindAll(w => w.CanHaveKey()).ForEach(w => wavesCopy.Add(w));
-
-            if (wavesCopy.Count < _requiredKeysCount)
-            {
-                Debug.LogError($"Not enough waves that can hold keys. Only have {wavesCopy.Count} waves that can hold keys.");
-                return;
-            }
+            List<Room> roomsList = rooms.FindAll(r => r is NormalRoom && r.RoomType is RoomType.Normal or RoomType.BossGate).ToList();
 
             for (int i = 0; i < _requiredKeysCount; i++)
             {
-                WaveData wave = wavesCopy.RandomItem();
-                wavesCopy.Remove(wave);
-                wave.HasKey = true;
+                Room room = roomsList.RandomItem();
+
+                if (room is not NormalRoom normalRoom)
+                {
+                    Debug.LogError($"Room {room.name} is not a NormalRoom");
+                    return;
+                }
+
+                roomsList.Remove(room);
+                normalRoom.FlagAsKeyHolder();
             }
+
+            //List<WaveData> wavesDataCopy = new List<WaveData>();
+
+            //wavesDataCopy = waveDatas.FindAll(w => w.CanHaveKey()).ToList();
+
+            //if (wavesDataCopy.Count < _requiredKeysCount)
+            //{
+            //    Debug.LogError($"Not enough waves that can hold keys. Only have {wavesDataCopy.Count} waves that can hold keys.");
+            //    return;
+            //}
+
+            //for (int i = 0; i < _requiredKeysCount; i++)
+            //{
+            //    WaveData wave = wavesDataCopy.RandomItem();
+            //    wavesDataCopy.Remove(wave);
+            //    wave.HasKey = true;
+            //}
         }
 
         public void OnKeyCollected()
@@ -69,10 +86,16 @@ namespace TankLike
                 return;
             }
 
-            _collectedKeys++;
+            SetBossKeysCount(++_collectedKeys);
+        }
 
-            string amountText = $" ({_collectedKeys}/{_requiredKeysCount})";
-            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, 0, amountText);
+        private void SetBossKeysCount(int count)
+        {
+            _collectedKeys = count;
+
+            GameManager.Instance.HUDController.UpdateKeysCount(_collectedKeys, _requiredKeysCount);
+
+            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, 0);
         }
 
         public bool HasEnoughKeys()

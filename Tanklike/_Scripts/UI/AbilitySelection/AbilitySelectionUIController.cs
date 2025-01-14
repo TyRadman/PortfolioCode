@@ -21,9 +21,6 @@ namespace TankLike.UI
 
         private AbilitySelectionPanel _currentSelectedPanel;
 
-        private const string ABILITY_SELECTION_SCENE = "S_AbilitySelection";
-        private const string LOBBY_SCENE = "S_Lobby";
-
         private void Start()
         {
             Cursor.visible = true;
@@ -52,26 +49,8 @@ namespace TankLike.UI
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
 
-            _loadingBar.SetActive(true);
-            StartCoroutine(LoadingSceneProcess());
-        }
-
-        private IEnumerator LoadingSceneProcess()
-        {
-            AsyncOperation loadOperation = SceneManager.LoadSceneAsync(LOBBY_SCENE, LoadSceneMode.Additive);
-
-            while (!loadOperation.isDone)
-            {
-                _loadingBarImage.fillAmount = loadOperation.progress;
-                yield return null;
-            }
-
-            AsyncOperation unloadOperation = SceneManager.UnloadSceneAsync(ABILITY_SELECTION_SCENE);
-
-            while (!unloadOperation.isDone)
-            {
-                yield return null;
-            }
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(Scenes.ABILITY_SELECTION, Scenes.LOBBY);
         }
     }
 }

@@ -12,5 +12,6 @@ namespace TankLike.UI.DamagePopUp
         public Vector2Int AmountRange;
         public Color TextColor;
         public string Prefix;
+        [field: SerializeField] public string Suffix { get; private set; }
     }
 }

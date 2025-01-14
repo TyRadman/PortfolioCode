@@ -36,8 +36,10 @@ namespace TankLike.UI
         {
             _selectedItem = _normalShotSelections.Find(d => d.Index == index);
             Weapon selectedWeapon = _selectedItem.Weapon;
-            _abilityNameText.text = selectedWeapon.Name;
-            _abilityNameDescription.text = selectedWeapon.Description;
+
+            // TODO: must use the holder's name and description
+            //_abilityNameText.text = selectedWeapon.Name;
+            //_abilityNameDescription.text = selectedWeapon.Description;
             PlayerPrefs.SetInt(nameof(_selectionData.Weapons), index);
             _nextButton.gameObject.SetActive(true);
         }

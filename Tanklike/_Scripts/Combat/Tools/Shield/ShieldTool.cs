@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using UnitControllers.Shields;
+
     [CreateAssetMenu(fileName = NAME_PREFIX + "Shield", menuName = ASSET_MENU_ROOT + "Shiled")]
     public class ShieldTool : Tool
     {
@@ -13,31 +15,32 @@ namespace TankLike.Combat
         private Shield _createdShield;
         private Transform _tankTransform;
 
-        public override void SetUp(TankComponents tankTransform)
+        public override void SetUp(TankComponents components)
         {
-            base.SetUp(tankTransform);
+            base.SetUp(components);
 
-            _tankTransform = tankTransform.transform;
+            _tankTransform = components.transform;
             // create the shield
-            _createdShield = Instantiate(_shieldPrefab, tankTransform.transform);
+            _createdShield = Instantiate(_shieldPrefab, components.transform);
+            _createdShield.SetUp(components);
             _createdShield.transform.localPosition = Vector3.zero;
             _createdShield.SetShieldAlpha(0f);
             // set the alignment of the shield
-            _createdShield.SetShieldUser(TankAlignment.PLAYER);
+            _createdShield.SetShieldUser(components.Alignment);
             // set up the shield's size
-            _createdShield.SetSize(tankTransform.GetComponent<TankAdditionalInfo>().ShieldScale);
+            _createdShield.SetSize(components.AdditionalInfo.ShieldScale);
         }
 
         public override void UseTool()
         {
             base.UseTool();
-            _createdShield.ActivateShield(true, _tankTransform);
+            _createdShield.ActivateShield();
             _tank.Invoke(nameof(DeactivateShield), _duration);
         }
 
         private void DeactivateShield()
         {
-            _createdShield.ActivateShield(false, _tankTransform);
+            _createdShield.DeactivateShield();
         }
 
         public override void ResetValues(Transform tankTransform)

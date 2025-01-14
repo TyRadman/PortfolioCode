@@ -1,13 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UnitControllers;
-using TankLike.UI.Notifications;
-using TankLike.Utils;
 
 namespace TankLike
 {
+    using TankLike.UI.DamagePopUp;
     using UI.HUD;
+    using TankLike.UnitControllers;
+    using TankLike.Utils;
+    using System;
 
     /// <summary>
     /// This script holds all the information about the players, like their references for the enemies to access, their selected characters, upgrades and anything that other classes might need from the players.
@@ -17,10 +18,22 @@ namespace TankLike
         // TODO: should be taken out as a class of its own and cleaned
         public class PlayerTransforms
         {
-            public Transform PlayerTransform;
-            public Transform ImageTransform;
+            [field: SerializeField]
+            public Transform PlayerTransform
+            {
+                get; private set;
+            }
+            [field: SerializeField]
+            public Transform ImageTransform
+            {
+                get; private set;
+            }
             public int PlayerIndex;
-            public PlayerPredictedPosition PredictedPosition;
+            [field: SerializeField]
+            public PlayerPredictedPosition PredictedPosition
+            {
+                get; private set;
+            }
 
             public PlayerTransforms(PlayerComponents components)
             {
@@ -47,16 +60,22 @@ namespace TankLike
 
         //[field: SerializeField] public int CoinsAmount { get; private set; }
         public static int PlayerLayer = 11;
-        public LayerMask PlayerLayerMask;
+        [field: SerializeField]
+        public LayerMask PlayerLayerMask
+        {
+            get; private set;
+        }
 
         [SerializeField] private List<GameplaySettings> _playersGameplaySettings;
         [SerializeField] private OffScreenIndicatorProfile[] _offScreenIndicatorProfiles;
         
         private Dictionary<PlayerType, Pool<UnitParts>> _playerPartsPools = new Dictionary<PlayerType, Pool<UnitParts>>();
         private List<PlayerComponents> _players = new List<PlayerComponents>();
+        private List<MiniPlayerComponents> _miniPlayers = new List<MiniPlayerComponents>();
         private List<PlayerTransforms> _playersTransforms = new List<PlayerTransforms>();
         private GameplaySettings _defaultSettings;
         private PlayersDatabase _playersDatabase;
+        private bool _gameEndsOnPlayersDeath;
 
         public void SetReferences(PlayersDatabase playersDatabase)
         {
@@ -75,7 +94,16 @@ namespace TankLike
             PlayerSpawner.SetUp();
             Constraints.SetUp();
             Coins.SetUp();
+
+            //PlayerSpawner.OnPlayersSetupStarted += OnPlayerSetupStarted;
+
+            GameManager.Instance.ReportManager.OnEnemyEliminated += AddExperienceToPlayers;
         }
+
+        //private void OnPlayerSetupStarted(PlayerComponents player)
+        //{
+        //    player.TankBodyParts.SetBodyParts(GetPlayerPartsByType((player.Stats as PlayerData).PlayerType));
+        //}
 
         public void Dispose()
         {
@@ -83,9 +111,19 @@ namespace TankLike
 
             DisposePools();
 
+            _players.ForEach(p => p.Dispose());
+
             PlayerSpawner.Dispose();
             Constraints.Dispose();
             Coins.Dispose();
+
+            _players.Clear();
+            _playersTransforms.Clear();
+
+            PlayersCount = 0;
+            ActivePlayersCount = 0;
+
+            GameManager.Instance.ReportManager.OnEnemyEliminated -= AddExperienceToPlayers;
         }
         #endregion
 
@@ -120,14 +158,11 @@ namespace TankLike
 
         private void AddPlayersAsOffScreenIndicatorTargets()
         {
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < _players.Count; i++)
             {
-                OffScreenIndicatorProfile profile = _offScreenIndicatorProfiles[i];
-                profile.FollowTarget = true;
-                profile.IsShown = true;
-                profile.TargetTransform = _players[i].transform;
-                GameManager.Instance.OffScreenIndicator.AddTarget(profile);
-                profile.Icon.SetColor(GetPlayerColor(i));
+                PlayerComponents player = _players[i];
+                player.GetComponent<OffScreenIndicatorTarget>().SetColor((player.Stats as PlayerData).Skins[i].Color);
+                player.GetComponent<OffScreenIndicatorTarget>().Enable();
             }
         }
 
@@ -185,32 +220,6 @@ namespace TankLike
             else
             {
                 return _playersTransforms[1].PlayerTransform;
-            }
-        }
-
-        public Transform GetClosestPlayerImage(Vector3 startPoint)
-        {
-            if (!IsActive)
-            {
-                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
-                return null;
-            }
-
-            if (ActivePlayersCount == 1)
-            {
-                return _playersTransforms[0].ImageTransform;
-            }
-
-            float distanceToPlayerOne = (_playersTransforms[0].ImageTransform.position - startPoint).sqrMagnitude;
-            float distanceToPlayerTwo = (_playersTransforms[1].ImageTransform.position - startPoint).sqrMagnitude;
-
-            if (distanceToPlayerOne < distanceToPlayerTwo)
-            {
-                return _playersTransforms[0].ImageTransform;
-            }
-            else
-            {
-                return _playersTransforms[1].ImageTransform;
             }
         }
 
@@ -320,7 +329,7 @@ namespace TankLike
             return _players.Find(p => !p.IsAlive).PlayerIndex;
         }
 
-        public List<Transform> GetPlayers()
+        public List<Transform> GetPlayersTransforms()
         {
             if (!IsActive)
             {
@@ -332,6 +341,49 @@ namespace TankLike
             _players.ForEach(p => transforms.Add(p.transform));
             return transforms;
         }
+
+        public List<PlayerComponents> GetPlayers(bool ignoreDeadPlayers = false)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return null;
+            }
+
+            if (ignoreDeadPlayers)
+            {
+                return _players.FindAll(p => p.IsAlive);
+            }
+
+            return _players;
+        }
+
+        /// <summary>
+        /// Returns the players and the miniplayers
+        /// </summary>
+        /// <returns></returns>
+        public List<UnitComponents> GetAllActivePlayerControllers()
+        {
+            List<UnitComponents> players = new List<UnitComponents>();
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                if (_players[i].IsAlive)
+                {
+                    players.Add(_players[i]);
+                }
+            }
+
+            for (int i = 0; i < _miniPlayers.Count; i++)
+            {
+                if (_miniPlayers[i].IsActive)
+                {
+                    players.Add(_miniPlayers[i]);
+                }
+            }
+
+            return players;
+        } 
 
         public UnitParts GetPlayerPartsByType(PlayerType type)
         {
@@ -355,7 +407,7 @@ namespace TankLike
             }
 
             _playersGameplaySettings[playerIndex].AimSensitivity = amount;
-            _players[playerIndex].Crosshair.SetAimSensitivity(amount);
+            _players[playerIndex].CrosshairController.SetAimSensitivity(amount);
         }
 
         public GameplaySettings GetGameplaySettings(int playerIndex)
@@ -408,20 +460,30 @@ namespace TankLike
             GameManager.Instance.CameraManager.PlayerCameraFollow.RemoveCameraFollow(playerIndex);
             _playersTransforms.Remove(_playersTransforms.Find(t => t.PlayerIndex == _players[playerIndex].PlayerIndex));
             ActivePlayersCount = _playersTransforms.Count;
-            GameManager.Instance.OffScreenIndicator.EnableOffScreenIndicatorForPlayer(playerIndex, false);
+            GameManager.Instance.HUDController.OffScreenIndicator.EnableOffScreenIndicatorForPlayer(playerIndex, false);
             bool allPlayersDead = _players.TrueForAll(p => !p.IsAlive);
 
-            if (allPlayersDead)
+            if (allPlayersDead && _gameEndsOnPlayersDeath)
             {
                 GameManager.Instance.OnGameOver();
             }
+            else
+            {
+                player.MiniPlayerSpawner.SpawnMiniPlayer();
+                GameManager.Instance.HUDController.PlayerHUDs[player.PlayerIndex].SwitchToMiniPlayerHUD();
+            }
+        }
+
+        public void SetGameoverOnDeath(bool value)
+        {
+            _gameEndsOnPlayersDeath = value;
         }
 
         private void SetColors(PlayerComponents player)
         {
             int index = ActivePlayersCount - 1;
-            Color color = ((PlayerData)player.Stats).Skins[index].Color;
-            _players[index].Crosshair.SetColor(color);
+            Color color = (player.Stats as PlayerData).Skins[index].Color;
+            _players[index].CrosshairController.SetColor(color);
         }
 
         private void SetPlayerTexture(PlayerComponents player)
@@ -432,13 +494,7 @@ namespace TankLike
             _players[index].TankBodyParts.SetTextureForMainMaterial(texture);
         }
 
-        private Color GetPlayerColor(int playerIndex)
-        {
-            Color color = ((PlayerData)_players[playerIndex].Stats).Skins[playerIndex].Color;
-            return color;
-        }
-
-        public float GetHealth()
+        public float GetPlayersTotalHealth01()
         {
             if (!IsActive)
             {
@@ -447,7 +503,7 @@ namespace TankLike
             }
 
             float health = 0f;
-            _players.ForEach(p => health += p.Health.GetHealth());
+            _players.ForEach(p => health += p.Health.GetHealthAmount01());
             return health;
         }
 
@@ -477,6 +533,85 @@ namespace TankLike
 
             _players.ForEach(p => p.Constraints.ApplyConstraints(apply, constraints));
         }
+
+        public void AddExperienceToPlayers(EnemyData data, int playerIndex)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            if(playerIndex >= _players.Count)
+            {
+                Debug.LogError($"Player index {playerIndex} is higher than the number of players {_players.Count}");
+                return;
+            }
+
+            if(playerIndex < 0)
+            {
+                return;
+            }
+
+            _players[playerIndex].Experience.AddExperience(data.ExperiencePerKill);
+        }
+
+        public void AddExperienceToPlayers(EntityEliminationReport report)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            if(report == null)
+            {
+                return;
+            }
+
+            int playerIndex = report.PlayerIndex;
+
+            if (playerIndex >= _players.Count || playerIndex < 0)
+            {
+                //Debug.LogError($"Player index {playerIndex} is incorrect.");
+                return;
+            }
+
+            if(report.Target is not TankComponents tank)
+            {
+                Debug.LogError($"Target is not a tank or entity.");
+                return;
+            }
+
+            if (tank is EnemyComponents enemy)
+            {
+                //Vector3 position = report.Position;
+                Vector3 position = _players[report.PlayerIndex].transform.position;
+
+                GameManager.Instance.DamagePopUpManager.DisplayPopUp(DamagePopUpType.XP, (enemy.Stats as EnemyData).ExperiencePerKill, position);
+                _players[playerIndex].Experience.AddExperience((enemy.Stats as EnemyData).ExperiencePerKill);
+            }
+            else if (tank is BossComponents boss)
+            {
+                //Vector3 position = report.Position;
+                Vector3 position = _players[report.PlayerIndex].transform.position;
+
+                GameManager.Instance.DamagePopUpManager.DisplayPopUp(DamagePopUpType.XP, (boss.Stats as EnemyData).ExperiencePerKill, position);
+                _players[playerIndex].Experience.AddExperience((boss.Stats as EnemyData).ExperiencePerKill);
+            }
+        }
+
+        internal bool HasDeadPlayers()
+        {
+            return _players.Exists(p => !p.IsAlive);
+        }
+
+        #region MiniPlayers
+        public void AddMiniPlayer(MiniPlayerComponents miniPlayer)
+        {
+            _miniPlayers.Add(miniPlayer);
+        }
+        #endregion
 
         #region Pools
         private void InitPools()
@@ -513,6 +648,14 @@ namespace TankLike
                 0
             );
             return pool;
+        }
+
+        internal void OnSinglePlayerMode()
+        {
+            if (_players[0] != null && _players[0].TryGetComponent(out OffScreenIndicatorTarget target))
+            {
+                target.Disable();
+            }
         }
         #endregion
     }

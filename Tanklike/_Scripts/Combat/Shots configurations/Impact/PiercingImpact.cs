@@ -15,7 +15,7 @@ namespace TankLike.UnitControllers
             // if there is a target, then apply damage to it, play the impact effects, and continue
             if (target != null)
             {
-                target.TakeDamage(damage, Vector3.zero, bullet.GetInstigator(), bullet.transform.position);
+                target.TakeDamage(damage, Vector3.zero, bullet.GetInstigator(), bullet.transform.position, bullet);
                 // play the effect 
                 bullet.PlayImpactEffects();
             }

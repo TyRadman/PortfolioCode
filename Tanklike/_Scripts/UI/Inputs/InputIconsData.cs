@@ -9,7 +9,13 @@ namespace TankLike.UI
     public class InputIconsData 
     {
         public string Action;
+        public List<string> Actions;
         public int KeyboardSpriteIndex;
         public int ControllerSpriteIndex;
+
+        public bool HasAction(string action)
+        {
+            return Actions.Contains(action);
+        }
     }
 }

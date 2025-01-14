@@ -1,12 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Misc;
-using TankLike.ScreenFreeze;
-using TankLike.UnitControllers;
 using UnityEngine;
 
-namespace TankLike.Combat
+namespace TankLike.Combat.Abilities
 {
+    using Combat.SkillTree;
+    using Combat.SkillTree.Upgrades;
+    using Misc;
+    using ScreenFreeze;
+    using UnitControllers;
+
     public abstract class Ability : ScriptableObject
     {
         /// <summary>
@@ -14,18 +17,24 @@ namespace TankLike.Combat
         /// </summary>
         public const string PREFIX = "Ability_";
 
-        [Header("Values")]
-        [SerializeField][Range(0.5f, 20)] protected float _duration = 0.5f;
-        [SerializeField] protected float _coolDown = 3f;
-        [SerializeField] private bool _canHoldAbility;
-        [SerializeField] private ScreenFreezeData _freezeData;
+        public List<SkillProperties> SkillDisplayProperties { get; set; } = new List<SkillProperties>();
 
-        protected Transform _tank;
+        [Header("Values")]
+        [SerializeField] private ScreenFreezeData _freezeData;
+        protected float _duration = 0.5f;
+
+        protected Transform _tankTransform;
         protected TankComponents _components;
+
+        /// <summary>
+        /// Whether the ability has been set up or not
+        /// </summary>
+        public bool IsSetUp { get; private set; } = false;
 
         public virtual void SetUp(TankComponents components)
         {
-            _tank = components.transform;
+            IsSetUp = true;
+            _tankTransform = components.transform;
             _components = components;
         }
 
@@ -40,35 +49,32 @@ namespace TankLike.Combat
                 GameManager.Instance.ScreenFreezer.FreezeScreen(_freezeData);
             }
         }
-        
+
         /// <summary>
         /// Called when the ability hold-down starts
         /// </summary>
-        public virtual void OnAbilityHoldStart()
-        {
-
-        }
+        public abstract void OnAbilityHoldStart();
 
         /// <summary>
         /// Called during the coroutine of the super ability hold down.
         /// </summary>
-        public virtual void OnAbilityHoldUpdate()
-        {
-
-        }
+        public abstract void OnAbilityHoldUpdate();
 
         /// <summary>
         /// Called when the ability finishes performing.
         /// </summary>
-        public virtual void OnAbilityFinished()
-        {
-
-        }
+        public abstract void OnAbilityFinished();
 
         /// <summary>
         /// Called when the ability is interrupted.
         /// </summary>
-        public virtual void OnAbilityInterrupted()
+        public abstract void OnAbilityInterrupted();
+
+        /// <summary>
+        /// Upgrades the values of the ability.
+        /// </summary>
+        /// <param name="upgrade">The asset holding the upgrades.</param>
+        public virtual void Upgrade(SkillUpgrade upgrade)
         {
 
         }
@@ -86,18 +92,45 @@ namespace TankLike.Combat
         /// Sets up the indicator by setting values that the ability has.
         /// </summary>
         /// <param name="indicator"></param>
-        public virtual void SetUpIndicatorSpecialValues(BaseIndicator indicator)
-        {
-
-        }
+        public abstract void SetUpIndicatorSpecialValues(AirIndicator indicator);
 
         /// <summary>
         /// Disposes the ability and all its dependencies.
         /// </summary>
         public virtual void Dispose()
         {
-
+            IsSetUp = false;
         }
+
+        /// <summary>
+        /// Cache the skills' properties from the ability's crucial variables.
+        /// </summary>
+        public virtual void PopulateSkillProperties()
+        {
+            //SkillDisplayProperties.Clear();
+        }
+
+        #region 
+        /// <summary>
+        /// Adds a property that will be display when the skill is viewed in the skills selection menu or the skill tree.
+        /// </summary>
+        /// <param name="propertyName">The name of the property to display.</param>
+        /// <param name="value">The value of the property.</param>
+        /// <param name="valueColor">The color in which the value will be display.</param>
+        /// <param name="valueUnit">The unit that will be displayed after the value.</param>
+        public void AddSkillProperty(string propertyName, float value, Color valueColor, string valueUnit)
+        {
+            SkillProperties property = new SkillProperties()
+            {
+                Name = propertyName,
+                Value = value.ToString(),
+                DisplayColor = valueColor,
+                UnitString = valueUnit
+            };
+
+            SkillDisplayProperties.Add(property);
+        }
+        #endregion
 
         private void OnDestroy()
         {

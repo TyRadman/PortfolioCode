@@ -1,18 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Combat;
-using TankLike.Misc;
-using TankLike.Utils;
 using UnityEngine;
-using static TankLike.PlayersManager;
 
 namespace TankLike.UnitControllers.States
 {
+    using Combat;
+    using Misc;
+    using Utils;
+    using static PlayersManager;
+
     [CreateAssetMenu(fileName = "State_ThreeCannon_RocketLauncherAttack", menuName = MENU_PATH + "Three Cannon/Rocket Launcher Attack State")]
     public class ThreeCannonBossRocketLauncherState : BossAttackState
     {
         [Header("Rocket Launcher Attack")]
         [SerializeField] private NormalShot _rocketLauncherWeapon;
+        [SerializeField] private IndicatorEffects.IndicatorType _indicatorType;
         [SerializeField] private int _rocketLauncherProjectilesPerAttack;
         [SerializeField] private float _rocketLauncherTimeBetweenProjectiles = 0.25f;
         [SerializeField] private float _rocketImpactRadius = 5;
@@ -27,17 +29,27 @@ namespace TankLike.UnitControllers.States
         private Transform _targetTransform;
         private PlayerTransforms _currentTarget;
         private Coroutine _attackCoroutine;
+        private BulletData _bulletData;
         private bool _followTargetTransform;
 
         public override void SetUp(StateMachine<BossStateType> stateMachine, BossComponents bossComponents)
         {
             base.SetUp(stateMachine, bossComponents);
             _movement.OnTargetFaced += OnTargetFacedHandler;
+
+            _bulletData = new BulletData()
+            {
+                Speed = _rocketLauncherWeapon.BulletSpeed,
+                Damage = _rocketLauncherWeapon.Damage,
+                MaxDistance = _rocketLauncherWeapon.MaxDistance,
+                CanBeDeflected = _rocketLauncherWeapon.CanBeDeflected
+            };
         }
 
         public override void OnEnter()
         {
-            Debug.Log("ROCKET LAUNCHER ATTACK STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             _followTargetTransform = false;
@@ -47,8 +59,8 @@ namespace TankLike.UnitControllers.States
 
             if (rand <= _randomTargetChance)
             {
-                var alivePlayers = GameManager.Instance.PlayersManager.GetPlayerTransforms();
-                var targetPlayerTransform = alivePlayers[Random.Range(0, alivePlayers.Count)];
+                List<PlayerTransforms> alivePlayers = GameManager.Instance.PlayersManager.GetPlayerTransforms();
+                PlayerTransforms targetPlayerTransform = alivePlayers[Random.Range(0, alivePlayers.Count)];
                 _attackController.SetTarget(targetPlayerTransform);
                 _currentTarget = targetPlayerTransform;
                 _targetTransform = targetPlayerTransform.PlayerTransform;
@@ -56,7 +68,7 @@ namespace TankLike.UnitControllers.States
             }
             else
             {
-                var targetPlayerTransform = GameManager.Instance.PlayersManager.GetFarthestPlayer(_movement.transform.position);
+                PlayerTransforms targetPlayerTransform = GameManager.Instance.PlayersManager.GetFarthestPlayer(_movement.transform.position);
                 _attackController.SetTarget(targetPlayerTransform);
                 _currentTarget = targetPlayerTransform;
                 _targetTransform = targetPlayerTransform.PlayerTransform;
@@ -64,11 +76,11 @@ namespace TankLike.UnitControllers.States
             }
 
             _movement.ResetTargetIsFaced();
-            //Debug.Log(_target.gameObject.name);
         }
 
         public override void OnUpdate()
         {
+            //Debug.Log("Update rocket launcher");
             if (_followTargetTransform)
             {
                 _movement.FaceTarget(_targetTransform);
@@ -85,7 +97,9 @@ namespace TankLike.UnitControllers.States
             _followTargetTransform = false;
 
             if (_attackCoroutine != null)
+            {
                 _attackController.StopCoroutine(_attackCoroutine);
+            }
         }
 
         public override void OnDispose()
@@ -95,18 +109,21 @@ namespace TankLike.UnitControllers.States
         private void OnTargetFacedHandler()
         {
             if (!_isActive)
+            {
                 return;
+            }
 
             _followTargetTransform = true;
 
-            //_attackController.Attack(ThreeCannonAttackType.RocketLauncher, OnAttackFinished);
             _attackCoroutine = _attackController.StartCoroutine(RocketLauncherAttackRoutine());
         }
 
         private void OnAttackFinished()
         {
             if (!_isActive)
+            {
                 return;
+            }
 
             _stateMachine.ChangeState(BossStateType.Move);
         }
@@ -114,16 +131,12 @@ namespace TankLike.UnitControllers.States
         #region Attack Methods
         private IEnumerator RocketLauncherAttackRoutine()
         {
-            List<Indicator> targetIndicators = new List<Indicator>();
-
-            //CalculatePositions(_rocketImpactRadius, targetPoints);
-
             for (int i = 0; i < _rocketLauncherProjectilesPerAttack; i++)
             {
                 //Play animation
                ((ThreeCannonBossAnimations)_animations).TriggerRocketLauncherAnimation();
 
-                var newPoint = _currentTarget.ImageTransform.position;
+                Vector3 newPoint = _currentTarget.ImageTransform.position;
                 newPoint.y = 0.16f; // dirty, have a variable for it
 
                 LaunchRocket(newPoint);
@@ -157,7 +170,7 @@ namespace TankLike.UnitControllers.States
             bullet.EnableBullet();
             bullet.SetActive(true);
             bullet.SetTargetLayerMask(_rocketLauncherTargetLayers);
-            bullet.SetValues(_rocketLauncherWeapon.BulletSpeed, _rocketLauncherWeapon.Damage, _rocketLauncherWeapon.MaxDistance);
+            bullet.SetValues(_bulletData);
             // set reference to the bullet data
             bullet.SetUpBulletdata(_rocketLauncherWeapon.BulletData);
             // assign the shooter of the bullet
@@ -167,13 +180,13 @@ namespace TankLike.UnitControllers.States
             GameManager.Instance.AudioManager.Play(_rocketLauncherWeapon.ShotAudio);
 
             //Spawn indicators
-            Vector3 indicatorSize = new Vector3(((AreaOfEffectImpact)bullet.Impact).AreaRadius * 2, 1, ((AreaOfEffectImpact)bullet.Impact).AreaRadius * 2);
-            var indicatorType = _rocketLauncherWeapon.IndicatorType;
+            AreaOfEffectImpact AOEImpact = bullet.Impact as AreaOfEffectImpact;
+            float AOERadius = AOEImpact.AreaRadius * 2f;
+            Vector3 indicatorSize = new Vector3(AOERadius, 1f, AOERadius);
 
-            Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(indicatorType);
+            Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_indicatorType);
             indicator.gameObject.SetActive(true);
-            indicator.transform.position = targetPoint;
-            indicator.transform.rotation = Quaternion.identity;
+            indicator.transform.SetPositionAndRotation(targetPoint, Quaternion.identity);
             indicator.transform.localScale = indicatorSize;
             indicator.Play(_rocketLauncherProjectileInAirDuration);
 
@@ -185,8 +198,6 @@ namespace TankLike.UnitControllers.States
         {
             Vector3[] targetPoints = new Vector3[pointsCount];
 
-            Indicator[] targetIndicators = new Indicator[pointsCount];
-
             CalculatePositions(_rocketImpactRadius, targetPoints);
 
             for (int i = 0; i < targetPoints.Length; i++)
@@ -194,38 +205,34 @@ namespace TankLike.UnitControllers.States
                 LaunchRocket(targetPoints[i]);
                 yield return new WaitForSeconds(0.05f);
             }
-
-            //yield return new WaitForSeconds(2f);
-
-            //for (int i = 0; i < targetIndicators.Length; i++)
-            //{
-            //    targetIndicators[i].TurnOff();
-            //}
         }
 
-        private void CalculatePositions(/*Vector3 mainPoint, float missilesSpreadRange,*/ float impactRange, Vector3[] points)
+        private void CalculatePositions(float impactRange, Vector3[] points)
         {
-            var totalPoints = points.Length;
-            var pos = _attackController.transform.position;
+            int totalPoints = points.Length;
 
             if (totalPoints == 0)
+            {
                 return;
+            }
 
             for (int i = 0; i < totalPoints; i++)
             {
-                var count = 0;
+                int count = 0;
+
                 while (true)
                 {
-                    var newPoint = Helper.GetRandomPointInsideSphere(_currentTarget.ImageTransform.position, 10);
+                    Vector3 newPoint = Helper.GetRandomPointInsideSphere(_currentTarget.ImageTransform.position, 10);
                     newPoint.y = _rocketLauncherProjectileIndicatorHeight;
 
                     points[i] = newPoint;
 
-                    if (/*new Vector3(newPoint.x - pos.x, 0f, newPoint.z - pos.z).sqrMagnitude >= minFireDistance &&*/ !PointIsOverlapping(newPoint, i, impactRange, points))
+                    if (!PointIsOverlapping(newPoint, i, impactRange, points))
                     {
                         points[i] = newPoint;
                         break;
                     }
+
                     count++;
 
                     if (count > _rocketLauncherProjectilesPerAttack)
@@ -243,8 +250,11 @@ namespace TankLike.UnitControllers.States
             for (int i = 1; i < maxIndex; i++)
             {
                 if (Vector3.SqrMagnitude(point - points[i]) < Mathf.Pow(explosionRange, 2f))
+                {
                     return true;
+                }
             }
+
             return false;
         }
         #endregion

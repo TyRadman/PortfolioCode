@@ -7,6 +7,7 @@ namespace TankLike.Tutorial
 {
     using UI.HUD;
     using UnitControllers;
+    using Sound;
 
     public class WaypointMarker : MonoBehaviour
     {
@@ -17,29 +18,36 @@ namespace TankLike.Tutorial
         [Header("Events")]
         [SerializeField] private UnityEvent _onTriggered;
         [SerializeField] private AbilityConstraint _constraints;
-        [HideInInspector] public TutorialManager TutorialManager;
+        public TutorialManager Manager;
         [SerializeField] private List<TutorialAchievement> _achievements = new List<TutorialAchievement>();
         public List<EnemySpawn> EnemiesToSpawn = new List<EnemySpawn>();
 
         [SerializeField] private UnityEvent _onAchievementsCompleted;
+        [SerializeField] private Audio _onTriggerAudio;
+        [SerializeField] private Audio _onAchievementCompletedAudio;
 
 
         private IEnumerator Start()
         {
-            TutorialManager = FindObjectOfType<TutorialManager>();
             _offScreenIndicatorProfile.SetUp(transform, false);
             yield return new WaitForSeconds(1f);
-            GameManager.Instance.OffScreenIndicator.AddTarget(_offScreenIndicatorProfile);
-
+            GameManager.Instance.HUDController.OffScreenIndicator.AddTarget(_offScreenIndicatorProfile);
         }
 
         private void CheckAchievements()
         {
             if (_achievements.TrueForAll(a => a.IsAchieved()))
             {
+                _achievements.ForEach(a => a.OnAchievementCompleted = null);
                 _onAchievementsCompleted?.Invoke();
-                GameManager.Instance.PlayersManager.Constraints.RemoveConstraints(_constraints);
+                RemoveConstraints();
+                GameManager.Instance.AudioManager.Play(_onAchievementCompletedAudio);
             }
+        }
+
+        public void RemoveConstraints()
+        {
+            GameManager.Instance.PlayersManager.Constraints.RemoveConstraints(_constraints);
         }
 
         #region Trigger Enter
@@ -55,14 +63,21 @@ namespace TankLike.Tutorial
         {
             if(EnemiesToSpawn.Count > 0)
             {
-                TutorialManager.SpawnEnemies(this);
+                Manager.SpawnEnemies(this);
             }
 
-            TutorialManager.SetRespawnPoint(transform);
             PlayCompletionAnimation();
+            GameManager.Instance.AudioManager.Play(_onTriggerAudio);
+
+            Manager.SetRespawnPoint(transform);
+
             _onTriggered?.Invoke();
-            GameManager.Instance.OffScreenIndicator.RemoveTarget(_offScreenIndicatorProfile);
+
+            GameManager.Instance.HUDController.OffScreenIndicator.RemoveTarget(_offScreenIndicatorProfile);
+
             GameManager.Instance.PlayersManager.Constraints.ApplyConstraints(_constraints);
+            Manager.SetCurrentConstraints(_constraints);
+
             SetUpAchievements();
         }
 
@@ -86,6 +101,5 @@ namespace TankLike.Tutorial
         public EnemyType Enemy;
         public Transform SpawnPoint;
         public List<DifficultyModifier> Modifiers = new List<DifficultyModifier>();
-
     }
 }

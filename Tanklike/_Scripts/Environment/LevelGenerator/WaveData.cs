@@ -1,18 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using UnitControllers;
+
     [CreateAssetMenu(fileName = "WD_00", menuName = "Level/Enemy wave data")]
     public class WaveData : ScriptableObject
     {
+        [field : SerializeField] public bool HasKey { get; set; } = false;
         [Range(1, 5)] public int Difficulty = 1;
         public List<EnemyType> Enemies;
-        [SerializeField] private EnemiesDatabase _dataBase;
         public int Capacity;
-        public bool HasKey = false;
+        [SerializeField] private EnemiesDatabase _dataBase;
 
         public void SetCapacity()
         {
@@ -22,7 +23,10 @@ namespace TankLike.Environment
             {
                 EnemyData enemy = _dataBase.GetAllEnemies().Find(e => e.EnemyType == Enemies[i]);
 
-                if (enemy == null) continue;
+                if (enemy == null)
+                {
+                    continue;
+                }
 
                 Capacity += enemy.Rank;
             }
@@ -39,9 +43,9 @@ namespace TankLike.Environment
                 return true;
             }
 
-            if(Enemies.Exists(e => e == EnemyType.Aimer || e == EnemyType.Archer || e == EnemyType.Laser))
+            if(Enemies.Exists(e => e is EnemyType.Aimer or EnemyType.Archer or EnemyType.Laser))
             {
-                //Debug.Log($"WHYYYY is it false at {this.name}");
+                Debug.Log($"WHYYYY is it false at {this.name}");
             }
 
             return false;

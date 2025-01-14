@@ -2,14 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 using UnityEngine;
-using TankLike.Combat;
-using TankLike.Utils;
-using TankLike.Misc;
-using TankLike.Cam;
-using static TankLike.PlayersManager;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+    using static PlayersManager;
+    
     public enum ThreeCannonAttackType
     {
         MainMachineGun,
@@ -22,6 +20,7 @@ namespace TankLike.UnitControllers
     {
         public Action OnAttackFinished;
         public Action OnGroundPoundTriggered;
+        public Action OnGroundPoundTriggerStay;
         public Action OnGroundPoundImpact;
 
         [field: SerializeField, Header("Machine Gun Attack")] public Transform MachineGunShootingPoint { get; private set; }
@@ -36,11 +35,13 @@ namespace TankLike.UnitControllers
 
         [field: SerializeField, Header("Ground Pound")] public ParticleSystem GroundPoundParticles { get; private set; }
         [field: SerializeField] public CollisionEventPublisher GroundPoundTrigger { get; private set; }
+        [field: SerializeField] public Vector2 GroundPoundTriggerDurationRange { get; private set; }
 
         [field: SerializeField, Header("Rocket Launcher Attack")] public Transform RocketLauncherShootingPoint { get; private set; }
 
+        public bool IsActive { get; private set; }
 
-        private BossComponents _components;
+        private BossComponents _bossComponents;
         private EnemyShooter _shooter;
         private ThreeCannonBossAnimations _animations;
         private PlayerTransforms _currentTarget;
@@ -49,30 +50,30 @@ namespace TankLike.UnitControllers
         private Coroutine _sideMachineGunsAnimationCoroutine;
         private Vector3 _roomCenter;
         private Vector3 _roomSize;
-        public bool IsActive { get; private set; }
+        private List<IPoolable> _activePoolables = new List<IPoolable>();
+        private float _groundPoundTimer;
+        private float _groundPoundCurrentTriggerDuration;
+        private bool _groundPoundTriggerStarted;
+        private Coroutine _groundPoundTriggerCoroutine;
 
-        public void SetUp(BossComponents components)
+        public void SetUp(IController controller)
         {
-            _components = components;
-            _roomCenter = components.RoomCenter;
-            _roomSize = components.RoomSize;
-            _shooter = (EnemyShooter)_components.Shooter;
-            _animations = (ThreeCannonBossAnimations)_components.Animations;
+            BossComponents components = controller as BossComponents;
 
-            //_groundPoundWeapon.SetTargetLayer(_groundPoundTargetLayers);
-
-            GroundPoundTrigger.OnTriggerEnterEvent += OnGroundPoundTriggerEnter;
-            EnableGroundPoundTrigger(false);
-
-            var pubs = _animations.Animator.GetBehaviours<AnimatorEventPublisher>();
-
-            foreach (AnimatorEventPublisher publisher in pubs)
+            if (components == null)
             {
-                if (publisher.StateName == "Ground Pound")
-                {
-                    publisher.OnSpecialEvent += GroundPoundImpactHandler;
-                }
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
+
+            _bossComponents = components;
+
+            _roomCenter = _bossComponents.RoomCenter;
+            _roomSize = _bossComponents.RoomSize;
+            _shooter = (EnemyShooter)_bossComponents.Shooter;
+            _animations = (ThreeCannonBossAnimations)_bossComponents.Animations;
+
+            //_groundPoundWeapon.SetTargetLayer(_groundPoundTargetLayers);         
         }
 
         public void SetTarget(PlayerTransforms target)
@@ -88,6 +89,22 @@ namespace TankLike.UnitControllers
         public void Attack(ThreeCannonAttackType attackType, Action OnAttackCompleted)
         {
             OnAttackFinished = OnAttackCompleted;
+        }
+
+        public void AddToActivePooables(IPoolable poolable)
+        {
+            if(!_activePoolables.Contains(poolable))
+            {
+                _activePoolables.Add(poolable);
+            }
+        }
+
+        public void RemoveFromActivePooables(IPoolable poolable)
+        {
+            if (_activePoolables.Contains(poolable))
+            {
+                _activePoolables.Remove(poolable);
+            }
         }
 
         #region Main Machine Gun Attack
@@ -110,11 +127,13 @@ namespace TankLike.UnitControllers
             GroundPoundTrigger.EnableCollider(value);
         }
 
-        private void OnGroundPoundTriggerEnter(Collider target)
+        private void OnGroundPoundTriggerStayHandler(Collider target)
         {
-            Debug.Log("Perform Ground Pound");
-            OnGroundPoundTriggered?.Invoke();
-            EnableGroundPoundTrigger(false);
+            if (target.gameObject.CompareTag("Player"))
+            {
+                //Debug.Log("Player detected in ground pound trigger");
+                OnGroundPoundTriggerStay?.Invoke();
+            }
         }
 
         private void GroundPoundImpactHandler()
@@ -140,22 +159,30 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
+            GroundPoundTrigger.OnTriggerStayEvent += OnGroundPoundTriggerStayHandler;
 
+            EnableGroundPoundTrigger(false);
+
+            var pubs = _animations.Animator.GetBehaviours<AnimatorEventPublisher>();
+
+            foreach (AnimatorEventPublisher publisher in pubs)
+            {
+                if (publisher.StateName == "Ground Pound")
+                {
+                    publisher.OnSpecialEvent += GroundPoundImpactHandler;
+                }
+            }
+
+            _groundPoundTimer = 0f;
+        }
+
+        public void Dispose()
+        {
             //Stop all the coroutines
             StopAllCoroutines();
 
-            if (_attackCoroutine != null)
-                StopCoroutine(_attackCoroutine);
-
-            if (_machineGunAnimationCoroutine != null)
-                StopCoroutine(_attackCoroutine);
-
-            if (_sideMachineGunsAnimationCoroutine != null)
-                StopCoroutine(_attackCoroutine);
-
             //Unsubscribe to all events
-            GroundPoundTrigger.OnTriggerEnterEvent -= OnGroundPoundTriggerEnter;
+            GroundPoundTrigger.OnTriggerStayEvent -= OnGroundPoundTriggerStayHandler;
 
             var pubs = _animations.Animator.GetBehaviours<AnimatorEventPublisher>();
 
@@ -166,10 +193,14 @@ namespace TankLike.UnitControllers
                     publisher.OnSpecialEvent -= GroundPoundImpactHandler;
                 }
             }
-        }
 
-        public void Dispose()
-        {
+            // Clear all poolables
+            if (_activePoolables.Count > 0)
+            {
+                _activePoolables.ForEach(e => e.TurnOff());
+            }
+
+            _activePoolables.Clear();
         }
         #endregion
     }

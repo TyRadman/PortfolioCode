@@ -10,6 +10,7 @@ namespace TankLike.UnitControllers
         #region Not Used
         public bool IsInvincible => _health.IsInvincible;
         public Transform Transform => _health.Transform;
+        public bool IsDead => _health.IsDead;
 
         public void Die()
         {
@@ -21,9 +22,15 @@ namespace TankLike.UnitControllers
 
         [SerializeField] private TankHealth _health;
 
-        public void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
+        public void TakeDamage(int damage, Vector3 direction, UnitComponents shooter, Vector3 bulletPosition, Ammunition damageDealer = null)
         {
-            _health.TakeDamage(damage, direction, shooter, bulletPosition);
+            if(_health == null)
+            {
+                Debug.LogError("Health reference is null");
+                return;
+            }
+
+            _health.TakeDamage(damage, direction, shooter, bulletPosition, damageDealer);
         }
 
 #if UNITY_EDITOR

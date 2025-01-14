@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace TankLike.UI.HUD
 {
-    public class BossHUD : MonoBehaviour
+    public class BossHUD : MonoBehaviour, IManager
     {
         [SerializeField] private GameObject _parent;
         [Header("Health")]
@@ -15,16 +15,58 @@ namespace TankLike.UI.HUD
         [SerializeField] private Image _damageBarImage;
         [SerializeField] private float _damageBarShrinkDelay = 1f;
         [SerializeField] private float _damageBarShrinkSpeed = 1f;
+
+        [Header("Animation")]
+        [SerializeField] private Animation _animation;
+        [SerializeField] private AnimationClip _idleAnimation;
+        [SerializeField] private AnimationClip _showAnimation;
+        [SerializeField] private AnimationClip _hideAnimation;
         
         private Coroutine _damageBarShrinkCoroutine;
         private float _damageBarShrinkTimer;
 
-        public void Enable(bool value)
+        public bool IsActive { get; private set; }
+
+        #region IManager
+        public void SetUp()
         {
-            _parent.SetActive(value);
+            IsActive = true;
+
+            _animation.clip = _idleAnimation;
+            _animation.Play();
         }
 
-        public void SetupHealthBar(int maxHealth)
+        public void Dispose()
+        {
+            IsActive = false;
+        }
+        #endregion
+
+        public void DisplayBossHUD()
+        {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            _animation.clip = _showAnimation;
+            _animation.Play();
+        }
+
+        public void HideBossHUD()
+        {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            _animation.clip = _hideAnimation;
+            _animation.Play();
+        }
+
+        public void SetupHealthBar()
         {
             if (_healthFillImage == null) return;
 

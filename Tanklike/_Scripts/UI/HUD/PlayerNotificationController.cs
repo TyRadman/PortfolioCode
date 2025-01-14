@@ -13,14 +13,25 @@ namespace TankLike.UI.Notifications
             _bars.ForEach(bb => bb.SetUp());
         }
 
-        public void PushCollectionNotification(int amount, NotificationBarSettings_SO settings, string extraText = "")
+        public void Dispose()
         {
+            _bars.ForEach(bb => bb.Dispose());
+        }
+
+        public void PushCollectionNotification(int amount, NotificationBarSettings_SO data)
+        {
+            if (data == null)
+            {
+                Debug.LogError("No settings passed");
+                return;
+            }
+
             CollectionNotificationBar selectedBar;
 
             // if there is a bar that holds the selected type of notification and it's not available i.e. is already displayed on the HUD
-            if (_bars.Exists(b => b.Type == settings.Type && b.CanAddTo))
+            if (_bars.Exists(b => b.Data == data && b.CanAddTo))
             {
-                selectedBar = _bars.Find(b => b.Type == settings.Type && b.CanAddTo);
+                selectedBar = _bars.Find(b => b.Data == data && b.CanAddTo);
             }
             // otherwise, just get the next available bar
             else
@@ -28,7 +39,7 @@ namespace TankLike.UI.Notifications
                 selectedBar = _bars.Find(b => b.IsAvailable);
             }
 
-            selectedBar.Display(settings.Name + extraText, settings.Icon, settings.Type, amount);
+            selectedBar.Display(data, amount);
         }
     }
 }

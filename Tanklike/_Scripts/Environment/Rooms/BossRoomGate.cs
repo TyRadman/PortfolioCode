@@ -16,16 +16,21 @@ namespace TankLike.Environment
         [SerializeField] private Audio _gateOpeningAudio;
         [SerializeField] private BossKey_GateSnap _keyPrefab;
         [SerializeField] private CameraShakeSettings _onOpenedCameraShake;
-        private BossKey_GateSnap[] _keys;
+
         [Header("Animation values")]
         [SerializeField] private float _snapToAirDuration = 0.5f;
         [SerializeField] private float _snapToKeySlots = 0.5f;
 
+        [Header("Minimap")]
+        [SerializeField] private GameObject _lockedMinimapIcon;
+        [SerializeField] private GameObject _unlockedMinimapIcon;
+
+        private BossKey_GateSnap[] _keys;
+        private BossKeysManager _keysManager;
+
         private const string NOT_ENOUGH_KEYS_MESSAGE = "Not enough keys";
         private const string OPEN_DOOR_ANIMATION_NAME = "Open";
         private const float BREAK_BETWEEN_ANIMATION_STATES= 0.2f;
-
-        private BossKeysManager _keysManager;
 
 
         public override void Setup(bool roomHasEnemies, Room parentRoom)
@@ -49,6 +54,9 @@ namespace TankLike.Environment
             }
 
             _keysManager.SetBossRoomGate(this);
+
+            _lockedMinimapIcon.SetActive(true);
+            _unlockedMinimapIcon.SetActive(false);
 
             _openGateAnimationEvent.OnEventFired += OnGateOpenedHandler;
         }
@@ -79,6 +87,7 @@ namespace TankLike.Environment
             {
                 _interactableArea.StopInteraction();
                 _interactableArea.EnableInteraction(false);
+
                 StartCoroutine(SnapKeysRoutine(playerIndex));
             }
             else
@@ -175,6 +184,10 @@ namespace TankLike.Environment
 
             _gateAnimator.Play(OPEN_DOOR_ANIMATION_NAME);
             _newRoomEnterTrigger.gameObject.SetActive(true);
+
+            // Switch minimap icon
+            _lockedMinimapIcon.SetActive(false);
+            _unlockedMinimapIcon.SetActive(true);
         }
     }
 }

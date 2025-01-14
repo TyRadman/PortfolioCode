@@ -1,20 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Combat;
-using TankLike.UnitControllers;
-using TankLike.Utils;
-using TankLike.Environment.LevelGeneration;
-using TankLike.Cam;
 
 namespace TankLike.Combat.Destructible
 {
+    using UnitControllers;
+    using Cam;
+
     public class Stone : DestructibleDropper, IBoostDestructible
     {
         [Header("Special Values")]
         [SerializeField] private Renderer _meshRenderer;
         [SerializeField] private float _shatterDuration;
-        [SerializeField] private float _collectableChance;
+
         [Header("References")]
         [SerializeField] private Collider _collider;
         [SerializeField] private Collider _trigger;
@@ -25,9 +23,9 @@ namespace TankLike.Combat.Destructible
             StartCoroutine(ShatterRoutine());
         }
 
-        protected override void OnDeath(TankComponents tank)
+        protected override void OnDestructibleDeath(UnitComponents tank)
         {
-            base.OnDeath(tank);
+            base.OnDestructibleDeath(tank);
 
             StartCoroutine(ShatterRoutine());
         }
@@ -37,9 +35,20 @@ namespace TankLike.Combat.Destructible
             _collider.enabled = false;
             _trigger.enabled = false;
 
-            GameManager.Instance.CollectableManager.SpawnCollectablesOfType(CollecatblesToSpawn, transform.position, Tag);
+            CollectablesDropRequest collectablesDropSettings = new CollectablesDropRequest()
+            {
+                Position = transform.position,
+                DropperTag = DropperTag,
+                Settings = _dropSettings,
+                Drops = _drops
+            };
 
-            if (_meshRenderer != null) _meshRenderer.gameObject.SetActive(false);
+            GameManager.Instance.CollectableManager.SpawnCollectablesOfType(collectablesDropSettings);
+
+            if (_meshRenderer != null)
+            {
+                _meshRenderer.gameObject.SetActive(false);
+            }
 
             _shatterEffect.Play();
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);

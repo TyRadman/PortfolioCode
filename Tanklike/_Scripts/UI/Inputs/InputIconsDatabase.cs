@@ -13,9 +13,9 @@ namespace TankLike.UI
 
         public int GetSpriteIndexFromBinding(string action, int controlSchema)
         {
-            foreach (var inputIcon in _inputIcons)
+            foreach (InputIconsData inputIcon in _inputIcons)
             {
-                if(inputIcon.Action == action)
+                if(inputIcon.HasAction(action))
                 {
                     if(controlSchema == 0)
                     {
@@ -32,30 +32,6 @@ namespace TankLike.UI
 
             return -1;
         }
-
-        //private void OnValidate()
-        //{
-        //    // Check if the inputActionAsset is assigned
-        //    if (_controls != null)
-        //    {
-        //        // Step 2: Iterate through each action map
-        //        foreach (var actionMap in _controls.actionMaps)
-        //        {
-        //            Debug.Log("Action Map: " + actionMap.name);
-
-        //            // Step 3: Iterate through each action in the action map
-        //            foreach (var action in actionMap.actions)
-        //            {
-        //                string bindingDisplayStrings = GetFormattedBindingDisplayStrings(action);
-        //                Debug.Log("  Action: " + action.name + " Bindings: " + bindingDisplayStrings);
-        //            }
-        //        }
-        //    }
-        //    else
-        //    {
-        //        Debug.LogError("Input Action Asset is not assigned.");
-        //    }
-        //}
 
         // Step 4: Method to get and format binding display strings
         string GetFormattedBindingDisplayStrings(InputAction action)

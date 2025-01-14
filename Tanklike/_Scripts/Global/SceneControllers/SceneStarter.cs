@@ -8,10 +8,6 @@ namespace TankLike
     {
         [SerializeField] private SceneController _sceneController;
 
-        public void StartScene()
-        {
-            Debug.Log("START SCENE USING SceneStater");
-            _sceneController.StarterSetUp();
-        }
+
     }
 }

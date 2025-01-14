@@ -1,35 +1,41 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using TankLike.Combat;
-using TankLike.Utils;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerShooter : TankShooter, IInput, IDisplayedInput
+    using Combat.Abilities;
+    using Utils;
+    using Sound;
+    using TankLike.Combat.SkillTree.Upgrades;
+    using UI.HUD;
+
+    public class PlayerShooter : TankShooter, IInput, IDisplayedInput, IEquippableWeapon
     {
-        [SerializeField] private List<Weapon> _playerNormalShots;
+        public bool IsWeaponEquipped { get; set; } = false;
+
         private PlayerComponents _playerComponents;
+        private PlayerHUD _HUD;
+        private Audio _emptyAmmoSound;
 
-        public override void SetUp(TankComponents components)
+        public override void SetUp(IController controller)
         {
-            SetUpInput(((PlayerComponents)components).PlayerIndex);
-            _playerComponents = (PlayerComponents)components;
+            PlayerComponents components = controller as PlayerComponents;
 
-            base.SetUp(components);
-
-            if (_playerComponents.AbilityData != null)
+            if (components == null)
             {
-                SetWeapon(_playerComponents.AbilityData.GetNormalShot());
-            }
-            else
-            {
-                SetWeapon(_startWeaponHolder);
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
 
-            OnShootStarted += _playerComponents.Crosshair.PlayShootingAnimation;
-            OnShootStarted += _playerComponents.Overheat.ReduceAmmoBarByOne;
+            _playerComponents = components;
+
+            base.SetUp(_playerComponents);
+
+            _emptyAmmoSound = GameManager.Instance.Constants.Audios.OnEmptyAmmoSound;
+            _HUD = GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex];
+
+            GameManager.Instance.StartingSkillsDB.GetStartingWeapon(_playerComponents.PlayerIndex).EquipSkill(_playerComponents);
         }
 
         #region Input
@@ -53,46 +59,58 @@ namespace TankLike.UnitControllers
                 InputManager.Controls.Player.Shoot.name, playerIndex);
 
             GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetWeaponInfo(_currentWeapon.GetIcon(), Helper.GetInputIcon(shootActionIconIndex));
+            GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetUseWeaponKey(Helper.GetInputIcon(shootActionIconIndex));
         }
         #endregion
 
-        private void HandleShootInput(InputAction.CallbackContext _)
+        private bool CanUseShootInput()
         {
-            if (!_canShoot)
+            return _canShoot && IsActive && !_isOnCoolDown && !IsConstrained && IsWeaponEquipped;
+        }
+
+        private void HandleShootInput(InputAction.CallbackContext context)
+        {
+            if (!CanUseShootInput())
             {
                 return;
             }
+
+            //if (CanShoot(true))
+            //{
+            //    HandleVibration(context);
+            //}
 
             // if there is no ammo left, player the sound effect and return
             if (!_playerComponents.Overheat.HasEnoughShots(1))
             {
-                GameManager.Instance.AudioManager.Play(GameManager.Instance.Constants.Audios.OnEmptyAmmoSound);
+                GameManager.Instance.AudioManager.Play(_emptyAmmoSound);
                 return;
             }
 
-            //_playerComponents.Crosshair.PlayShootingAnimation();
             Shoot();
-            //_playerComponents.Overheat.ReduceAmmoBarByOne();
         }
 
-        public override void SetWeapon(WeaponHolder weapon)
+        private void HandleVibration(InputAction.CallbackContext context)
         {
-            base.SetWeapon(weapon);
-            UpdateInputDisplay(((PlayerComponents)_components).PlayerIndex);
+            Gamepad gamepad = context.control.device as Gamepad;
+            GameManager.Instance.InputManager.PerformVibration(gamepad, 0.7f, 0.2f, 0.1f);
         }
 
-        //public void AddNormalShot(WeaponHolder weapon)
-        //{
-        //    // clone this SO and add it to the player
-        //    Weapon normalShot = Instantiate(weapon.Weapon);
+        #region Add and Equip Weapon
+        public override void EquipSkill(SkillHolder holder)
+        {
+            base.EquipSkill(holder);
 
-        //    _playerNormalShots.Add(normalShot);
+            if (holder is not WeaponHolder weaponHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(WeaponHolder).Name, holder.name);
+                return;
+            }
 
-        //    if (_currentWeapon == null)
-        //    {
-        //        _currentWeapon = normalShot;
-        //    }
-        //}
+            _playerComponents.Overheat.UpdateCrossHairBars(_currentWeaponHolder.Weapon);
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
+        }
+        #endregion
 
         protected override void EnableShooting()
         {
@@ -102,36 +120,84 @@ namespace TankLike.UnitControllers
         private IEnumerator EnableShootingProcess()
         {
             float timer = 0f;
-            GameManager.Instance.HUDController.PlayerHUDs[((PlayerComponents)_components).PlayerIndex].SetWeaponChargeAmount(1f, 0);
+            _HUD.SetWeaponChargeAmount(1f);
 
             while (timer < _coolDownTime)
             {
                 timer += Time.deltaTime;
-                GameManager.Instance.HUDController.PlayerHUDs[((PlayerComponents)_components).PlayerIndex].SetWeaponChargeAmount(1 - timer / _coolDownTime, 0);
+                _HUD.SetWeaponChargeAmount(1 - timer / _coolDownTime);
                 yield return null;
             }
 
-            _canShoot = true;
+            _HUD.OnWeaponCooldownFinished();
+            _isOnCoolDown = false;
         }
 
+        private void SetUpShootingEvent()
+        {
+            OnShootStarted += _playerComponents.CrosshairController.PlayShootingAnimation;
+            OnShootStarted += _playerComponents.Overheat.ReduceAmmoBarByOne;
+        }
+
+        public override void UpgradeSkill(BaseWeaponUpgrade weaponUpgrade)
+        {
+            base.UpgradeSkill(weaponUpgrade);
+
+            //_currentWeaponHolder.Weapon.Upgrade(weaponUpgrade);
+            //ReEquipSkill();
+        }
+
+        #region Weapon Equipment
+        public void Equip()
+        {
+            IsWeaponEquipped = true;
+
+            _playerComponents.CrosshairController.ShowDots();
+            _playerComponents.CrosshairController.EnableCrosshair(true);
+        }
+
+        public void Unequip()
+        {
+            IsWeaponEquipped = false;
+
+            _playerComponents.CrosshairController.HideDots();
+            _playerComponents.CrosshairController.EnableCrosshair(false);
+        }
+
+        public bool CanEquip()
+        {
+            return !_isOnCoolDown;
+        }
+
+        public bool CanUnequip()
+        {
+            return !_isOnCoolDown;
+        }
+        #endregion
+
         #region IController
+        public override void Activate()
+        {
+            base.Activate();
+        }
+
         public override void Deactivate()
         {
-            OnShootStarted = null;
             base.Deactivate();
         }
 
         public override void Restart()
         {
-            OnShootStarted = null;
             base.Restart();
-            DisposeInput(((PlayerComponents)_components).PlayerIndex);
+            SetUpInput(_playerComponents.PlayerIndex);
+            SetUpShootingEvent();
         }
 
         public override void Dispose()
         {
-            OnShootStarted = null;
             base.Dispose();
+            DisposeInput(_playerComponents.PlayerIndex);
+            OnShootStarted = null;
         }
         #endregion
     }

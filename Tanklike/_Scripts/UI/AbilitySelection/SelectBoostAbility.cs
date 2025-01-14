@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Combat;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace TankLike.UI
 {
+    using TankLike.Combat.Abilities;
+
     public class SelectBoostAbility : AbilitySelectionPanel
     {
         [System.Serializable]

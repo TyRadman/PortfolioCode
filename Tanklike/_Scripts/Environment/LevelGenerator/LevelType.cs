@@ -7,6 +7,7 @@ namespace TankLike.Environment.LevelGeneration
     public enum LevelType
     {
         Random = 0,
-        Custom = 1
+        Custom = 1,
+        None = 2
     }
 }

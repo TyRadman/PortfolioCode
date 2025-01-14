@@ -24,11 +24,22 @@ namespace TankLike.UI
         [SerializeField] private TextMeshProUGUI _buttonText;
         [SerializeField] private Color _normalColor;
         [SerializeField] private Color _highlightedColor;
+        [SerializeField] private Animator _highlightAnimator;
+
+        private readonly int _selectHash = Animator.StringToHash("Select");
+        private readonly int _idleHash = Animator.StringToHash("Idle");
 
         public virtual void Highlight(bool highlight)
         {
             Color newColor = highlight ? _highlightedColor : _normalColor;
             _highlightedGraphics.ForEach(g => g.color = newColor);
+
+            if(_highlightAnimator != null)
+            {
+                int animation = highlight ? _selectHash : _idleHash;
+                _highlightAnimator.Play(animation);
+
+            }
         }
 
         public virtual void InvokeAction(Direction direction = Direction.None)

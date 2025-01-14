@@ -4,13 +4,52 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+
     public class TankConstraints : MonoBehaviour, IController
     {
-        [SerializeField] private PlayerComponents _components;
+        private PlayerComponents _playerComponents;
         private List<AbilityConstraint> _currentConstraints = new List<AbilityConstraint>();
-        private AbilityConstraint _currentConstraint = AbilityConstraint.None;
+        private AbilityConstraint _activeConstraint = AbilityConstraint.None;
+        private List<IConstraintedComponent> _constraintComponents = new List<IConstraintedComponent>();
 
         public bool IsActive { get; private set; }
+
+        public void SetUp(IController controller)
+        {
+            PlayerComponents components = controller as PlayerComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = components;
+
+            _constraintComponents = new List<IConstraintedComponent>();
+
+            _constraintComponents.Add(_playerComponents.Movement);
+            _constraintComponents.Add(_playerComponents.CrosshairController);
+
+            if (_playerComponents.Shooter is TankShooter shooter)
+            {
+                _constraintComponents.Add(shooter);
+            }
+            else
+            {
+                Helper.LogWrongComponentsType(GetType());
+            }
+
+            _constraintComponents.Add(_playerComponents.Health);
+            _constraintComponents.Add(_playerComponents.PlayerBoost);
+            _constraintComponents.Add(_playerComponents.ChargeAttack);
+            _constraintComponents.Add(_playerComponents.AimAssist);
+            _constraintComponents.Add(_playerComponents.SuperAbilities);
+            _constraintComponents.Add(_playerComponents.Jump);
+            _constraintComponents.Add(_playerComponents.Tools);
+            _constraintComponents.Add(_playerComponents.UIController.InventoryController);
+        }
 
         public void ApplyConstraints(bool enable, AbilityConstraint constraints)
         {
@@ -23,18 +62,9 @@ namespace TankLike.UnitControllers
                 _currentConstraints.Remove(constraints);
             }
 
-            _currentConstraint = GetCurrentConstraint();
+            _activeConstraint = GetCurrentConstraint();
 
-            _components.Movement.EnableMovement((_currentConstraint & AbilityConstraint.Movement) == 0);
-            _components.Crosshair.Enable((_currentConstraint & AbilityConstraint.Rotation) == 0);
-            _components.Shooter.EnableShooting((_currentConstraint & AbilityConstraint.Shooting) == 0);
-            _components.Health.EnableTakingDamage((_currentConstraint & AbilityConstraint.TakingDamage) == 0);
-            _components.PlayerBoost.EnableBoost((_currentConstraint & AbilityConstraint.Boost) == 0);
-            _components.OnHold.Enable((_currentConstraint & AbilityConstraint.HoldDownAction) == 0);
-            _components.AimAssist.EnableAimAssist((_currentConstraint & AbilityConstraint.AimAssist) == 0);
-            _components.SuperAbilities.EnableAbility((_currentConstraint & AbilityConstraint.SuperAbility) == 0);
-            _components.Jump.EnableJump((_currentConstraint & AbilityConstraint.Jump) == 0);
-            _components.Tools.EnableToolsUsage((_currentConstraint & AbilityConstraint.Tools) == 0);
+            _constraintComponents.ForEach(c => c.ApplyConstraint(_activeConstraint));
         }
 
         private AbilityConstraint GetCurrentConstraint()
@@ -61,11 +91,21 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
+            if(_currentConstraints.Count > 0)
+            {
+                _currentConstraints.Clear();
+            }
+
+            _constraintComponents.ForEach(c => c.IsConstrained = false);
+
+            // release all the constraints
+            AbilityConstraint constraints = (AbilityConstraint)~0;
+            ApplyConstraints(false, constraints);
         }
 
         public void Dispose()
         {
+
         }
         #endregion
     }
@@ -83,6 +123,7 @@ namespace TankLike.UnitControllers
         AimAssist = 64,
         SuperAbility = 128,
         Jump = 256,
-        Tools = 512
+        Tools = 512,
+        Inventory = 1024,
     }
 }

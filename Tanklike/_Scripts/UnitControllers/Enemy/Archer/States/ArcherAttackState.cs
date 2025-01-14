@@ -37,7 +37,7 @@ namespace TankLike.UnitControllers.States
             _isActive = true;
 
             _target = _shooter.GetCurrentTarget().PlayerTransform;
-            _shooter.TelegraphAttack();
+            _shooter.StartTelegraph();
 
             float moveChance = Random.Range(0f, 1f);
 

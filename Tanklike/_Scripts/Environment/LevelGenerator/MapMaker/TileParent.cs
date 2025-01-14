@@ -8,5 +8,6 @@ namespace TankLike.Environment.MapMaker
     public class TileParent
     {
         public TileTag Tag;
+        public TileType Type;
     }
 }

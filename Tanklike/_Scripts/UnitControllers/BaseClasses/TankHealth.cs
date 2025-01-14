@@ -1,82 +1,77 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Minimap;
-using TankLike.Combat;
-using TankLike.UI.DamagePopUp;
-using TankLike.Cam;
-using TankLike.ScreenFreeze;
 
-namespace TankLike.UnitControllers 
+namespace TankLike.UnitControllers
 {
+    using Minimap;
+    using Combat;
+    using UI.DamagePopUp;
+    using Cam;
+    using ScreenFreeze;
+    using Utils;
+    using System;
+
     [RequireComponent(typeof(DamagePopUpAnchor))]
-    public abstract class TankHealth : MonoBehaviour, IController, IDamageable
+    public abstract class TankHealth : MonoBehaviour, IController, IDamageable, IConstraintedComponent
     {
+        public System.Action OnHit { get; set; }
+        public System.Action<TankComponents> OnDeath { get; set; }
+        public System.Action OnHealthFullyCharged { get; set; }
+
         [Header("Settings")]
         [SerializeField] protected int _maxHealth;
         [SerializeField] protected bool _canTakeDamage = true;
-        [field: SerializeField] public bool IsInvincible { get; set; } = false;
-        public bool IsDead { get; private set; } = true;
+        [field: SerializeField] public bool IsInvincible { get; protected set; } = false;
 
         [Header("References")]
         [SerializeField] protected TankHealthEffect _damageEffects;
         [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { get; protected set;  }
         [field: SerializeField] public ScreenFreezeData DeathScreenFreeze { get; protected set; }
 
-        public const float DAMAGE_POP_UP_OFFSET = 2f;
+        public bool IsDead { get; protected set; } = true;
+        public bool IsActive { get; protected set; }
 
-        protected TankComponents _components;
-        protected Transform _body;
-        protected Transform _turret;
+        public delegate void OnHealthValueChangedDelegate(float currentHealth, float maxHealth);
+        // we add an 'event' so that it can't be reset, or invoked externally 
+        public event OnHealthValueChangedDelegate OnHealthValueChanged;
+
+        private TankComponents _components;
         protected UnitData _stats;
         protected List<DamageDetector> _damageDetectors;
         protected int _currentHealth;
-
+        protected int _lastCurrentHealth;
         protected float _damageMultiplier = 0f;
 
-        public System.Action OnHit { get; set; }
-        public System.Action<TankComponents> OnDeath { get; set; }
+        public const float DAMAGE_POP_UP_OFFSET = 2f;
 
         [HideInInspector] public Transform Transform => transform;
-        public bool IsActive { get; protected set; }
 
-        public virtual void SetUp(TankComponents components)
+        public bool IsConstrained { get; set; }
+
+        public virtual void SetUp(IController controller)
         {
-            TankBodyParts parts = components.TankBodyParts;
-            UnitData stats = components.Stats;
-
-            IsDead = false;
-            _stats = stats;
-            _body = parts.GetBodyPartOfType(BodyPartType.Body).transform;
-            _turret = parts.GetBodyPartOfType(BodyPartType.Turret).transform;
-            _damageDetectors = ((TankBody)parts.GetBodyPartOfType(BodyPartType.Body)).DamageDetectors;
-            _components = components;
-            IsInvincible = false;
-            _currentHealth = _maxHealth;
-        }
-
-        public virtual void Die()
-        {
-            if(IsDead)
+            if (controller is not TankComponents components)
             {
+                Helper.LogWrongComponentsType(GetType());
                 return;
             }
 
-            IsDead = true;
-            GameManager.Instance.ScreenFreezer.FreezeScreen(DeathScreenFreeze);
-            _components.VisualEffects.PlayDeathEffects();
-            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.EXPLOSION);
-            OnDeath?.Invoke(_components);
+            _components = components;
+            TankBodyParts parts = _components.TankBodyParts;
+            _stats = _components.Stats;
+
+            _damageDetectors = ((TankBody)parts.GetBodyPartOfType(BodyPartType.Body)).DamageDetectors;
         }
 
-        public virtual void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
+        public virtual void TakeDamage(int damage, Vector3 direction, UnitComponents shooter, Vector3 bulletPosition, Ammunition damageDealer = null)
         {
             if (IsDead)
             {
                 return;
             }
 
-            if (!_canTakeDamage)
+            if (!_canTakeDamage || IsConstrained)
             {
                 return;
             }
@@ -89,25 +84,9 @@ namespace TankLike.UnitControllers
                 damage += Mathf.RoundToInt(damage * _damageMultiplier);
             }
 
-            _currentHealth -= damage;
+            AddToHealthValue(-damage);
             _damageEffects.SetIntensity((float)_currentHealth / (float)_maxHealth);
 
-            ///// display pop up /////
-            // if the damage is positive, then it's a heal
-            if (PopUpAnchor != null)
-            {
-                if (damage > 0)
-                {
-                    GameManager.Instance.DamagePopUpManager.DisplayPopUp(
-                        DamagePopUpType.Damage, damage, PopUpAnchor.Anchor);
-                }
-                else
-                {
-                    GameManager.Instance.DamagePopUpManager.DisplayPopUp(
-                        DamagePopUpType.Heal, damage, PopUpAnchor.Anchor);
-                }
-            }
-            
             if (_currentHealth <= 0)
             {
                 _currentHealth = 0;
@@ -119,15 +98,35 @@ namespace TankLike.UnitControllers
                 _currentHealth = _maxHealth;
             }
         }
-        
+
+        public virtual void Die()
+        {
+            if (IsDead)
+            {
+                return;
+            }
+
+            IsDead = true;
+            GameManager.Instance.ScreenFreezer.FreezeScreen(DeathScreenFreeze);
+            _components.VisualEffects.PlayDeathEffects();
+            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.EXPLOSION);
+            OnDeath?.Invoke(_components);
+        }
+
         public virtual void Heal(int amount)
         {
-            _currentHealth += amount;
+            if(_currentHealth >= _maxHealth)
+            {
+                return;
+            }
+
+            AddToHealthValue(amount);
 
             _damageEffects.SetIntensity((float)_currentHealth / (float)_maxHealth);
 
-            if (_currentHealth > _maxHealth)
+            if (_currentHealth >= _maxHealth)
             {
+                OnHealthFullyCharged?.Invoke();
                 _currentHealth = _maxHealth;
             }
         }
@@ -145,11 +144,6 @@ namespace TankLike.UnitControllers
             _currentHealth = (int)Mathf.Lerp(0, _maxHealth, t);
         }
 
-        public void EnableTakingDamage(bool enable)
-        {
-            _canTakeDamage = enable;
-        }
-
         public void SetMaxHealth(int health, bool refillHealth = true)
         {
             _maxHealth = health;
@@ -160,26 +154,124 @@ namespace TankLike.UnitControllers
             }
         }
 
-        public void SetInvincible(bool value)
-        {
-            IsInvincible = value;
-        }
-
-        public void SwitchDamageDetectorsLayer(int layer)
+        public void SetDamageDetectorsLayer(int layer)
         {
             _damageDetectors.ForEach(d => d.gameObject.layer = layer);
-            //gameObject.layer = layer;
         }
 
-        public float GetHealth()
+        public int GetDamageDetectorsLayer()
         {
-            return _currentHealth / _maxHealth;
+            if(_damageDetectors.Count == 0)
+            {
+                Debug.LogError($"No damage detectors at {gameObject.name}");
+                return -1;
+            }
+
+            return _damageDetectors[0].gameObject.layer;
         }
 
         public void ReplenishFullHealth()
         {
             Heal(_maxHealth - _currentHealth);
         }
+
+        public bool IsFull()
+        {
+            return _currentHealth == _maxHealth;
+        }
+
+        public virtual void RestoreFullHealth()
+        {
+            _currentHealth = _maxHealth;
+        }
+
+        public virtual void SetHealthPercentage(float value, bool playEffects = true)
+        {
+            value = Mathf.Clamp01(value);
+
+            int expectedHealth = Mathf.CeilToInt((float)_maxHealth * value);
+
+            // if the current health is greater than the new health, then the change is a damage, otherwise, it's a heal
+            if (_currentHealth >= expectedHealth)
+            {
+                int damageAmountToInflict = _currentHealth - expectedHealth;
+                TakeDamage(damageAmountToInflict, Vector3.zero, null, Vector3.zero);
+            }
+            else
+            {
+                int amountTohealth = expectedHealth - _currentHealth;
+                Heal(amountTohealth);
+            }
+        }
+
+        public int GetMaxHP()
+        {
+            return _maxHealth;
+        }
+
+        #region Utilities
+        /// <summary>
+        /// Changes the health value by the given amount.
+        /// </summary>
+        /// <param name="value"></param>
+        protected virtual void AddToHealthValue(int value)
+        {
+            _lastCurrentHealth = _currentHealth;
+            _currentHealth += value;
+            _currentHealth = Mathf.Clamp(_currentHealth, 0, _maxHealth);
+
+            // Display pop up
+            if (PopUpAnchor != null)
+            {
+                DamagePopUpType type = value < 0 ? DamagePopUpType.Damage : DamagePopUpType.Heal;
+                GameManager.Instance.DamagePopUpManager.DisplayPopUp(type, value, PopUpAnchor.Anchor);
+            }
+
+            OnHealthValueChanged?.Invoke(_currentHealth, _maxHealth);
+        }
+
+        protected virtual void SetHealthValue(int value)
+        {
+            _currentHealth = value;
+            _currentHealth = Mathf.Clamp(_currentHealth, 0, _maxHealth);
+
+            if (PopUpAnchor != null)
+            {
+                DamagePopUpType type = value < 0 ? DamagePopUpType.Damage : DamagePopUpType.Heal;
+                GameManager.Instance.DamagePopUpManager.DisplayPopUp(type, value, PopUpAnchor.Anchor);
+            }
+
+            OnHealthValueChanged?.Invoke(_currentHealth, _maxHealth);
+        }
+
+        internal int GetHealthAmount()
+        {
+            return _currentHealth;
+        }
+
+        internal float GetHealthAmount01()
+        {
+            return (float)_currentHealth / (float)_maxHealth;
+        }
+
+        internal float GetMaxHealth()
+        {
+            return (float)_maxHealth;
+        }
+
+        internal void SetHealthAmount(int v)
+        {
+            SetHealthValue(v);
+        }
+        #endregion
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canTakeDamage = (constraints & AbilityConstraint.TakingDamage) == 0;
+            IsConstrained = !canTakeDamage;
+        }
+        #endregion
 
         #region IController
         public virtual void Activate()
@@ -196,11 +288,14 @@ namespace TankLike.UnitControllers
         public virtual void Restart()
         {
             IsDead = false;
-            _currentHealth = _maxHealth;
+            IsInvincible = false;
+            IsConstrained = false;
+            OnHit += _components.Visuals.OnHitHandler;
         }
 
         public virtual void Dispose()
         {
+            OnHit -= _components.Visuals.OnHitHandler;
         }
         #endregion
     }

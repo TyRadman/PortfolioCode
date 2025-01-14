@@ -22,7 +22,6 @@ namespace TankLike
             IsActive = false;
 
             _activeSummons.Clear();
-            _activeSummons = null;
         }
         #endregion
 

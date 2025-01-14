@@ -8,6 +8,7 @@ using TankLike.EditorStuff;
 
 namespace TankLike.Environment.MapMaker
 {
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(MapTiles_SO))]
     public class MapTileEditor : UnityEditor.Editor
     {
@@ -19,7 +20,13 @@ namespace TankLike.Environment.MapMaker
         public override void OnInspectorGUI()
         {
             base.OnInspectorGUI();
+
             Map = (MapTiles_SO)target;
+
+            if (GUILayout.Button("Cache Neighbours"))
+            {
+                Map.CacheSurroundingTilesIndices();
+            }
 
             GUILayout.Space(21f);
             DrawTileTexture(Map.Tiles);
@@ -30,7 +37,7 @@ namespace TankLike.Environment.MapMaker
             if (foldOut)
             {
                 EditorGUI.indentLevel++;
-                
+
                 ShowGrid = GUILayout.Toggle(ShowGrid, "Show Grid");
                 MapEditorDisplayColors.WALL_COLOR = EditorGUILayout.ColorField("Wall Color", MapEditorDisplayColors.WALL_COLOR);
                 MapEditorDisplayColors.GROUND_COLOR = EditorGUILayout.ColorField("Ground Color", MapEditorDisplayColors.GROUND_COLOR);
@@ -106,7 +113,7 @@ namespace TankLike.Environment.MapMaker
                 {
                     return MapEditorDisplayColors.SPAWN_POINTS_COLOR;
                 }
-                else if(tile.Overlays[0] == DestructableTag.BossSpawnPoint)
+                else if (tile.Overlays[0] == DestructableTag.BossSpawnPoint)
                 {
                     return MapEditorDisplayColors.BOSS_SPAWN_POINTS_COLOR;
                 }
@@ -120,7 +127,7 @@ namespace TankLike.Environment.MapMaker
             {
                 return MapEditorDisplayColors.GROUND_COLOR;
             }
-            else if(tag >= 4 && tag <= 9)
+            else if (tag >= 4 && tag <= 9)
             {
                 return MapEditorDisplayColors.WALL_COLOR;
             }

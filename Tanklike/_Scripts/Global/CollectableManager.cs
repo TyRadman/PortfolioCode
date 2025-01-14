@@ -2,16 +2,18 @@ using TankLike.Utils;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.ItemsSystem;
-using TankLike.Combat.Destructible;
-using TankLike.Environment.LevelGeneration;
 
 namespace TankLike
 {
+    using ItemsSystem;
+    using Combat.Destructible;
+    using Environment.LevelGeneration;
+
     public class CollectableManager : MonoBehaviour, IManager
     {
         [SerializeField] private List<Collectable> _collectables;
         [SerializeField] private Vector2 _spreadRange;
+        [SerializeField] private CollectablesDropSettings _defaultCollectableSettings;
 
         public bool IsActive { get; private set; }
 
@@ -70,7 +72,7 @@ namespace TankLike
         }
         #endregion
 
-        public void SpawnCollectablesOfType(List<DropChance> tags, Vector3 position, DestructableTag dropper)
+        public void SpawnCollectablesOfType(CollectablesDropRequest requestData)
         {
             if (!IsActive)
             {
@@ -78,50 +80,100 @@ namespace TankLike
                 return;
             }
 
-            LevelDestructibleData_SO data = GameManager.Instance.DestructiblesManager.GetDestructibleDropData();
-            DestructibleDrop drops = data.DropsData.Find(d => d.Tag == dropper);
+            DestructibleDrop dropsToUse;
 
-            List<DropChance> selectedDrops = new List<DropChance>();
+            if (requestData.DropPassedTags && requestData.Drops != null)
+            {
+                dropsToUse = requestData.Drops;
+            }
+            else
+            {
+                LevelDestructibleData_SO data = GameManager.Instance.DestructiblesManager.GetDestructibleDropData();
+                dropsToUse = data.DropsData.Find(d => d.Tag == requestData.DropperTag);
+            }
+
+            List<DropChance> selectedDrops;
+            selectedDrops = new List<DropChance>();
 
             // apply chances changes depending on the affectors
-            ApplyChancesEffects(drops.Drops);
-            drops.UpdateHighestChance();
-            float chance = Random.value * drops.HighestChance;
+            ApplyChancesEffects(dropsToUse.Drops);
+            dropsToUse.UpdateHighestChance();
+            float rand = Random.value * dropsToUse.HighestChance;
 
-            drops.Drops.FindAll(d => d.Chance > chance).ForEach(d => selectedDrops.Add(d));
-            selectedDrops.ForEach(t => SpawnCollectable(position, t.DropType, t.CountRange.RandomValue()));
+            dropsToUse.Drops.FindAll(d => d.CurrentChance > rand).ForEach(d => selectedDrops.Add(d));
 
-            // the count has to be controlled in the future
-            //tags.ForEach(t => SpawnCollectable(position, t.DropTag, t.CountRange.RandomValue()));
+            for (int i = 0; i < selectedDrops.Count; i++)
+            {
+                DropChance drop = selectedDrops[i];
+
+                SpawnCollectable(requestData.Position, drop.DropType, drop.CountRange.RandomValue(), requestData.Settings);
+            }
         }
 
+        /// <summary>
+        /// Applies affectors to the chances, which influences the weights of the drops depending on the player's stats.
+        /// </summary>
+        /// <param name="drops"></param>
         private void ApplyChancesEffects(List<DropChance> drops)
         {
             for (int i = 0; i < drops.Count; i++)
             {
                 DropChance drop = drops[i];
 
-                if(drop.Affector == ChanceAffector.None)
+                if (drop.Affector.AffectorType == ChanceAffector.None)
                 {
                     continue;
                 }
 
                 float effect = 1f;
 
-                switch (drop.Affector)
+                switch (drop.Affector.AffectorType)
                 {
                     case ChanceAffector.PlayerHealth:
                         {
-                            effect = drop.EffectRange.Lerp(GameManager.Instance.PlayersManager.GetHealth());
+                            effect = drop.Affector.EffectRange.Lerp(GameManager.Instance.PlayersManager.GetPlayersTotalHealth01());
                             break;
                         }
                 }
 
-                //print($"value: {effect}. Health: {GameManager.Instance.PlayersManager.GetHealth()}. Effect range: {drop.EffectRange}");
-                drops.FindAll(d => d != drop).ForEach(d => d.Chance *= effect);
+                drops.FindAll(d => d != drop).ForEach(d => d.CurrentChance *= effect);
             }
         }
 
+        private void SpawnCollectable(Vector3 position, CollectableType drop, int count, CollectablesDropSettings settings = null)
+        {
+            if (drop == CollectableType.Empty)
+            {
+                return;
+            }
+
+            if (settings == null)
+            {
+                settings = _defaultCollectableSettings;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 pos = position + new Vector3(_spreadRange.RandomValue(), 0f, _spreadRange.RandomValue());
+                var collectable = _collectablesPools[drop].RequestObject(pos, Quaternion.identity);
+                GameManager.Instance.SetParentToRoomSpawnables(collectable.gameObject);
+                collectable.gameObject.SetActive(true);
+
+                if (!settings.HasDeathCountDown)
+                {
+                    collectable.ActivateSelfDestructTimer(false);
+                }
+
+                collectable.StartCollectable();
+            }
+        }
+
+        /// <summary>
+        /// Spawns a collectable with a chance.
+        /// </summary>
+        /// <param name="chance"></param>
+        /// <param name="position"></param>
+        /// <param name="tag"></param>
         public void SpawnRandomCollectables(float chance, Vector3 position, CollectableType tag)
         {
             if (!IsActive)
@@ -130,29 +182,11 @@ namespace TankLike
                 return;
             }
 
-            var rand = Random.Range(0f, 1f);
+            float rand = Random.Range(0f, 1f);
 
             if (rand <= chance)
             {
                 SpawnCollectable(position, tag, 1);
-            }      
-        }
-
-        private void SpawnCollectable(Vector3 position, CollectableType drop, int count)
-        {
-            if (drop == CollectableType.Empty)
-            {
-                return;
-            }
-
-            Collectable collectable = _collectables.Find(c => c.Type == drop);
-
-            for (int i = 0; i < count; i++)
-            {
-                Vector3 pos = position + new Vector3(_spreadRange.RandomValue(), 0f, _spreadRange.RandomValue());
-                var collect = _collectablesPools[drop].RequestObject(pos, Quaternion.identity);
-                GameManager.Instance.SetParentToRoomSpawnables(collect.gameObject);
-                collect.gameObject.SetActive(true);
             }
         }
     }
@@ -160,5 +194,14 @@ namespace TankLike
     public enum ChanceAffector
     {
         None = 0, PlayerAmmo = 1, PlayerHealth = 2
+    }
+
+    public class CollectablesDropRequest
+    {
+        public DestructibleDrop Drops;
+        public Vector3 Position;
+        public DropperTag DropperTag;
+        public CollectablesDropSettings Settings;
+        public bool DropPassedTags = false;
     }
 }

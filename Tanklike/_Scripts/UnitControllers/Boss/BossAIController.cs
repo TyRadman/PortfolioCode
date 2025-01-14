@@ -18,6 +18,7 @@ namespace TankLike.UnitControllers
 
         [Header("Debug")]
         [SerializeField] protected bool _movementDebug;
+        [SerializeField] protected BossStateType _currentState;
 
         [Header("State Machine")]
         [SerializeField] protected BossStateType _initialState;
@@ -29,21 +30,31 @@ namespace TankLike.UnitControllers
         [SerializeField] protected bool _initialInactiveState;
 
         protected StateMachine<BossStateType> _stateMachine;
-        protected BossComponents _components;
+        protected BossComponents _bossComponents;
         protected BossHealth _health;
         protected BossMovementController _movementController;
         protected BossAttackController _attackController;
 
         protected Dictionary<BossStateType, IState> _statesDictionary = new Dictionary<BossStateType, IState>();
+        [SerializeField] private ThreeCannonBossAttackState _attackState;
 
         public bool IsActive { get; private set; }
 
-        public void SetUp(BossComponents components)
+        public void SetUp(IController controller)
         {
-            _components = components;
-            _movementController = (BossMovementController)components.Movement;
-            _attackController = (BossAttackController)components.AttackController;
-            _health = (BossHealth)components.Health;
+            BossComponents components = controller as BossComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _bossComponents = components;
+
+            _movementController = (BossMovementController)_bossComponents.Movement;
+            _attackController = _bossComponents.AttackController;
+            _health = (BossHealth)_bossComponents.Health;
 
             InitStateMachine();
 
@@ -61,8 +72,13 @@ namespace TankLike.UnitControllers
             foreach (BossState state in _states)
             {
                 BossState newState = Instantiate(state);
-                newState.SetUp(_stateMachine, _components);
+                newState.SetUp(_stateMachine, _bossComponents);
                 _statesDictionary.Add(state.BossStateType, newState);
+
+                if(newState is ThreeCannonBossAttackState attackState)
+                {
+                    _attackState = attackState;
+                }
             }
 
             _stateMachine.Init(_statesDictionary);
@@ -76,11 +92,16 @@ namespace TankLike.UnitControllers
             }
         }
 
+        public void SetCurrentState(BossStateType state)
+        {
+            _currentState = state;
+        }
+
         public void ActivateBoss()
         {
             Debug.Log("ACTIVATE BOSS");
             _stateMachine.ChangeState(_activationState);
-            _components.Movement.Activate();
+            _bossComponents.Movement.Activate();
         }
 
         public State GetStateByType(BossStateType type)
@@ -104,7 +125,6 @@ namespace TankLike.UnitControllers
             Debug.Log("ACTIVATE");
             IsActive = true;
 
-            _components.Activate();
             Invoke(nameof(ActivateBoss), 0.5f);
         }
 
@@ -115,12 +135,11 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            _stateMachine.ChangeState(BossStateType.Death);
-            IsActive = false;
         }
 
         public void Dispose()
         {
+            _stateMachine.ChangeState(BossStateType.Death);
         }
         #endregion
     }

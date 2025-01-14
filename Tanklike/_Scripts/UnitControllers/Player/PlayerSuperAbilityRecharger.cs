@@ -6,11 +6,18 @@ namespace TankLike.UnitControllers
 {
     using Utils;
     using Combat.Abilities;
+    using UI.HUD;
 
     public class PlayerSuperAbilityRecharger : MonoBehaviour, IController
     {
+        public System.Action OnSuperAbilityCharged { get; set; }
+
         [SerializeField] private AbilityRechargingMethod _currentRechargingMethod;
-        [SerializeField] private PlayerComponents _components;
+
+        private RechargingValues _rechargingMethods;
+        private PlayerHUD _HUD;
+        private PlayerComponents _playerComponents;
+
         /// <summary>
         /// A value between 0 and 1 where 1 indicating the ability is fully charged and ready to use
         /// </summary>
@@ -19,14 +26,36 @@ namespace TankLike.UnitControllers
         private float _chargePerEnemyHit = 0f;
         private float _chargePerHit = 0f;
 
+        private bool _canCharge = false;
+
         public bool IsActive { get; private set; }
+
+        public void SetUp(IController controller)
+        {
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = playerComponents;
+            _HUD = GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex];
+            _canCharge = true;
+        }
+
+        public RechargingValues GetRechargingMethod()
+        {
+            return _rechargingMethods;
+        }
 
         #region Set Up
         public void SetUpRechargeMethods(RechargingValues rechargingMethods)
         {
+            _rechargingMethods = rechargingMethods;
+
             // unsubscribe, just in case
-            _components.Health.OnHit -= RechargeOnHit;
-            _components.Shooter.OnTargetHit -= RechargeOnEnemyHit;
+            _playerComponents.Health.OnHit -= RechargeOnHit;
+            _playerComponents.Shooter.UnregisterOnTargetHitCallback(RechargeOnEnemyHit);
             
             _currentRechargingMethod = rechargingMethods.RechargingMethod;
             // get the values that are gonna be used with every burst of super recharge
@@ -35,17 +64,34 @@ namespace TankLike.UnitControllers
             _chargePerEnemyHit = 1f / rechargingMethods.NumberOfEnemyHits;
 
             // subscribe recharging methods to their corresponding events
-            if ((rechargingMethods.RechargingMethod & AbilityRechargingMethod.OnPlayerHit) != 0) _components.Health.OnHit += RechargeOnHit;
+            bool isOnPlayerHitRecharge = (rechargingMethods.RechargingMethod & AbilityRechargingMethod.OnPlayerHit) != 0;
 
-            if ((rechargingMethods.RechargingMethod & AbilityRechargingMethod.OnEnemyHit) != 0) _components.Shooter.OnTargetHit += RechargeOnEnemyHit;
+            if (isOnPlayerHitRecharge)
+            {
+                _playerComponents.Health.OnHit += RechargeOnHit;
+            }
+
+            bool isOnEnemyHitRecharge = (rechargingMethods.RechargingMethod & AbilityRechargingMethod.OnEnemyHit) != 0;
+
+            if (isOnEnemyHitRecharge)
+            {
+                _playerComponents.Shooter.RegisterOnTargetHitCallback(RechargeOnEnemyHit);
+            }
 
             // we start recharging by default since we start with an empty bar
-            EnableRecharging();
+            //_abilityChargeAmount = 0f;
+
+            // we check if the current recharging methods include charging the super over time
+            if ((_currentRechargingMethod & AbilityRechargingMethod.OverTime) != 0)
+            {
+                StartCoroutine(OverTimeChargingProcess());
+            }
         }
         #endregion
 
         public void EnableRecharging()
         {
+            _canCharge = true;
             // set the amount charged of the ability to zero
             _abilityChargeAmount = 0f;
 
@@ -54,6 +100,11 @@ namespace TankLike.UnitControllers
             {
                 StartCoroutine(OverTimeChargingProcess());
             }
+        }
+
+        public void DisableRecharging()
+        {
+            _canCharge = false;
         }
 
         private void RechargeOnHit()
@@ -87,16 +138,30 @@ namespace TankLike.UnitControllers
 
         private void AddAbilityChargeAmount(float amount)
         {
+            if(_abilityChargeAmount >= 1f)
+            {
+                return;
+            }
+
+            if (!_canCharge)
+            {
+                return;
+            }
+
             _abilityChargeAmount += amount;
-            // update UI
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetSuperAbilityChargeAmount(1 - _abilityChargeAmount, 0);
+
+            _HUD.SetSuperAbilityChargeAmount(_abilityChargeAmount, 0);
 
             if (_abilityChargeAmount >= 1f)
             {
                 // reset the amount in case it overflowed
                 _abilityChargeAmount = 1f;
                 // enable the usage of the super ability
-                ((PlayerSuperAbilities)_components.SuperAbility).EnableAbilityUsage();
+                _playerComponents.SuperAbilities.EnableAbilityUsage();
+
+                _HUD.OnAbilityFullyCharged();
+
+                OnSuperAbilityCharged?.Invoke();
             }
         }
 
@@ -107,9 +172,12 @@ namespace TankLike.UnitControllers
                 return;
             }
 
-            _abilityChargeAmount = 1f;
-            ((PlayerSuperAbilities)_components.SuperAbility).EnableAbilityUsage();
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetSuperAbilityChargeAmount(1 - _abilityChargeAmount, 0);
+            AddAbilityChargeAmount(1f);
+        }
+
+        internal bool IsFullyCharged()
+        {
+            return _abilityChargeAmount >= 1f;
         }
 
         #region IController
@@ -125,11 +193,11 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
         }
 
         public void Dispose()
         {
+            _HUD.OnPlayerDeath();
         }
         #endregion
     }

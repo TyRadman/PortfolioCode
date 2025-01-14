@@ -1,65 +1,81 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using System;
 
 namespace TankLike.ItemsSystem
 {
+    using TankLike.Misc;
     using UI.Notifications;
+    using UnitControllers;
 
+    [SelectionBase]
     [RequireComponent(typeof(Collider))]
     public abstract class Collectable : MonoBehaviour, IPoolable
     {
         [field: SerializeField] public CollectableType Type { get; private set; }
+        public Action<IPoolable> OnReleaseToPool { get; private set; }
+        public bool CanBeCollected { get; set; }
+
         [Header("Drop Settings")]
         [SerializeField] private float _bounceHeight = 1.5f;
         [SerializeField] private AnimationCurve _bounceCurve;
+        [SerializeField] private bool _skipCountDown = false;
+
         [Header("Attraction")]
         [SerializeField] private float _attractionRadius = 3f;
         [SerializeField] private CollectableAttractor _attractor;
+
         [Header("Other Values")]
         [SerializeField] private bool _bounceOnStart = true;
-        private bool _canBeCollected;
-        private const float GROUND_LEVEL = 0f;
         [SerializeField] private ConstantsManager _constants;
-        public Action<IPoolable> OnReleaseToPool { get; private set; }
-        [SerializeField] private bool _startOnEnable = true;
 
         [Header("Notifications")]
         [SerializeField] protected NotificationBarSettings_SO _notificationSettings;
 
+        [Header("Child Objects")]
+        [SerializeField] private List<ParticlesChildDetacher> _childrenToDetach;
+
         [Header("Pool")]
         [SerializeField] private bool _usePool = true;
 
-        public bool CanBeCollected => _canBeCollected;
+        private WaitForSeconds _shrinkingWait;
         private bool _isActive = false;
-        private const float SHRINKING_DURATION = 0.2f;
+        private bool _hasDeathCountDown = true;
+        private Coroutine _shrinkingRoutine;
 
-        private void OnEnable()
-        {
-            if (!_startOnEnable)
-            {
-                return;
-            }
-         
-            SpawnCollectable();
-            _attractor.SetUpAttractor(_attractionRadius, this);
-        }
+        private const float GROUND_LEVEL = 0f;
+        private const float SHRINKING_DURATION = 0.2f;
 
         public void StartCollectable()
         {
+            _shrinkingWait = new WaitForSeconds(GameManager.Instance.Constants.Collectables.DisplayDuration);
             _isActive = true;
-            SpawnCollectable();
             _attractor.SetUpAttractor(_attractionRadius, this);
+            SpawnCollectable();
+            transform.localScale = Vector3.one;
         }
 
-        public virtual void OnCollected(PlayerComponents player)
+        public virtual void SpawnCollectable()
+        {
+            if (_bounceOnStart)
+            {
+                CanBeCollected = false;
+                _attractor.EnableAttractor(false);
+
+                GameManager.Instance.CoroutineManager.StartExternalCoroutine(BounceProcess());
+            }
+            else
+            {
+                _attractor.EnableAttractor(true);
+                CanBeCollected = true;
+            }
+        }
+
+        public virtual void OnCollected(IPlayerController player)
         {
             _isActive = false;
-
-            //DisplayNotification(player.PlayerIndex);
+            GameManager.Instance.CoroutineManager.StopExternalCoroutine(_shrinkingRoutine);
 
             _attractor.EnableAttractor(false);
             CancelInvoke();
@@ -76,47 +92,29 @@ namespace TankLike.ItemsSystem
             }
         }
 
-        private void DisplayNotification(int playerIndex)
+        public void PlayParticles()
         {
-            if(_notificationSettings == null)
-            {
-                return;
-            }
-
-            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, playerIndex);
+            var vfx = GetPoofParticles();
+            vfx.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
+            vfx.gameObject.SetActive(true);
+            vfx.Play();
         }
 
         public virtual void DisableCollectable()
         {
-            _canBeCollected = false;
+            CanBeCollected = false;
             _attractor.EnableAttractor(false);
         }
 
-        [ContextMenu("Bounce")]
-        public virtual void SpawnCollectable()
-        {
-            if (_bounceOnStart)
-            {
-                _canBeCollected = false;
-                _attractor.EnableAttractor(false);
-                StartCoroutine(BounceProcess(_constants.Collectables.BounceCurves.RandomItem()));
-            }
-            else
-            {
-                _attractor.EnableAttractor(true);
-                _canBeCollected = true;
-            }
-        }
-
-        private IEnumerator BounceProcess(AnimationCurve curve)
+        private IEnumerator BounceProcess()
         {
             float timer = 0;
 
-            float boundTime = GameManager.Instance.Constants.Collectables.BounceTime;
+            float bounceTime = GameManager.Instance.Constants.Collectables.BounceTime;
 
-            while (timer < boundTime)
+            while (timer < bounceTime)
             {
-                float offset = _bounceCurve.Evaluate(timer / boundTime) * _bounceHeight;
+                float offset = _bounceCurve.Evaluate(timer / bounceTime) * _bounceHeight;
                 transform.position = new Vector3(transform.position.x, GROUND_LEVEL + offset, transform.position.z);
                 timer += Time.deltaTime;
                 yield return null;
@@ -124,18 +122,21 @@ namespace TankLike.ItemsSystem
 
             transform.position = new Vector3(transform.position.x, GROUND_LEVEL + _bounceCurve.Evaluate(1f) * _bounceHeight, transform.position.z);
             _attractor.EnableAttractor(true);
-            _canBeCollected = true;
+            CanBeCollected = true;
             OnBounceFinished();
         }
 
         protected virtual void OnBounceFinished()
         {
-            StartCoroutine(ShrinkingProcess());
+            if (_hasDeathCountDown && !_skipCountDown)
+            {
+                _shrinkingRoutine = GameManager.Instance.CoroutineManager.StartExternalCoroutine(ShrinkingProcess());
+            }
         }
 
         private IEnumerator ShrinkingProcess()
         {
-            yield return new WaitForSeconds(GameManager.Instance.Constants.Collectables.DisplayDuration);
+            yield return _shrinkingWait;
 
             float timeElapsed = 0f;
             Vector3 startScale = transform.localScale;
@@ -147,6 +148,8 @@ namespace TankLike.ItemsSystem
                 yield return null;
             }
 
+            _isActive = false;
+
             if (_usePool)
             {
                 OnReleaseToPool(this);
@@ -157,16 +160,18 @@ namespace TankLike.ItemsSystem
             }
         }
 
-        public void PlayParticles()
+        protected virtual ParticleSystemHandler GetPoofParticles()
         {
-            var vfx = GameManager.Instance.VisualEffectsManager.Misc.OnCollectedPoof;
-            vfx.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
-            vfx.gameObject.SetActive(true);
-            vfx.Play();
+            return GameManager.Instance.VisualEffectsManager.Misc.OnCollectedPoof;
+        }
+
+        public void ActivateSelfDestructTimer(bool isActive)
+        {
+            _hasDeathCountDown = isActive;
         }
 
         #region Pool
-        public void Init(System.Action<IPoolable> OnRelease)
+        public void Init(Action<IPoolable> OnRelease)
         {
             OnReleaseToPool = OnRelease;
         }
@@ -182,6 +187,7 @@ namespace TankLike.ItemsSystem
 
         public void OnRelease()
         {
+            _childrenToDetach.ForEach(c => c.DetachAndReattach());
             gameObject.SetActive(false);
         }
 

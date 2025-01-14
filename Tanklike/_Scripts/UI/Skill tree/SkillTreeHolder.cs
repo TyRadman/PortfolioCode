@@ -1,191 +1,257 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Combat;
-using TankLike.UI;
-using TankLike.UI.Inventory;
-using TankLike.UnitControllers;
-using TankLike.Utils;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Video;
 
-namespace TankLike.SkillTree
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+namespace TankLike.Combat.SkillTree
 {
+    using UI;
     using UI.Workshop;
+    using UnitControllers;
+    using Utils;
+    using UI.SkillTree;
+    using Upgrades;
+    using Attributes;
+    using TankLike.Sound;
 
-    public class SkillTreeHolder : Navigatable, IInput
+    public class SkillTreeHolder : Navigatable
     {
+        [SerializeField] private Audio _navigationSFX;
+        [SerializeField] private Audio _selectionSFX;
+        [SerializeField] private Audio _errorSFX;
+        [Header("Caches")]
+        [SerializeField] private SkillTreeCell _centerCell;
+        [SerializeField] private List<SkillTreeCell> _cells;
+
+        [Header("Line References")]
+        [SerializeField] private SkillTreeLine _linePrefab;
+        [SerializeField] private Transform _linesParent;
+
+        [Header("Movement References")]
+        [SerializeField] private RectTransform _skillTreeRect;
+        [SerializeField] private Transform _parent;
+
+        [Header("Components")]
+        [SerializeField] private SkillTreeUIDisplayer _UIDisplayer;
+        [SerializeField] private SkillTreeUpgradesController _upgradesController;
+        [SerializeField] private SkillTreeRandomSkillMenuController _randomSkillsMenu;
+        [SerializeField] private SkillTreeAdditionalCellsGenerator _specialCellsGenerator;
+        [SerializeField, InSelf] private SkillTreeBranchBuilder _branchBuilder;
+        [SerializeField, InSelf(true)] private SkillTreeInput _input;
+
+        private Dictionary<Direction, Coroutine> _navigationRoutines = new Dictionary<Direction, Coroutine>()
+        {
+            {Direction.Up, null},
+            {Direction.Down, null},
+            {Direction.Left, null},
+            {Direction.Right, null }
+        };
+
+        private PlayerComponents _currentPlayer;
+        private SkillTreeCell _activeSkillCell;
+        private WorkShopTabsNavigatable _workShopNavigatable;
+        private SkillTreeCell _lastSelectedCell;
+        private Vector2 _destinationToMoveTo;
+        private float _skillTreeMovementThreshold;
+        private bool _canMove = false;
+        private bool _isHolding = false;
+        private bool _isInControl = false;
+
         #region Constants
+        private readonly WaitForSeconds _holdUpdateWait = new WaitForSeconds(0.2f);
+
         private const string EMPTY_NAME_TEXT = "Skill name";
         private const string EMPTY_DESCRIPTION_TEXT = "The skill description";
         private const string EMPTY_POINTS_REQUIRED_TEXT = "--";
         private const string RANDOM_NAME_TEXT = "Random Skill";
         private const string RANDOM_DESCRIPTION_TEXT = "Choose one of two random skills";
         private const string RANDOM_POINTS_REQUIRED_TEXT = "1";
-        private const int RANDOM_SKILL_POINTS_REQUIRED_AMOUNT = 1;
-        private const float SELECTION_HOLD_DURATION = 1f;
         private const float SELECTION_HOLD_EMPTYING_SPEED_MULTIPLIER = 4f;
-        #endregion
-        [SerializeField] private SkillTreeCell _activeSkillCell;
-        [Header("Colors")]
-        [SerializeField] private Color _unavailableCellColor;
-        [SerializeField] private Color _lockedCellColor;
-        [SerializeField] private Color _unlockedCellColor;
-        [SerializeField] private SkillTreeCell _centerCell;
-        [SerializeField] private List<SkillTreeCell> _cells;
-        [Header("References")]
-        [SerializeField] private TextMeshProUGUI _skillNameText;
-        [SerializeField] private TextMeshProUGUI _skillDescriptionText;
-        [SerializeField] private TextMeshProUGUI _skillPointsRequiredText;
-        [SerializeField] private TextMeshProUGUI _playerSkillPointsText;
-        [SerializeField] private TextMeshProUGUI _skillStateText;
-        [SerializeField] private SkillTreeRandomSkillMenuController _randomSkillsMenu;
-        [SerializeField] private SkillTreeSkillsDatabase _mutualSkillsDatabase;
-        [SerializeField] private SkillTreeSkillsDatabase _specialSkillsDatabase;
-        [SerializeField] private List<SkillProfile> _randomSkills = new List<SkillProfile>();
-        private WorkShopTabsNavigatable _workShopNavigatable;
-        private SkillTreeCell _lastSelectedCell;
-        private bool _canMove = false;
-        [SerializeField] private float _coolDown = 0.1f;
-        private PlayerComponents _currentPlayer;
-        private bool _isHolding = false;
+        private const int RANDOM_SKILL_POINTS_REQUIRED_AMOUNT = 1;
+        private const float SKILL_TREE_MOVEMENT_SPEED = 0.2f;
 
-        private void Awake()
+        private readonly float _navigationCoolDown = 0.05f;
+
+        private readonly Dictionary<UpgradeTypes, string> _upgradeDescriptioins = new Dictionary<UpgradeTypes, string>()
         {
-            _randomSkillsMenu.Close();
-            // add all the skills to a list so that we can remove skills later to avoid duplications
-            _mutualSkillsDatabase.Skills.ForEach(s => _randomSkills.Add(s));
-            _specialSkillsDatabase.Skills.ForEach(s => _randomSkills.Add(s));
-            _workShopNavigatable = GameManager.Instance.WorkShopManager;
+            {UpgradeTypes.BaseWeapon, $"Unlock one of two {"Base Weapon".Color(_upgradeColors[UpgradeTypes.BaseWeapon])}" },
+            {UpgradeTypes.ChargeAttack, $"Unlock one of two {"Charge Attack".Color(_upgradeColors[UpgradeTypes.ChargeAttack])}" },
+            {UpgradeTypes.SuperAbility, $"Unlock one of two {"Super Ability".Color(_upgradeColors[UpgradeTypes.SuperAbility])}" },
+            {UpgradeTypes.StatsUpgrade, $"Unlock one of two {"Tank Upgrades".Color(_upgradeColors[UpgradeTypes.StatsUpgrade])}" },
+            {UpgradeTypes.SpecialUpgrade, $"Unlock one of two {"Special Tank Upgrades".Color(_upgradeColors[UpgradeTypes.SpecialUpgrade])}" },
+            {UpgradeTypes.None, "Base Cell" }
+        };
+
+        private static readonly Dictionary<UpgradeTypes, Color> _upgradeColors = new Dictionary<UpgradeTypes, Color>()
+        {
+            {UpgradeTypes.BaseWeapon, new Color(0.3f, 0.7f, 1f)},     // Azure Blue
+            {UpgradeTypes.ChargeAttack, new Color(0.5f, 0.3f, 0.9f)}, // Bold Purple
+            {UpgradeTypes.SuperAbility, new Color(1f, 0.2f, 0.2f)},   // Stellar Violet
+            {UpgradeTypes.StatsUpgrade, new Color(0.376f, 0.882f, 0.878f)}, // Teal Blue
+            {UpgradeTypes.SpecialUpgrade, new Color(0.933f, 0.380f, 0.137f)},
+            {UpgradeTypes.None,  Colors.White}
+        };
+
+        private readonly Dictionary<UpgradeTypes, string> _upgradeNames = new Dictionary<UpgradeTypes, string>()
+        {
+            {UpgradeTypes.BaseWeapon,  "Base Weapon".Color(_upgradeColors[UpgradeTypes.BaseWeapon]) + " Upgrade"},
+            {UpgradeTypes.ChargeAttack,  "Charge Attack".Color(_upgradeColors[UpgradeTypes.ChargeAttack]) + " Upgrade"},
+            {UpgradeTypes.SuperAbility,  "Super Ability".Color(_upgradeColors[UpgradeTypes.SuperAbility]) + " Upgrade" },
+            {UpgradeTypes.StatsUpgrade,  "Tank Upgrade".Color(_upgradeColors[UpgradeTypes.StatsUpgrade])},
+            {UpgradeTypes.SpecialUpgrade,  "Special Upgrade".Color(_upgradeColors[UpgradeTypes.SpecialUpgrade])},
+            {UpgradeTypes.None,  "Base Cell"}
+        };
+        #endregion
+
+        #region Set up
+        public void BuildBranches()
+        {
+            _cells.AddRange(_branchBuilder.BuildBranches());
         }
 
         public override void SetUp()
         {
             base.SetUp();
 
-            _cells.ForEach(c => c.SetUp());
+            _cells.AddRange(_branchBuilder.BuildBranches());
+            _isInControl = true;
+
+            _workShopNavigatable = GameManager.Instance.WorkshopController.WorkshopUI;
+
+            SetCellColors();
+
             _activeSkillCell = _centerCell;
-            Navigate(Direction.Down);
-            Navigate(Direction.Up);
+
             CancelInvoke();
             _canMove = false;
+
+            _skillTreeMovementThreshold = _branchBuilder.GetCellsDistance() * _parent.localScale.x;
+
+            if (_specialCellsGenerator != null)
+            {
+                _specialCellsGenerator.SetUp(this);
+                _specialCellsGenerator.GenerateSpecialSkills();
+            }
+
+            _upgradesController.SetUp(_currentPlayer);
+
+            GameManager.Instance.WorkshopController.OnWorkshopSpawned += OnWorkshopSpawned;
         }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            GameManager.Instance.WorkshopController.OnWorkshopSpawned -= OnWorkshopSpawned;
+        }
+
+        private void SetCellColors()
+        {
+            _cells.ForEach(c => c.SetUp());
+            _centerCell.SetColor(Colors.White);
+
+            for (int i = 0; i < _cells.Count; i++)
+            {
+                _cells[i].SetLockedImageColor(_upgradeColors[_cells[i].UpgradeType]);
+            }
+        }
+
+        public void SetPlayer(PlayerComponents player)
+        {
+            _currentPlayer = player;
+        }
+
+        private void OnWorkshopSpawned()
+        {
+            SetActiveCell(_centerCell);
+            _destinationToMoveTo = Vector3.zero;
+            _skillTreeRect.localPosition = Vector3.zero;
+        }
+        #endregion
 
         #region Open, Close and Load
         public override void Open(int playerIndex = 0)
         {
             base.Open(playerIndex);
-            _activeSkillCell.HighLight(true);
+            _activeSkillCell.Highlight();
             _canMove = true;
-            SetUpInput(PlayerIndex);
+            _input.SetUpInput(PlayerIndex);
             GameManager.Instance.InputManager.EnableUIInput();
-            _currentPlayer = GameManager.Instance.PlayersManager.GetPlayer(PlayerIndex);
-            // load the player's skill
+
+            _centerCell.ChangeCellState(CellState.Unlocked);
         }
 
         public override void Close(int playerIndex = 0)
         {
-            if (!IsActive)
+            if (!IsOpened)
             {
                 return;
+            }
+
+            if(_activeSkillCell.GetProgressAmount() != 0f)
+            {
+                _activeSkillCell.SetProgressAmount(0f);
             }
 
             base.Close(playerIndex);
             CancelInvoke();
-            DisposeInput(playerIndex);
-        }
-
-        public override void Load(int playerIndex = 0)
-        {
-            base.Load(playerIndex);
+            _input.DisposeInput(PlayerIndex);
         }
         #endregion
 
         #region Input
-        public void SetUpInput(int playerIndex)
+        public void StartSelection()
         {
-            PlayerInputActions c = InputManager.Controls;
-            InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
-            UIMap.FindAction(c.UI.Navigate_Up.name).performed += NavigateUp;
-            UIMap.FindAction(c.UI.Navigate_Down.name).performed += NavigateDown;
-            UIMap.FindAction(c.UI.Navigate_Right.name).performed += NavigateRight;
-            UIMap.FindAction(c.UI.Navigate_Left.name).performed += NavigateLeft;
-
-            UIMap.FindAction(c.UI.Submit.name).started += StartSelection;
-            UIMap.FindAction(c.UI.Submit.name).canceled += EndSelection;
-            UIMap.FindAction(c.UI.Submit.name).performed += SelectAction;
-        }
-
-        private void StartSelection(InputAction.CallbackContext _)
-        {
-            if (!_activeSkillCell.IsOnHold)
+            if (!_isInControl)
             {
                 return;
             }
 
             StopAllCoroutines();
+
             StartCoroutine(SelectionHoldProcess());
         }
 
-        private void EndSelection(InputAction.CallbackContext _)
+        public void EndSelection()
         {
-            if (!_isHolding)
+            if (!_isHolding || !_isInControl)
             {
                 return;
             }
 
             StopAllCoroutines();
-            StartCoroutine(SelectionHoldDeprocess());
+            StartCoroutine(SelectionReleaseHoldProcess());
         }
 
-        public void DisposeInput(int playerIndex)
+        public void NavigateByDirection(Direction direction)
         {
-            PlayerInputActions c = InputManager.Controls;
-            InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
-
-            UIMap.FindAction(c.UI.Navigate_Up.name).performed -= NavigateUp;
-            UIMap.FindAction(c.UI.Navigate_Down.name).performed -= NavigateDown;
-            UIMap.FindAction(c.UI.Navigate_Right.name).performed -= NavigateRight;
-            UIMap.FindAction(c.UI.Navigate_Left.name).performed -= NavigateLeft;
-
-            UIMap.FindAction(c.UI.Submit.name).started -= StartSelection;
-            UIMap.FindAction(c.UI.Submit.name).canceled -= EndSelection;
-            UIMap.FindAction(c.UI.Submit.name).performed -= SelectAction;
-
-            GameManager.Instance.InputManager.DisableInputs();
-            GameManager.Instance.InputManager.EnablePlayerInput();
-        }
-
-        public override void NavigateLeft(InputAction.CallbackContext _)
-        {
-            base.NavigateLeft(_);
-            Navigate(Direction.Left);
-        }
-        public override void NavigateRight(InputAction.CallbackContext _)
-        {
-            base.NavigateLeft(_);
-            Navigate(Direction.Right);
-        }
-        public override void NavigateUp(InputAction.CallbackContext _)
-        {
-            base.NavigateLeft(_);
-            Navigate(Direction.Up);
-        }
-        public override void NavigateDown(InputAction.CallbackContext _)
-        {
-            base.NavigateLeft(_);
-            Navigate(Direction.Down);
-        }
-
-        private void SelectAction(InputAction.CallbackContext _)
-        {
-            if (_activeSkillCell.IsOnHold)
+            if (!_isInControl)
             {
                 return;
             }
 
-            Select();
+            this.StopCoroutineSafe(_navigationRoutines[direction]);
+
+            _navigationRoutines[direction] = StartCoroutine(NavigationRoutinte(direction));
+        }
+
+        public void StopNavigationByDirection(Direction direction)
+        {
+            this.StopCoroutineSafe(_navigationRoutines[direction]);
+        }
+
+        private IEnumerator NavigationRoutinte(Direction direction)
+        {
+            while (IsOpened)
+            {
+                Navigate(direction);
+                yield return _holdUpdateWait;
+            }
         }
         #endregion
 
@@ -194,124 +260,217 @@ namespace TankLike.SkillTree
         #region Navigation
         public override void Navigate(Direction direction)
         {
-            if (!IsActive || !_canMove)
+            if (!IsOpened || !_canMove)
             {
                 return;
             }
 
             base.Navigate(direction);
 
-            var nextCell = _activeSkillCell.NextCellInputs.Find(c => c.CellDirection == direction);
+            SkillsConnectedCell nextCell = _activeSkillCell.ConnectedCells.Find(c => c.CellDirection == direction);
 
-            if (nextCell == null)
+            if (nextCell == null || nextCell.Cell == null)
             {
                 return;
             }
 
-            _activeSkillCell.HighLight(false);
-            _activeSkillCell = nextCell.Cell;
-            _activeSkillCell.HighLight(true);
+            _activeSkillCell.Unhighlight();
+            _activeSkillCell = nextCell.Cell as SkillTreeCell;
+            _activeSkillCell.Highlight();
 
+            Vector2 cellLocalPosition = _activeSkillCell.RectTransform.localPosition;
+            float xPosition = Mathf.Max(0f, Mathf.Abs(cellLocalPosition.x) - _skillTreeMovementThreshold) * Mathf.Sign(cellLocalPosition.x);
+            float yPosition = Mathf.Max(0f, Mathf.Abs(cellLocalPosition.y) - _skillTreeMovementThreshold) * Mathf.Sign(cellLocalPosition.y);
+            _destinationToMoveTo = -1 * new Vector2(xPosition, yPosition);
 
-            string name = string.Empty;
-            string description = string.Empty;
-            string requiredPoints = string.Empty;
-            CellState state = _activeSkillCell.CellState;
-            int playerPoints = _currentPlayer.Upgrades.GetSkillPoints();
+            UpdateSkillTreeUI();
 
-            if (_activeSkillCell.CellType == CellType.Random)
+            _canMove = false;
+            Invoke(nameof(EnableMovement), _navigationCoolDown);
+            GameManager.Instance.AudioManager.Play(_navigationSFX);
+        }
+
+        private void Update()
+        {
+            _skillTreeRect.localPosition = Vector2.Lerp(_skillTreeRect.localPosition, _destinationToMoveTo, SKILL_TREE_MOVEMENT_SPEED);
+        }
+
+        #endregion
+
+        #region Update UI
+        private void UpdateSkillTreeUI()
+        {
+            UpdateSkillName();
+            UpdateSkillDescription();
+            UpdatePreviewVideo();
+            UpdateSkillPoints();
+            UpdateSkillState();
+        }
+
+        private void UpdateSkillName()
+        {
+            string name;
+
+            if (_activeSkillCell.CellState == CellState.Unlocked)
             {
-                name = RANDOM_NAME_TEXT;
-                description = RANDOM_DESCRIPTION_TEXT;
-                requiredPoints = RANDOM_POINTS_REQUIRED_TEXT;
-            }
-            else if(_activeSkillCell.SkillProfile == null)
-            {
-                name = EMPTY_NAME_TEXT;
-                description = EMPTY_DESCRIPTION_TEXT;
-                requiredPoints = EMPTY_POINTS_REQUIRED_TEXT;
+                name = _activeSkillCell.GetName();
             }
             else
             {
-                //name = _activeSkillCell.SkillProfile.GetName();
-                //description = _activeSkillCell.SkillProfile.GetDescription();
-                requiredPoints = _activeSkillCell.SkillProfile.SkillPointsRequired.ToString();
+                name = _upgradeNames[_activeSkillCell.UpgradeType];
             }
 
-            //SetSkillInfo(name, description, requiredPoints);
-            UpdateUI(name, description, requiredPoints, state, playerPoints);
-            // cool down stuff
-            _canMove = false;
-            Invoke(nameof(EnableMovement), _coolDown);
+            _UIDisplayer.UpdateName(name);
+        }
+
+        private void UpdateSkillDescription()
+        {
+            string description;
+
+            if (_activeSkillCell.CellState == CellState.Unlocked)
+            {
+                description = _activeSkillCell.GetDescription();
+            }
+            else
+            {
+                description = _upgradeDescriptioins[_activeSkillCell.UpgradeType];
+            }
+
+            _UIDisplayer.UpdateDescription(description);
+        }
+
+        private void UpdatePreviewVideo()
+        {
+            VideoClip videoClip = null;
+
+            if (_activeSkillCell.SkillProfile != null && _activeSkillCell.SkillProfile.PreviewVideo != null)
+            {
+                videoClip = _activeSkillCell.SkillProfile.PreviewVideo;
+            }
+
+            _UIDisplayer.UpdatePreviewVideo(videoClip);
+        }
+
+        private void UpdateSkillPoints()
+        {
+            bool displaySkillPoints = _activeSkillCell.CellState != CellState.Unlocked;
+            int playerPoints = _currentPlayer.Upgrades.GetSkillPoints();
+            int requiredPoints = _activeSkillCell.RequiredSkillPoints;
+
+            _UIDisplayer.UpdateSkillPoints(displaySkillPoints, playerPoints, requiredPoints);
+        }
+
+        private void UpdateSkillState()
+        {
+            _UIDisplayer.UpdateSkillState(_activeSkillCell.CellState);
         }
         #endregion
 
+        private void OneClickSelect()
+        {
+            if (!IsCellSelectable())
+            {
+                _activeSkillCell.PlayOnWarningAnimation();
+                return;
+            }
+
+            Select();
+        }
+
         private IEnumerator SelectionHoldProcess()
         {
-            if (!CellIsSelectable())
+            if (!IsCellSelectable())
             {
                 yield break;
             }
 
+
+            GameManager.Instance.AudioManager.Play(_selectionSFX);
             _isHolding = true;
-            float time = Mathf.Lerp(0f, SELECTION_HOLD_DURATION,
-                   Mathf.InverseLerp(0f, SELECTION_HOLD_DURATION, _activeSkillCell.GetFillAmount()));
+
+            float holdDuration = 1 / _activeSkillCell.HoldValue;
+            float holdValue = _activeSkillCell.HoldValue;
+
+            // get the last point the progress bar was at to start incrementing it from there
+            float time = Mathf.Lerp(0f, holdDuration, 
+                Mathf.InverseLerp(0f, holdDuration, _activeSkillCell.GetFillAmount()));
+
+            // TODO: we don't need to do this every time an ability unlocks since the duration is a constant and won't change (do it through the animation)
+            _activeSkillCell.SetHoldAnimationDurationMultiplier(holdDuration);
+
+            // play scale up animation
+            _activeSkillCell.PlayOnHoldStartedAnimation();
+
             _canMove = false;
 
-            while (time < SELECTION_HOLD_DURATION)
+            while (time < holdDuration)
             {
                 time += Time.deltaTime;
-                _activeSkillCell.SetProgressAmount(time / SELECTION_HOLD_DURATION);
+                float progressBarAmount = time * holdValue;
+                _activeSkillCell.SetProgressAmount(progressBarAmount);
                 yield return null;
             }
+
+            _activeSkillCell.PlayOnHoldStoppedAnimmation();
 
             _isHolding = false;
             _canMove = true;
             Select();
         }
 
-        private IEnumerator SelectionHoldDeprocess()
+        private IEnumerator SelectionReleaseHoldProcess()
         {
             if(_activeSkillCell.GetFillAmount() == 0f)
             {
                 yield break;
             }
 
-            float time = Mathf.Lerp(0f, SELECTION_HOLD_DURATION, 
-                Mathf.InverseLerp(0f, SELECTION_HOLD_DURATION, _activeSkillCell.GetFillAmount()));
+            float holdDuration = 1 / _activeSkillCell.HoldValue;
+            float holdValue = _activeSkillCell.HoldValue;
+
+            _activeSkillCell.PlayOnHoldStoppedAnimmation();
+
+            // get the point the progress bar reached before the input stopped to backtrack from there
+            float progress = Mathf.InverseLerp(0f, holdDuration, _activeSkillCell.GetFillAmount());
+            float time = Mathf.Lerp(0f, holdDuration, progress);
+
             _canMove = false;
 
             while (time > 0)
             {
                 time -= Time.deltaTime * SELECTION_HOLD_EMPTYING_SPEED_MULTIPLIER;
-                _activeSkillCell.SetProgressAmount(time / SELECTION_HOLD_DURATION);
+                float progressBarAmount = time * holdValue;
+                _activeSkillCell.SetProgressAmount(progressBarAmount);
                 yield return null;
             }
 
             _canMove = true;
         }
 
-        private bool CellIsSelectable()
+        private bool IsCellSelectable()
         {
-            bool isNonSelectable = _activeSkillCell.CellType == CellType.None;
+            //bool isNotSelectable = _activeSkillCell.CellType == CellType.None;
             bool isUnlocked = _activeSkillCell.CellState == CellState.Unlocked;
 
-            if (isNonSelectable || !IsActive || isUnlocked)
+            if (!IsOpened || isUnlocked)
             {
+                GameManager.Instance.AudioManager.Play(_errorSFX);
                 return false;
             }
 
             bool cellIsUnavailable = _activeSkillCell.CellState == CellState.Unavailable;
-            bool playerHasEnoughSkillPoints = _currentPlayer.Upgrades.GetSkillPoints() >= _activeSkillCell.SkillProfile.SkillPointsRequired;
+            bool playerHasEnoughSkillPoints = _currentPlayer.Upgrades.GetSkillPoints() >= _activeSkillCell.RequiredSkillPoints;
 
             if (cellIsUnavailable)
             {
-                print($"Can't unlock this skill yet. Unlock the previous one first.");
+                GameManager.Instance.AudioManager.Play(_errorSFX);
+                //print($"Can't unlock this skill yet. Unlock the previous one first.");
                 return false;
             }
 
             if (!playerHasEnoughSkillPoints)
             {
+                GameManager.Instance.AudioManager.Play(_errorSFX);
                 return false;
             }
 
@@ -320,154 +479,70 @@ namespace TankLike.SkillTree
 
         public override void Select()
         {
-            if (!CellIsSelectable())
-            {
-                return;
-            }
-
-            _activeSkillCell.PlayOnProgressBarFinishedAnimation();
-
-            switch (_activeSkillCell.CellType)
-            {
-                case CellType.Predefined:
-                    {
-                        OnPredefinedSkillSelected();
-                        break;
-                    }
-                case CellType.Random:
-                    {
-                        OnRandomSkillSelected();
-                        break;
-                    }
-                case CellType.RandomOptionMenu:
-                    {
-                        OnCellFromRandomMenuSelected();
-                        break;
-                    }
-            }
-        }
-
-        private void OnPredefinedSkillSelected()
-        {
-            SkillProfile skillProfile = _activeSkillCell.SkillProfile;
-            // apply the skill
-            // TODO: Fix the skill tree
-            //skillProfile.SkillHolder.SetUp(_currentPlayer.Upgrades.transform);
-            // set the cell's state to unlocked
-            _activeSkillCell.ChangeCellState(CellState.Unlocked);
-            // deduct the skill points
-            _currentPlayer.Upgrades.AddSkillPoints(-skillProfile.SkillPointsRequired);
-            // update UI
-            UpdateUI("--", _activeSkillCell.CellState, _currentPlayer.Upgrades.GetSkillPoints());
-
+            _activeSkillCell.PlayOnUnlockedAnimation();
+            OnRandomSkillSelected();
         }
 
         private void OnRandomSkillSelected()
         {
+            _activeSkillCell.Unhighlight();
+         
             // disable input from the workshop manager (changing tabs or exiting the menu)
-            _workShopNavigatable.IsActive = false;
-            // cache the last selected cell in the skill tree which is the random cell
-            _lastSelectedCell = _activeSkillCell;
-            // show the menu
-            _randomSkillsMenu.Open();
-            // remove the highlight from the skill tree cell
-            _activeSkillCell.HighLight(false);
-            // highlight the first cell in the random skills menu
-            _activeSkillCell = _randomSkillsMenu.GetFirstCell();
-            _activeSkillCell.HighLight(true);
-            // set skill profiles for the cells
-            SkillProfile firstSkill = _randomSkills.RandomItem(true);
-            SkillProfile secondSkill = _randomSkills.RandomItem(true);
-            _randomSkillsMenu.SetSkills(firstSkill, secondSkill);
-            // deduct skill points from player
-            int skillPointsRequired = 1;
-            _currentPlayer.Upgrades.AddSkillPoints(-skillPointsRequired);
+            _workShopNavigatable.IsOpened = false;
+
+            PopulatePopUpWindowSkills();
+
+            _randomSkillsMenu.SetCellIconColor(_upgradeColors[_activeSkillCell.UpgradeType]);
+
+            _randomSkillsMenu.Open(PlayerIndex);
+
+            _isInControl = false;
+
+            _currentPlayer.Upgrades.AddSkillPoints(-_activeSkillCell.RequiredSkillPoints);
+            _UIDisplayer.UpdatePlayerSkillPointsCount(_currentPlayer.Upgrades.GetSkillPoints());
         }
 
-        private void OnCellFromRandomMenuSelected()
+        private void PopulatePopUpWindowSkills()
         {
-            // enable the workshop
-            _workShopNavigatable.IsActive = true;
+            List<SkillUpgrade> upgrades = _upgradesController.GetUpgrades(_activeSkillCell.UpgradeType, PlayerIndex);
+            SkillUpgrade firstSkill = upgrades.RandomItem();
+            SkillUpgrade secondSkill = upgrades.FindAll(s => s != firstSkill).RandomItem();
 
-            SkillProfile skillProfile = _activeSkillCell.SkillProfile;
-            // apply the skill
-            // TODO: Skill tree fixes
-            //skillProfile.SkillHolder.SetUp(_currentPlayer.Upgrades.transform);
-            // deduct the skill points
-            _currentPlayer.Upgrades.AddSkillPoints(-skillProfile.SkillPointsRequired);
+            //Debug.Log($"First upgrade is {firstSkill.name}");
+            //Debug.Log($"First upgrade is {secondSkill.name}");
+            //Debug.Log($"Getting upgrades for player {PlayerIndex} and got {firstSkill.GetPlayer().PlayerIndex}");
+            _randomSkillsMenu.SetSkillProfiles(firstSkill, secondSkill);
+        }
 
-            // update the cell in the skill tree
-            _randomSkillsMenu.Close();
-            _activeSkillCell = _lastSelectedCell;
-            _activeSkillCell.SetSkillProfile(skillProfile);
+        public void EnableSkillTreeHolder()
+        {
+            _isInControl = true;
+
+            _workShopNavigatable.IsOpened = true;
+
             _activeSkillCell.ChangeCellState(CellState.Unlocked);
-            _activeSkillCell.HighLight(true);
-            _activeSkillCell.SetCellType(CellType.None);
-            // return the unselected skill to the pool
-            _randomSkills.Add(_randomSkillsMenu.GetOtherCell(_activeSkillCell).SkillProfile);
 
-            UpdateUI("--", _activeSkillCell.CellState, _currentPlayer.Upgrades.GetSkillPoints());
-        }
-        #endregion
-
-        #region Update UI overloads
-        public void UpdateUI(CellState state, int availablePoints)
-        {
-            _skillStateText.text = state.ToString();
-
-            if (availablePoints >= 0)
+            if (_activeSkillCell.UpgradeType == UpgradeTypes.SpecialUpgrade)
             {
-                _playerSkillPointsText.text = availablePoints.ToString();
+                _activeSkillCell.SetColor(_upgradeColors[_activeSkillCell.UpgradeType]);
             }
 
-            // coloring
-            if (state == CellState.None)
-            {
-                _skillStateText.text = string.Empty;
-            }
-            else
-            {
-                _skillStateText.color = state == CellState.Unavailable ? _unavailableCellColor : state == CellState.Locked ? _lockedCellColor : _unlockedCellColor;
-            }
+            _activeSkillCell.SetColoredOutlineColor(_upgradeColors[_activeSkillCell.UpgradeType]);
 
-            if (_activeSkillCell.SkillProfile == null)
-            {
-                return;
-            }
+            _activeSkillCell.Highlight();
 
-            if (availablePoints < _activeSkillCell.SkillProfile.SkillPointsRequired)
-            {
-                _skillPointsRequiredText.color = _unavailableCellColor;
-            }
-            else
-            {
-                _skillPointsRequiredText.color = _lockedCellColor;
-            }
+            UpdateSkillTreeUI();
         }
 
-        public void UpdateUI(string pointsRequired, CellState state, int availablePoints)
+        private void SetActiveCell(SkillTreeCell newCell, bool dehighlightPreviousCell = true)
         {
-            if (pointsRequired != string.Empty)
+            if (dehighlightPreviousCell && _activeSkillCell != null)
             {
-                _skillPointsRequiredText.text = pointsRequired;
+                _activeSkillCell.Unhighlight();
             }
 
-            UpdateUI(state, availablePoints);
-        }
-
-        public void UpdateUI(string name, string description, string requiredPoints, CellState state, int availablePoints)
-        {
-            if (name != string.Empty)
-            {
-                _skillNameText.text = name;
-            }
-
-            if (description != string.Empty)
-            {
-                _skillDescriptionText.text = description;
-            }
-
-            UpdateUI(requiredPoints, state, availablePoints);
+            _activeSkillCell = newCell;
+            _activeSkillCell.Highlight();
         }
         #endregion
 
@@ -476,17 +551,10 @@ namespace TankLike.SkillTree
             _canMove = true;
         }
 
-        public void SetSkillInfo(string name, string description, string skillPoints)
-        {
-            _skillNameText.text = name;
-            _skillDescriptionText.text = description;
-            _skillPointsRequiredText.text = skillPoints;
-        }
-
         public override void DehighlightCells()
         {
             base.DehighlightCells();
-            _activeSkillCell.HighLight(false);
+            _activeSkillCell.Unhighlight();
         }
 
         public override void SetActiveCellAsFirstCell()
@@ -494,7 +562,69 @@ namespace TankLike.SkillTree
             base.SetActiveCellAsFirstCell();
 
             _activeSkillCell = _centerCell;
-            _activeSkillCell.HighLight(true);
+            _activeSkillCell.Highlight();
         }
+
+        public void CreateLineBetweenCells(SkillTreeCell firstCell, SkillTreeCell secondCell)
+        {
+            SkillTreeLine newLine = Instantiate(_linePrefab, _linesParent);
+            firstCell.ConnectionLines.Add(newLine);
+            newLine.ConnectCells(firstCell, secondCell);
+        }
+
+        public SkillTreeCell GetActiveCell()
+        {
+            return _activeSkillCell;
+        }
+
+        #region Editor Methods
+#if UNITY_EDITOR
+        public void GenerateConnectionLines()
+        {
+            ClearConnectionLines();
+            CreateLinesForNextCells(_centerCell);
+        }
+
+        private void CreateLinesForNextCells(SkillTreeCell cell)
+        {
+            cell.Holder = this;
+
+            if(cell.NextCells.Count == 0)
+            {
+                return;
+            }
+
+            if(cell.NextCells.Exists(c => c == null))
+            {
+                cell.NextCells.RemoveAll(c => c == null);
+            }
+
+            cell.ConnectionLines.Clear();
+
+            for (int i = 0; i < cell.NextCells.Count; i++)
+            {
+                SkillTreeCell nextCell = cell.NextCells[i];
+
+                SkillTreeLine newLine = (SkillTreeLine)PrefabUtility.InstantiatePrefab(_linePrefab, _linesParent);
+                cell.ConnectionLines.Add(newLine);
+
+                newLine.ConnectCells(cell, nextCell);
+
+                CreateLinesForNextCells(cell.NextCells[i]);
+
+                // TODO: remember that this is important!
+                EditorUtility.SetDirty(newLine.gameObject);
+            }
+        }
+
+        public void ClearConnectionLines()
+        {
+            for (int i = _linesParent.childCount - 1; i >= 0 ; i--)
+            {
+                DestroyImmediate(_linesParent.GetChild(i).gameObject);
+            }
+        }
+#endif
+        #endregion
     }
 }

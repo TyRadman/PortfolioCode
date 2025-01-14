@@ -9,13 +9,17 @@ namespace TankLike.UnitControllers.States
     [CreateAssetMenu(fileName = "State_Explosive_Move", menuName = MENU_PATH + "Explosive/Move State")]
     public class ExplosiveMoveState : MoveState
     {
-        private float _pathUpdateTime = 0.5f;
+        private float _pathUpdateTime = 0.25f;
         private float _pathUpdateTimer;
+
+        private ExplosiveShooter _shooter;
 
         public override void SetUp(StateMachine<EnemyStateType> stateMachine, EnemyComponents enemyComponents)
         {
             base.SetUp(stateMachine, enemyComponents);
-            _movement.OnTargetReached += OnTargetReachedHandler;
+
+            _shooter = (ExplosiveShooter)enemyComponents.Shooter;
+            _shooter.OnExplosionTriggered += OnExplosionTriggeredHandler;
         }
 
         public override void OnEnter()
@@ -43,7 +47,7 @@ namespace TankLike.UnitControllers.States
 
         public override void OnDispose()
         {
-            _movement.OnTargetReached -= OnTargetReachedHandler;
+            _shooter.OnExplosionTriggered -= OnExplosionTriggeredHandler;
         }
 
         protected override void MoveToTarget(Vector3 target)
@@ -57,7 +61,7 @@ namespace TankLike.UnitControllers.States
             }
         }
 
-        private void OnTargetReachedHandler()
+        private void OnExplosionTriggeredHandler()
         {
             if (!_isActive)
             {

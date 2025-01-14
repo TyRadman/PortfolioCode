@@ -1,21 +1,32 @@
-using System.Collections;
-using System.Collections.Generic;
-using TankLike.Combat;
-using TankLike.UI.InGame;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.Combat.AirDrone
 {
+    using UnitControllers;
+
     public class AirDroneShooter : MonoBehaviour
     {
         [SerializeField] private Weapon _customShot;
         [SerializeField] private Transform _shootingPoint;
         [SerializeField] private float _bulletSpeed = 10f;
         [SerializeField] private GameTags _enemyTag;
+
         // to add credit to the owner of the drone
         private TankComponents _ownerShooter;
+        private BulletData _bulletData;
+
+        public void SetUp(TankComponents ownerShooter)
+        {
+            _ownerShooter = ownerShooter;
+
+            _bulletData = new BulletData()
+            {
+                Speed = _bulletSpeed,
+                Damage = _customShot.Damage,
+                MaxDistance = 0,
+                CanBeDeflected = false
+            };
+        }
 
         public void Shoot()
         {
@@ -47,16 +58,12 @@ namespace TankLike.Combat.AirDrone
             if (angle != 0) rotation *= Quaternion.Euler(0f, angle, 0f);
 
             bullet.transform.SetPositionAndRotation(position, rotation);
+
             bullet.StartBullet(_ownerShooter);
             // give the bullet a target tag
-            bullet.SetTargetLayerMask(_enemyTag.ToString());
+            bullet.SetTargetLayerMask((TankAlignment)(int)_enemyTag);
             // set the bullet's values
-            bullet.SetValues(_bulletSpeed, _customShot.Damage, 0);
-        }
-
-        public void SetUp(TankComponents ownerShooter)
-        {
-            _ownerShooter = ownerShooter;
+            bullet.SetValues(_bulletData);
         }
     }
 }

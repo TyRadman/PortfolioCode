@@ -15,7 +15,7 @@ namespace TankLike.UI
         [SerializeField] private string _defaultMainText;
 
         [Header("Animations")]
-        [SerializeField] private Animator _amimator;
+        [SerializeField] private Animator _animator;
 
         //[SerializeField] private MenuSelectable _firstSelectedItem;
 
@@ -40,8 +40,8 @@ namespace TankLike.UI
                 _messageText.text = messageText;
             }
 
-            // Set _noButton as the current selectable
-            if (_currentSelectable != null)
+            //// Set _noButton as the current selectable
+            if (_currentSelectable != null && _currentSelectable == _yesButton)
             {
                 _currentSelectable.Highlight(false);
             }
@@ -64,7 +64,7 @@ namespace TankLike.UI
             _noButton.GetMainAction().AddListener(new UnityAction(OnPanelClose));
 
             // Play show animation
-            _amimator.Play(_showHash, -1, 0f);
+            _animator.Play(_showHash, -1, 0f);
 
             // Enable inputs
             GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnableConfirmPanelController(true);
@@ -87,7 +87,8 @@ namespace TankLike.UI
 
         private void OnPanelClose()
         {
-            _amimator.Play(_hideHash, -1, 0f);
+            _animator.Play(_hideHash, -1, 0f);
+            // TODO: Check if we need this
             GameManager.Instance.PlayersManager.GetPlayer(_currentPlayerIndex).UIController.EnableConfirmPanelController(false);
         }
 

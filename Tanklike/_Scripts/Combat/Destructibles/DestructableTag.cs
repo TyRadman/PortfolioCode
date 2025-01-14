@@ -4,8 +4,4 @@ using UnityEngine;
 
 namespace TankLike.Combat.Destructible
 {
-    public enum DestructableTag
-    {
-        None = 1000, Crate = 0, Rock = 1, Wall = 2, SpawnPoint = 3, BossSpawnPoint = 4
-    }
 }

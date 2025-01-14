@@ -11,34 +11,41 @@ namespace TankLike.UnitControllers.States
     {
         [SerializeField] private Vector2 _movementDistanceRange;
         [SerializeField, Range(0f, 1f)] private float _moveToTargetChance = 0.5f;
+
+        [Header("Ground Pound")]
+        [field: SerializeField] private Vector2 _groundPoundTriggerDurationRange;
+
         private Vector3 _targetPoint;
         private bool _targetPointFound;
         private int _pointFinderCounter;
         private Vector3 _mapCenter;
         private float _walkableAreaRadius;
 
-        private float _groundPoundCheckTime = 0.5f;
-        private float _groundPoundCheckTimer;
+        private float _groundPoundTimer;
+        private float _groundPoundCurrentTriggerDuration;
+        private bool _groundPoundTimerStarted;
         private bool _movementStarted;
 
         public override void SetUp(StateMachine<BossStateType> stateMachine, BossComponents bossComponents)
         {
             base.SetUp(stateMachine, bossComponents);
             _movement.OnTargetReached += OnTargetReachedHandler;
-            _attackController.OnGroundPoundTriggered += OnGroundPoundTriggeredHandler;
+            _attackController.OnGroundPoundTriggerStay += OnGroundPoundTriggerStayHandler;
 
             _mapCenter = bossComponents.RoomCenter;
             _walkableAreaRadius = _movement.WalkableAreaRadius;
+
+            _groundPoundTimer = 0f;
+            _groundPoundTimerStarted = false;
         }
 
         public override void OnEnter()
         {
-            Debug.Log("MOVE STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             _attackController.EnableGroundPoundTrigger(true);
-
-            _groundPoundCheckTimer = 0f;
             _movementStarted = false;
         }
 
@@ -49,70 +56,65 @@ namespace TankLike.UnitControllers.States
                 return;
             }
 
-            if(_groundPoundCheckTimer >= _groundPoundCheckTime)
+            _movementStarted = true;
+            _movement.StartMoveAnimation(true);
+
+            // If there is already an active target that was not reached, don't pick a new random point
+            if (_movement.TargetIsAvailable)
             {
-                _movementStarted = true;
-                _movement.StartMoveAnimation(true);
-
-                // If there is already an active target that was not reached, don't pick a new random point
-                if (_movement.TargetIsAvailable)
-                {
-                    _movement.StartMovement();
-                    return;
-                }
-
-                _pointFinderCounter = 0;
-                _targetPointFound = false;
-
-                while (!_targetPointFound && _pointFinderCounter < 50)
-                {
-                    // Get the chance to move towards the target player
-                    float chance = Random.Range(0, 1f);
-                    Vector3 point = Vector3.zero;
-
-                    if (chance <= _moveToTargetChance)
-                    {
-                        // Get target player as target point
-                        var player = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
-                        Vector3 dir = player.position - _movement.transform.position;
-                        dir.Normalize();
-
-                        float dist = Vector3.Distance(player.position, _movement.transform.position);
-
-                        if (dist > _movementDistanceRange.y)
-                        {
-                            dist = _movementDistanceRange.y;
-                        }
-
-                        point = _movement.transform.position + dir * dist;
-                    }
-                    else
-                    {
-                        // Get random point and move to it
-                        float angle = Random.Range(0.0f, Mathf.PI * 2);
-                        Vector3 dir = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
-                        dir *= Random.Range(_movementDistanceRange.x, _movementDistanceRange.y);
-                        dir.y = 0.5f;
-                        point = _movement.transform.position + dir;
-                    }
-
-                    if (Helper.IsPointInsideSphere(point, _mapCenter, _walkableAreaRadius))
-                    {
-                        MoveToTarget(point);
-                    }
-
-                    _pointFinderCounter++;
-                }
-
-                if (!_targetPointFound)
-                {
-                    _stateMachine.ChangeState(BossStateType.Attack);
-                }
+                _movement.StartMovement();
+                return;
             }
-            else
+
+            // Find a random target point
+            _pointFinderCounter = 0;
+            _targetPointFound = false;
+
+            while (!_targetPointFound && _pointFinderCounter < 50)
             {
-                _groundPoundCheckTimer += Time.deltaTime;
+                // Get the chance to move towards the target player
+                float chance = Random.Range(0, 1f);
+                Vector3 point = Vector3.zero;
+
+                if (chance <= _moveToTargetChance)
+                {
+                    // Get target player as target point
+                    var player = GameManager.Instance.PlayersManager.GetClosestPlayerTransform(_movement.transform.position);
+                    Vector3 dir = player.position - _movement.transform.position;
+                    dir.Normalize();
+
+                    float dist = Vector3.Distance(player.position, _movement.transform.position);
+
+                    if (dist > _movementDistanceRange.y)
+                    {
+                        dist = _movementDistanceRange.y;
+                    }
+
+                    point = _movement.transform.position + dir * dist;
+                }
+                else
+                {
+                    // Get random point and move to it
+                    float angle = Random.Range(0.0f, Mathf.PI * 2);
+                    Vector3 dir = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
+                    dir *= Random.Range(_movementDistanceRange.x, _movementDistanceRange.y);
+                    dir.y = 0.5f;
+                    point = _movement.transform.position + dir;
+                }
+
+                if (Helper.IsPointInsideSphere(point, _mapCenter, _walkableAreaRadius))
+                {
+                    MoveToTarget(point);
+                }
+
+                _pointFinderCounter++;
             }
+
+            if (!_targetPointFound)
+            {
+                _stateMachine.ChangeState(BossStateType.Attack);
+            }
+
         }
 
         public override void OnExit()
@@ -124,7 +126,7 @@ namespace TankLike.UnitControllers.States
         public override void OnDispose()
         {
             _movement.OnTargetReached -= OnTargetReachedHandler;
-            _attackController.OnGroundPoundTriggered -= OnGroundPoundTriggeredHandler;
+            _attackController.OnGroundPoundTriggerStay -= OnGroundPoundTriggerStayHandler;
         }
 
         private bool MoveToTarget(Vector3 target)
@@ -152,7 +154,7 @@ namespace TankLike.UnitControllers.States
             _stateMachine.ChangeState(BossStateType.Attack);
         }
 
-        private void OnGroundPoundTriggeredHandler()
+        private void TriggerGroundPound()
         {
             if (!_isActive)
             {
@@ -161,6 +163,65 @@ namespace TankLike.UnitControllers.States
 
             _movement.StopMovement();
             _stateMachine.ChangeState(BossStateType.GroundPound);
+        }
+
+        private void OnGroundPoundTriggerEnterHandler()
+        {
+            //if (!_isActive)
+            //{
+            //    return;
+            //}
+
+            _groundPoundTimerStarted = true;
+
+            if (_groundPoundTimer == 0f)
+            {
+                _groundPoundTimer = 0f;
+                _groundPoundCurrentTriggerDuration = Random.Range(_groundPoundTriggerDurationRange.x, _groundPoundTriggerDurationRange.y);
+                Debug.Log("Current Trigger Duration: " + _groundPoundCurrentTriggerDuration);
+            }
+        }
+
+        private void OnGroundPoundTriggerStayHandler()
+        {
+            if (!_isActive)
+            {
+                return;
+            }
+
+            if (!_groundPoundTimerStarted)
+            {
+                _groundPoundTimer = 0f;
+                _groundPoundTimerStarted = true;
+                _groundPoundCurrentTriggerDuration = Random.Range(_groundPoundTriggerDurationRange.x, _groundPoundTriggerDurationRange.y);
+                //Debug.Log("Current Trigger Duration: " + _groundPoundCurrentTriggerDuration);
+            }
+            else
+            {
+                if (_groundPoundTimer < _groundPoundCurrentTriggerDuration)
+                {
+                    _groundPoundTimer += Time.deltaTime;
+                    //Debug.Log("Ground pound timer: " + _groundPoundTimer);
+                }
+                else
+                {
+                    //Debug.Log("Perform Ground Pound");
+                    TriggerGroundPound();
+                    _bossComponents.AttackController.EnableGroundPoundTrigger(false);
+                    _groundPoundTimer = 0f;
+                    _groundPoundTimerStarted = false;
+                }
+            }
+        }
+
+        private void OnGroundPoundTriggerExitHandler()
+        {
+            //if (!_isActive)
+            //{
+            //    return;
+            //}
+
+            _groundPoundTimerStarted = false;
         }
     }
 }

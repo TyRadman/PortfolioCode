@@ -82,6 +82,11 @@ namespace TankLike.Combat
             Invoke(nameof(TurnOff), PARTICLES_DEATH_DELAY + CHAR_EXTRA_DURATION);
         }
 
+        public float GetDamage()
+        {
+            return _damageToDeal;
+        }
+
         #region Pool
         public void Init(Action<IPoolable> OnRelease)
         {

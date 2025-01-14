@@ -5,6 +5,8 @@ using UnityEngine.UI;
 
 namespace TankLike
 {
+    using Utils;
+
     public class JumpBar : MonoBehaviour
     {
         [SerializeField] private Animation _animation;
@@ -27,15 +29,9 @@ namespace TankLike
             this.PlayAnimation(_animation, _hideClip);
         }
 
-        //private void PlayAnimation(AnimationClip clip)
-        //{
-        //    if(_animation.isPlaying)
-        //    {
-        //        _animation.Stop();
-        //    }
-
-        //    _animation.clip = clip;
-        //    _animation.Play();
-        //}
+        public void ForceHide()
+        {
+            transform.localScale = Vector3.zero; // TODO: dirty, but does the job for now
+        }
     }
 }

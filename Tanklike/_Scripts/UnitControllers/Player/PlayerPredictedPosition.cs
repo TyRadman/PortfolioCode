@@ -1,16 +1,17 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+
     public class PlayerPredictedPosition : MonoBehaviour, IController
     {
+        public bool IsActive { get; private set; }
         [SerializeField] private Transform _image;
-        [field: SerializeField] public bool IsActive { get; private set; }
         private Transform _playerTransform;
-        private PlayerComponents _components;
+        private PlayerComponents _playerComponents;
         private PlayerMovement _movement;
         [SerializeField] private float _distance = 3f;
         [SerializeField] private float _interpolationSpeed = 0.1f;
@@ -25,17 +26,22 @@ namespace TankLike.UnitControllers
             UpdatePosition();
         }
 
-        public void SetUp(TankComponents components)
+        public void SetUp(IController controller)
         {
-            _components = (PlayerComponents)components;
-            _playerTransform = components.transform;
-            _image.parent = null;
-            _movement = _components.Movement as PlayerMovement;
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = playerComponents;
+            _playerTransform = _playerComponents.transform;
+            _movement = _playerComponents.Movement as PlayerMovement;
         }
 
         private void UpdatePosition()
         {
-            float multiplier = _components.Movement.CurrentSpeed;
+            float multiplier = _playerComponents.Movement.CurrentSpeed;
             Vector3 direction = _movement.LastMovementInput;
             Vector3 newPosition = _playerTransform.position + direction * _distance * multiplier;
             newPosition = Vector3.Lerp(_image.position, newPosition, _interpolationSpeed * Time.deltaTime);
@@ -45,7 +51,7 @@ namespace TankLike.UnitControllers
 
         public Vector3 GetPositionAtDistance(float distance)
         {
-            float multiplier = _components.Movement.CurrentSpeed;
+            float multiplier = _playerComponents.Movement.CurrentSpeed;
             Vector3 direction = _movement.LastMovementInput;
             Vector3 newPosition = _playerTransform.position + direction * distance * multiplier;
             newPosition.y = _playerTransform.position.y + 0.5f;
@@ -68,14 +74,13 @@ namespace TankLike.UnitControllers
             IsActive = false;
         }
 
-        public void Dispose()
-        {
-
-        }
-
         public void Restart()
         {
-            IsActive = false;
+            _image.parent = null;
+        }
+
+        public void Dispose()
+        {
         }
         #endregion
     }

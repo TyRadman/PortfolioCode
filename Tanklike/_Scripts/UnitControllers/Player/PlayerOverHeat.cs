@@ -1,43 +1,45 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UI;
-using TankLike.UI.Notifications;
-using TankLike.UI.InGame;
-using TankLike.Sound;
-using TankLike.Combat;
 
 namespace TankLike.UnitControllers
 {
+    using UI.Notifications;
+    using UI.InGame;
+    using Sound;
+    using Combat;
+
+    /// <summary>
+    /// Responsible for ammo management and the visuals related to it.
+    /// </summary>
     public class PlayerOverHeat : MonoBehaviour, IController
     {
-        protected float _maxShotAmount;
-        protected float _currectShotAmount;
+        public System.Action OnShotRecharged { get; set; }
+
         [Tooltip("How many bars will recharge a second")]
         [SerializeField][Range(0.1f, 10f)] protected float _shotsBarsIncrement = 0f;
-        public const float PRIOR_RECHARGING_WAIT_TIME = 1f;
-        private int _barsNumber = 3;
+        
         [Header("References")]
         [SerializeField] private SegmentedBar _segmentedBar;
-        private bool _canRechargeShots = true;
-        private int _lastShotsCount = 0;
         [SerializeField] private Audio _rechargeAudio;
-        private const float RECHARGE_SFX_TRIGGER_THRESHOLD = 0.2f;
-        private PlayerComponents _components;
         [SerializeField] private NotificationBarSettings_SO _notificationSettings;
+        
+        protected float _maxShotAmount;
+        protected float _currectShotAmount;
+
+        private float _beforeChargeTime = 0f;
+        private int _lastShotsCount = 0;
+        private bool _canRechargeShots = true;
+        
+        public const float PRIOR_RECHARGING_WAIT_TIME = 0.4f;
+
+        private const float RECHARGE_SFX_TRIGGER_THRESHOLD = 0.2f;
 
         public bool IsActive { get; private set; }
 
-        public void SetUp(PlayerComponents components)
+        public void SetUp(IController controller)
         {
-            _components = components;
-            _barsNumber = _components.Shooter.GetWeapon().AmmoCapacity;
-            _maxShotAmount = _barsNumber;
-            _currectShotAmount = _maxShotAmount;
-            _lastShotsCount = (int)_maxShotAmount;
             _segmentedBar.SetUp();
-            UpdateSegmentsCount();
-            _segmentedBar.SetTotalAmount(1f);
+
+            OnShotRecharged += () => GameManager.Instance.AudioManager.Play(_rechargeAudio);
         }
 
         private void Update()
@@ -50,12 +52,28 @@ namespace TankLike.UnitControllers
             IncreaseShotsOverTime(_shotsBarsIncrement * Time.deltaTime);
         }
 
-        public void UpdateSegmentsCount()
+        /// <summary>
+        /// Updates the number of segments the crosshair's bar has.
+        /// </summary>
+        /// <param name="ammoCapacity">The number of segments to be made.</param>
+        public void UpdateCrossHairBars(Weapon weapon)
         {
-            _segmentedBar.SetCount(_barsNumber);
+            _maxShotAmount = weapon.AmmoCapacity;
+            _segmentedBar.SetCount(weapon.AmmoCapacity);
+            _segmentedBar.SetTotalAmount(1f);
+
+            if(weapon.AmmoRechargeSpeed > 0)
+            {
+                _shotsBarsIncrement = weapon.AmmoRechargeSpeed;
+            }
+
+            SetBeforeChargeDuration(weapon.GetCoolDownTime());
+
+            _currectShotAmount = _maxShotAmount;
+            _lastShotsCount = (int)_maxShotAmount;
         }
 
-        public virtual void IncreaseShotsOverTime(float fuelAmount)
+        private void IncreaseShotsOverTime(float amount)
         {
             if (_shotsBarsIncrement <= 0 || _currectShotAmount >= _maxShotAmount)
             {
@@ -64,36 +82,26 @@ namespace TankLike.UnitControllers
 
             if (_currectShotAmount < _maxShotAmount)
             {
-                AddShotBarAmount(fuelAmount);
+                AddShotBarAmount(amount);
             }
         }
 
         public void ReduceAmmoBarByOne()
         {
             _lastShotsCount--;
+
             _segmentedBar.AddAmountToSegments(-1);
+
             _currectShotAmount--;
             _currectShotAmount = Mathf.Clamp(_currectShotAmount, 0, _maxShotAmount);
 
             _canRechargeShots = false;
+
             // cancel any invokes that might have been called before
             CancelInvoke();
+            
             // enable recharging after a while
-            Invoke(nameof(EnableRecharging), PRIOR_RECHARGING_WAIT_TIME);
-        }
-
-        public void AddAmmoBar(int amount)
-        {
-            _lastShotsCount += amount;
-            _segmentedBar.AddAmountToSegments(amount);
-            _currectShotAmount += amount;
-            _currectShotAmount = Mathf.Clamp(_currectShotAmount, 0, _maxShotAmount);
-
-            _canRechargeShots = false;
-            // cancel any invokes that might have been called before
-            CancelInvoke();
-            // enable recharging after a while
-            Invoke(nameof(EnableRecharging), PRIOR_RECHARGING_WAIT_TIME);
+            Invoke(nameof(EnableRecharging), _beforeChargeTime);
         }
 
         private void EnableRecharging()
@@ -101,7 +109,7 @@ namespace TankLike.UnitControllers
             _canRechargeShots = true;
         }
 
-        public virtual void AddShotBarAmount(float amount)
+        private void AddShotBarAmount(float amount)
         {
             _segmentedBar.AddAmountToSegments(amount);
             _currectShotAmount += amount;
@@ -109,15 +117,14 @@ namespace TankLike.UnitControllers
 
             if(Mathf.FloorToInt(_currectShotAmount + RECHARGE_SFX_TRIGGER_THRESHOLD) > _lastShotsCount)
             {
-                GameManager.Instance.AudioManager.Play(_rechargeAudio);
-                _components.Crosshair.PlayReloadAnimation();
+                OnShotRecharged?.Invoke();
                 _lastShotsCount++;
             }
         }
 
         public void FillBars()
         {
-            GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 0, _components.PlayerIndex);
+            //GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 0, _playerComponents.PlayerIndex);
             _segmentedBar.AddAmountToSegments(_maxShotAmount - _currectShotAmount);
             _currectShotAmount = _maxShotAmount;
             _lastShotsCount = (int)_maxShotAmount;
@@ -125,7 +132,12 @@ namespace TankLike.UnitControllers
 
         public bool HasEnoughShots(int amount)
         {
-            return amount <= _currectShotAmount;
+            return _currectShotAmount >= amount;
+        }
+
+        private void SetBeforeChargeDuration(float weaponCooldown)
+        {
+            _beforeChargeTime = weaponCooldown + PRIOR_RECHARGING_WAIT_TIME;
         }
 
         #region IController
@@ -141,11 +153,14 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
+            _currectShotAmount = _maxShotAmount;
+            _lastShotsCount = (int)_maxShotAmount;
+            _segmentedBar.SetTotalAmount(1f);
         }
 
         public void Dispose()
         {
+            OnShotRecharged = null;
         }
         #endregion
     }

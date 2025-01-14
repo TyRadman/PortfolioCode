@@ -12,23 +12,25 @@ namespace TankLike.Elements
         {
             base.TakeEffect(tank);
 
-            tank.Movement.EnableMovement(false);
+            // TODO: replace it with constraints
+            //tank.Movement.EnableMovement(false);
             tank.Movement.StopMovement();
             tank.Movement?.EnableRotation(false);
-            tank.Shooter?.EnableShooting(false);
+            //tank.Shooter?.EnableShooting(false);
             tank.Animation?.StopAnimations(true);
-            tank.SuperAbility?.EnableAbility(false);
+            //tank.SuperAbility?.EnableAbility(false);
         }
 
         public override void StopEffect(TankComponents tank)
         {
             base.StopEffect(tank);
 
-            tank.Movement.EnableMovement(true);
+            // TODO: replace it with constraints
+            //tank.Movement.EnableMovement(true);
             tank.Movement?.EnableRotation(true);
-            tank.Shooter?.EnableShooting(true);
+            //tank.Shooter?.EnableShooting(true);
             tank.Animation?.StopAnimations(false);
-            tank.SuperAbility?.EnableAbility(true);
+            //tank.SuperAbility?.EnableAbility(true);
         }
     }
 }

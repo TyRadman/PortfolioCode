@@ -14,7 +14,10 @@ namespace TankLike
         {
             base.OnInspectorGUI();
 
-            if (!GUI.changed) return;
+            if (!GUI.changed)
+            {
+                return;
+            }
 
             WaveData wave = (WaveData)target;
 

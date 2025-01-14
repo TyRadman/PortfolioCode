@@ -4,20 +4,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 using TankLike.UnitControllers.States;
+using BT;
 
 namespace TankLike.UnitControllers
 {
-    public class EnemyAIController : MonoBehaviour, IController, IPoolable
+    public class EnemyAIController : MonoBehaviour, IController
     {
-        public Action<EnemyAIController> OnEnemyDeath { get; set; }
-
         [Header("Debug")]
         [SerializeField] protected bool _movementDebug;
+        [SerializeField] protected EnemyStateType _currentState;
 
         [Header("State Machine")]
         [SerializeField] protected EnemyStateType _initialState;
         [SerializeField] protected EnemyStateType _activationState;
         [SerializeField] protected List<State> _states;
+        //[field: SerializeField] public BehaviorTreeRunner _BTRunner;
 
         [Header("Settings")]
         [SerializeField] protected EnemyType _enemyType;
@@ -25,43 +26,42 @@ namespace TankLike.UnitControllers
         [SerializeField] protected CollisionEventPublisher _aggroTrigger;
 
         protected StateMachine<EnemyStateType> _stateMachine;
+        protected EnemyComponents _enemyComponents;
         protected EnemyMovement _movement;
         protected EnemyShooter _shooter;
         protected EnemyHealth _health;
         protected EnemyTurretController _turretController;
 
-        public Action<IPoolable> OnReleaseToPool { get; private set; }
         protected Dictionary<EnemyStateType, IState> _statesDictionary = new Dictionary<EnemyStateType, IState>();
 
         public bool IsActive { get; set; }
-        public EnemyComponents Components { get; private set; }
 
-        public virtual void SetReferences(EnemyComponents components)
+        public void SetUp(IController controller)
         {
-            Components = components;
-            _movement = (EnemyMovement)components.Movement;
-            _shooter = (EnemyShooter)components.Shooter;
-            _health = (EnemyHealth)components.Health;
-            _turretController = (EnemyTurretController)components.TurretController;
-
-            _movement.SetDebugMode(_movementDebug);
-            
-            if (_turretController != null)
+            if (controller is not EnemyComponents enemyComponents)
             {
-                _turretController.SetDebugMode(_movementDebug);
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
-            
-            if (!_movementDebug)
-            {
-                InitStateMachine();
-                _stateMachine.SetInitialState(_initialState);
 
-                if (_initialState != EnemyStateType.IDLE)
-                    Activate();
-            }
-            else
+            _enemyComponents = enemyComponents;
+
+            _movement = (EnemyMovement)_enemyComponents.Movement;
+            _shooter = (EnemyShooter)_enemyComponents.Shooter;
+            _health = (EnemyHealth)_enemyComponents.Health;
+            _turretController = (EnemyTurretController)_enemyComponents.TurretController;
+
+            InitStateMachine();
+
+            if (_initialState != EnemyStateType.IDLE)
             {
-                _movement.Activate();
+                Activate();
+            }
+
+            // TODO: see if still need the aggro trigger
+            if(_aggroTrigger != null)
+            {
+                _aggroTrigger.enabled = false;
             }
         }
 
@@ -73,7 +73,7 @@ namespace TankLike.UnitControllers
             foreach (var state in _states)
             {
                 var newState = Instantiate(state);
-                newState.SetUp(_stateMachine, Components);
+                newState.SetUp(_stateMachine, _enemyComponents);
                 _statesDictionary.Add(state.EnemyStateType, newState);
             }
 
@@ -83,6 +83,11 @@ namespace TankLike.UnitControllers
         public State GetStateByType(EnemyStateType type)
         {
             return (State)_statesDictionary[type];
+        }
+
+        public void ChangeState(EnemyStateType type)
+        {
+            _stateMachine.ChangeState(type);
         }
 
         private void Update()
@@ -96,7 +101,7 @@ namespace TankLike.UnitControllers
         public void ActivateEnemy()
         {
             _stateMachine.ChangeState(_activationState);
-            _movement.Activate();
+            //_BTRunner.Run();
         }
 
         private void OnPlayerDetected(Collider other)
@@ -108,11 +113,17 @@ namespace TankLike.UnitControllers
             }
         }
 
+        public void SetCurrentState(EnemyStateType state)
+        {
+            _currentState = state;
+        }
+
         #region IController
         public void Activate()
         {
-            Components.Activate();
+            //Debug.Log("Activate AI controller");
 
+            // TODO: see if still need the aggro trigger
             if (!_initialInactiveState)
             {
                 Invoke(nameof(ActivateEnemy), 0.5f);
@@ -125,52 +136,27 @@ namespace TankLike.UnitControllers
 
         public void Deactivate()
         {
-
+            _stateMachine.ChangeState(_initialState);
         }
 
         public void Restart()
         {
-            OnEnemyDeath?.Invoke(this);
-            OnReleaseToPool?.Invoke(this);
+            _stateMachine.SetInitialState(_initialState);
 
+            //if (_initialInactiveState)
+            //{
+            //    _aggroTrigger.OnTriggerEnterEvent -= OnPlayerDetected;
+            //    _aggroTrigger.enabled = true;
+            //}
+        }
+
+        public void Dispose()
+        {
             if (_initialInactiveState)
             {
                 _aggroTrigger.OnTriggerEnterEvent -= OnPlayerDetected;
                 _aggroTrigger.enabled = true;
             }
-        }
-
-        public void Dispose()
-        {
-            if(_stateMachine != null)
-                _stateMachine.Dispose();
-        }
-        #endregion
-
-        #region Pool
-        public void Init(Action<IPoolable> OnRelease)
-        {
-            OnReleaseToPool = OnRelease;
-        }
-
-        public void TurnOff()
-        {
-            OnReleaseToPool(this);
-        }
-
-        public void OnRequest()
-        {
-            Components.TankBodyParts.InstantiateBodyParts();
-        }
-
-        public void OnRelease()
-        {
-            gameObject.SetActive(false);
-        }
-
-        public void Clear()
-        {
-            Destroy(gameObject);
         }
         #endregion
     }

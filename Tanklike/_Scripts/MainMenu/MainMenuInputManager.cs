@@ -13,28 +13,28 @@ namespace TankLike.MainMenu
     {
         public List<PlayerInputHandler> Inputs = new List<PlayerInputHandler>();
         [SerializeField] private PlayerInput _playerPrefab;
+        [SerializeField] private MainMenuUIController _mainMenuUIController;
 
-        private MainMenuUIController _mainMenu;
 
-        public void SetUp(MainMenuUIController mainMenu)
+        public void SetUp()
         {
-            _mainMenu = mainMenu;
         }
 
         public void OnPlayerJoined(PlayerInput playerInput)
         {
-            Debug.Log("ON JOINED");
+            //Debug.Log("ON JOINED");
             PlayerInputHandler inputHandler = playerInput.GetComponent<PlayerInputHandler>();
             //inputHandler.SetUp();
             Inputs.Add(inputHandler);
-            _mainMenu.SetUpInputForInputHandler(inputHandler);
+            _mainMenuUIController.SetUpInputForInputHandler(inputHandler);
         }
 
         public void OnPlayerLeft(PlayerInput playerInput)
         {
-            Debug.Log("ON LEFT");
+            //Debug.Log("ON LEFT");
             PlayerInputHandler inputHandler = playerInput.GetComponent<PlayerInputHandler>();
             Inputs.Remove(inputHandler);
+            _mainMenuUIController.DisposeInputForInputHandler(inputHandler);
         }
 
         public void RemoveInputHandlers()

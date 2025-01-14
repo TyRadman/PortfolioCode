@@ -11,6 +11,7 @@ namespace TankLike.UI.HUD
     public class OffScreenIndicatorProfile
     {
         public OffScreenIcon IconPrefab;
+
         [HideInInspector] public bool FollowTarget = false;
         [HideInInspector] public bool IsShown = false;
         [HideInInspector] public Transform TargetTransform;

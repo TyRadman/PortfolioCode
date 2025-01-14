@@ -4,50 +4,57 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+
+    /// <summary>
+    /// Handles the player's fuel consumption and refilling.
+    /// </summary>
     public class PlayerFuel : MonoBehaviour, IController
     {
+        public bool IsActive { get; private set; }
+
         [Header("Settings")]
         [SerializeField] private float _maxFuel;
         [SerializeField] private float _refillSpeed;
         [SerializeField] private float _refillDelay = 1f;
 
-        private PlayerComponents _components;
-        private float _currentFuel;
+        private PlayerComponents _playerComponents;
         private Coroutine _refillCoroutine;
         private WaitForSeconds _refillWaitForSeconds;
+        
+        private System.Action OnFuelFull;
+        private System.Action OnFuelNotFull;
+
+        private float _currentFuel;
         private bool _canConsumeFuel = true;
 
-        public bool IsActive { get; private set; }
-
-        public void Setup(PlayerComponents components)
+        public void SetUp(IController controller)
         {
-            _components = components;
-            _currentFuel = _maxFuel;
-
-            _refillWaitForSeconds = new WaitForSeconds(_refillDelay);
-            UpdateFuelUI();
-        }
-
-        public bool HasEnoughFuel(float amount)
-        {
-            if(_currentFuel < amount)
+            if (controller is not PlayerComponents playerComponents)
             {
-                return false;
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
 
-            return true;
+            _playerComponents = playerComponents;
+
+            _refillWaitForSeconds = new WaitForSeconds(_refillDelay);
         }
 
-        public bool HasEnoughFuel()
-        {
-            return _currentFuel > 0f;
-        }
-
+        /// <summary>
+        /// We only use this to consume fuel. Refilling it should have its own method.
+        /// </summary>
+        /// <param name="amount"></param>
         public void UseFuel(float amount)
         {
-            if(!_canConsumeFuel)
+            if (!_canConsumeFuel)
             {
                 return;
+            }
+
+            if (IsFuelFull())
+            {
+                OnFuelNotFull?.Invoke();
             }
 
             _currentFuel -= amount;
@@ -55,36 +62,63 @@ namespace TankLike.UnitControllers
 
             UpdateFuelUI();
 
-            if (_refillCoroutine != null)
-            {
-                StopCoroutine(_refillCoroutine);
-            }
-
-            _refillCoroutine = StartCoroutine(RefillRoutine());
-        }
-
-        public void RefillFuel()
-        {
-            _currentFuel = _maxFuel;
-            UpdateFuelUI();
+            StartRefillProcess();
         }
 
         private void UpdateFuelUI()
         {
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].UpdateFuelBar(_currentFuel, _maxFuel);
+            GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].UpdateFuelBar(_currentFuel, _maxFuel);
+        }
+
+        private void StartRefillProcess()
+        {
+            this.StopCoroutineSafe(_refillCoroutine);
+            _refillCoroutine = StartCoroutine(RefillRoutine());
         }
 
         private IEnumerator RefillRoutine()
         {
             yield return _refillWaitForSeconds;
 
-            while (_currentFuel < _maxFuel)
+            while (_currentFuel < _maxFuel && IsActive)
             {
                 _currentFuel += _refillSpeed * Time.deltaTime;
                 UpdateFuelUI();
 
                 yield return null;
             }
+
+            if (IsActive)
+            {
+                OnFuelFull?.Invoke();
+            }
+        }
+
+        #region Utilities
+        public void RefillFuel()
+        {
+            _currentFuel = _maxFuel;
+            UpdateFuelUI();
+        }
+
+        public bool HasEnoughFuel(float amount)
+        {
+            if (_currentFuel < amount)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool IsFuelFull()
+        {
+            return _currentFuel >= _maxFuel;
+        }
+
+        public bool HasEnoughFuel()
+        {
+            return _currentFuel > 0f;
         }
 
         public void EnableFuelConsumption(bool enable)
@@ -92,10 +126,50 @@ namespace TankLike.UnitControllers
             _canConsumeFuel = enable;
         }
 
+        #region External Subscription
+        public void AddOnFuelFullListener(System.Action onFullFuel, bool triggerIfConditionMet = true)
+        {
+            if(onFullFuel == null)
+            {
+                Debug.LogError("No event passed");
+                return;
+            }
+
+            OnFuelFull += onFullFuel;
+
+            if(IsFuelFull() && triggerIfConditionMet)
+            {
+                onFullFuel.Invoke();
+            }
+        }
+
+        public void AddOnFuelNotFullListener(System.Action onNotFullFuel, bool triggerIfConditionMet = true)
+        {
+            if (onNotFullFuel == null)
+            {
+                Debug.LogError("No event passed");
+                return;
+            }
+
+            OnFuelNotFull += onNotFullFuel;
+
+            if (!IsFuelFull() && triggerIfConditionMet)
+            {
+                onNotFullFuel.Invoke();
+            }
+        }
+        #endregion
+        #endregion
+
         #region IController
         public void Activate()
         {
             IsActive = true;
+
+            if (!IsFuelFull())
+            {
+                StartRefillProcess();
+            }
         }
 
         public void Deactivate()
@@ -105,11 +179,16 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
+            _currentFuel = _maxFuel;
+            UpdateFuelUI();
+            RefillFuel();
         }
 
         public void Dispose()
         {
+            _currentFuel = 0f;
+            UpdateFuelUI();
+            OnFuelFull = null;
         }
         #endregion
     }

@@ -1,37 +1,39 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UnitControllers;
-using TankLike.Utils;
-using TankLike.Environment;
 using System.Linq;
 
 namespace TankLike
 {
+    using UnitControllers;
+    using Utils;
+    using Environment;
+
     public class EnemiesManager : MonoBehaviour, IManager
     {
+        [field: SerializeField, Range(0f, 1f)] public float Difficulty { get; private set; }
+        public bool IsActive { get; private set; }
+        public bool EnemiesAreActivated { get; private set; }
+
         [Header("Settings")]
-        [SerializeField] private Vector2Int _wavesRange;
         [SerializeField] private bool _spawnEnemies = true;
-        private Dictionary<EnemyType, Pool<EnemyAIController>> _enemiesPools = new Dictionary<EnemyType, Pool<EnemyAIController>>();
-        [SerializeField] private List<Transform> _spawnedEnemies = new List<Transform>();
-        [SerializeField] private WaveData[] _tutorialWaves;
-        [SerializeField] private List<WaveData> _wavesToSpawn = new List<WaveData>();
-        [SerializeField] private Vector2Int _roomsWithEnemiesNumberRange;
-        private Vector2Int _wavesCapacityRange;
+        [SerializeField] private List<TankComponents> _spawnedEnemies = new List<TankComponents>();
+        [SerializeField] private List<WaveData> _tutorialWaves;
         [SerializeField] private AnimationCurve _progressionCurve;
         [SerializeField] private int _currentMinProgression = 0;
         [SerializeField] private int _currentWaveIndex = 0;
 
-        [field: SerializeField, Range(0f, 1f)] public float Difficulty { get; private set; }
-        public bool IsActive { get; private set; }
-
-        private EnemiesDatabase _enemiesDatabase;
-        [SerializeField] private List<WaveData> _waves;
-
         private Dictionary<EnemyType, Pool<UnitParts>> _enemyPartsPools = new Dictionary<EnemyType, Pool<UnitParts>>();
-
+        private Dictionary<EnemyType, Pool<EnemyComponents>> _enemiesPools = new Dictionary<EnemyType, Pool<EnemyComponents>>();
+        private List<WaveData> _wavesToSpawn = new List<WaveData>();
+        private List<WaveData> _waves;
+        private EnemiesDatabase _enemiesDatabase;
+        private Vector2Int _wavesCapacityRange;
         private bool _fightActivated;
+        private int _roomsWithNoSpawns = 0;
+
+        private const int MAX_WAVES_PER_ROOM_COUNT = 3;
+        private const float AVERAGE_WAVES_PER_ROOM = 2f;
 
         public void SetReferences(EnemiesDatabase enemiesDatabase)
         {
@@ -42,12 +44,22 @@ namespace TankLike
         public void SetUp()
         {
             IsActive = true;
+            _currentWaveIndex = 0;
+            _currentMinProgression = 0;
 
-            _waves = GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().Waves;
-            _wavesCapacityRange = new Vector2Int(_waves.OrderBy(w => w.Capacity).First().Capacity,
-                _waves.OrderByDescending(w => w.Capacity).First().Capacity);
+            _waves = new List<WaveData>(GameManager.Instance.LevelGenerator.RoomsBuilder.GetCurrentLevelData().Waves);
+
+            List<WaveData> wavesToGetCapacityFrom = new List<WaveData>();
+            _waves.ForEach(w => wavesToGetCapacityFrom.Add(w));
+            _tutorialWaves.ForEach(w => wavesToGetCapacityFrom.Add(w));
+
+            int minCapacity = wavesToGetCapacityFrom.OrderBy(w => w.Capacity).First().Capacity;
+            int maxCapacity = wavesToGetCapacityFrom.OrderByDescending(w => w.Capacity).First().Capacity;
+            _wavesCapacityRange = new Vector2Int(minCapacity, maxCapacity);
 
             InitPools();
+
+            _spawnedEnemies.Clear();
 
             if (!_spawnEnemies)
             {
@@ -55,6 +67,9 @@ namespace TankLike
             }
 
             CreateWaves();
+
+            // Enemies should be activated by default when they spawn
+            EnemiesAreActivated = true;
         }
 
         public void Dispose()
@@ -62,58 +77,79 @@ namespace TankLike
             IsActive = false;
 
             DisposePools();
+
+            if(_waves != null)
+            {
+                _waves.Clear();
+            }
+
+            _wavesToSpawn.Clear();
         }
         #endregion
 
         public void CreateWaves()
         {
-            int numberOfWaves = GameManager.Instance.RoomsManager.Rooms.Count(r => r.RoomType == RoomType.Normal);
+            List<Room> rooms = GameManager.Instance.RoomsManager.Rooms;
+            _roomsWithNoSpawns = rooms.Count(r => r.RoomType == RoomType.Normal || r.RoomType == RoomType.BossGate);
+            int numberOfWaves = Mathf.CeilToInt(_roomsWithNoSpawns * AVERAGE_WAVES_PER_ROOM);
 
-            if(numberOfWaves < 3)
+            if (numberOfWaves < 3)
             {
                 Debug.LogError("Number of rooms that can hold keys is less than the number of keys");
                 return;
             }
 
-            for (int i = 0; i < _tutorialWaves.Length; i++)
+            for (int i = 0; i < _tutorialWaves.Count; i++)
             {
-                WaveData wave = Instantiate(_tutorialWaves[i]);
-                _wavesToSpawn.Add(wave);
+                _wavesToSpawn.Add(Instantiate(_tutorialWaves[i]));
             }
 
-            for (int i = _tutorialWaves.Length; i < numberOfWaves + 1; i++)
+            for (int i = _tutorialWaves.Count; i < numberOfWaves; i++)
             {
-                _currentMinProgression = (int)Mathf.Lerp(_wavesCapacityRange.x, _wavesCapacityRange.y, _progressionCurve.Evaluate((float)i / (float)numberOfWaves));
-                int capacityCount = _waves.FindAll(w => w.Capacity >= _currentMinProgression).OrderByDescending(w => w.Capacity).Last().Capacity;
-                WaveData waveToCreate = _waves.FindAll(w => w.Capacity == capacityCount).RandomItem();
+                float wavesProgression = _progressionCurve.Evaluate((float)i / (float)numberOfWaves);
+                _currentMinProgression = (int)Mathf.Lerp(_wavesCapacityRange.x, _wavesCapacityRange.y, wavesProgression);
 
-                if (waveToCreate == null)
+                WaveData waveToCreate = null;
+                int startMargin = 0;
+
+                while (waveToCreate == null)
                 {
-                    waveToCreate = _waves.RandomItem();
+                    startMargin += 2;
+                    waveToCreate = GetWaveWithinCapacityCount(_currentMinProgression, startMargin);
                 }
 
-                WaveData wave = Instantiate(waveToCreate);
-                _wavesToSpawn.Add(wave);
+                _wavesToSpawn.Add(Instantiate(waveToCreate));
             }
             
             // ones the waves (as data, not as spawned enemies) is created, add the key holders to it
-            GameManager.Instance.BossKeysManager.DistributeKeysAcrossRemainingRooms(_wavesToSpawn);
+
+            GameManager.Instance.BossKeysManager.DistributeKeysAcrossRemainingRooms(rooms);
+
             // set the game difficulty
-            SetDifficulty(GameManager.Instance.PlayersTempInfoSaver.GameDifficulty);
+            SetDifficulty(GameManager.Instance.GameData.Difficulty);
+        }
+
+        private WaveData GetWaveWithinCapacityCount(int capacityCount, int capacityMargin)
+        {
+            int minCapacity = capacityCount - capacityMargin;
+            int maxCapacity = capacityCount + capacityMargin;
+            return _waves.FindAll(w => w.Capacity >= minCapacity && w.Capacity <= maxCapacity).RandomItem();
         }
 
         /// <summary>
         /// Called everytime the played enters a room that has enemies to spawn. Because we decide what enemies to spawn after the player enters a room to control progression.
         /// </summary>
         /// <param name="room"></param>
-        public void GetEnemies(NormalRoom room)
+        public EnemyWave GetEnemies()
         {
             if (!_spawnEnemies)
             {
-                return;
+                return null;
             }
 
-            WaveData waveToCreate = _wavesToSpawn[_currentWaveIndex++];
+            WaveData waveToCreate = _wavesToSpawn[_currentWaveIndex];
+            ++_currentWaveIndex;
+
             List<EnemyType> waveEnemies = waveToCreate.Enemies;
 
             // create an empty wave and an empty list for enemies
@@ -135,28 +171,59 @@ namespace TankLike
             }
 
             wave.HasKey = waveToCreate.HasKey;
-            room.Spawner.SetRoomEnemyWaves(new List<EnemyWave>() { wave});
-            room.SpawnedEnemies = true;
+
+            return wave;
+        }
+
+        int index = 0;
+        public List<EnemyWave> GetWaves()
+        {
+
+            // TODO: have this as a helper method
+            List<EnemyWave> waves = new List<EnemyWave>();
+            int wavesLeft = _wavesToSpawn.Count - _currentWaveIndex;
+
+            int minWavesCount = Mathf.Max(1, wavesLeft - (_roomsWithNoSpawns - 1) * MAX_WAVES_PER_ROOM_COUNT);
+
+            int maxWavesCount = Mathf.Min(MAX_WAVES_PER_ROOM_COUNT, wavesLeft - (_roomsWithNoSpawns - 1));
+
+            int wavesCount = Random.Range(minWavesCount, maxWavesCount + 1);
+
+            //Debug.Log($"Room {index++} has {wavesCount} waves. Waves left: {wavesLeft}->{wavesLeft - wavesCount}. " +
+            //    $"Rooms count: {_roomsWithNoSpawns}. Min: {minWavesCount}, Max: {maxWavesCount}");
+
+            _roomsWithNoSpawns--;
+
+            for (int i = 0; i < wavesCount; i++)
+            {
+                waves.Add(GetEnemies());
+            }
+
+            return waves;
         }
 
         #region Pools
         private void InitPools()
         {
-            foreach (var enemy in _enemiesDatabase.GetAllEnemies())
+            foreach (EnemyData enemy in _enemiesDatabase.GetAllEnemies())
             {
                 _enemiesPools.Add(enemy.EnemyType, CreateEnemyPool(enemy));
             }
 
-            foreach (var enemy in _enemiesDatabase.GetAllEnemies())
+            foreach (EnemyData enemy in _enemiesDatabase.GetAllEnemies())
             {
-                if (enemy.PartsPrefab == null) continue;
+                if (enemy.PartsPrefab == null)
+                {
+                    continue;
+                }
+                
                 _enemyPartsPools.Add(enemy.EnemyType, CreateEnemyPartsPool(enemy));
             }
         }
 
         private void DisposePools()
         {
-            foreach (KeyValuePair<EnemyType, Pool<EnemyAIController>> enemy in _enemiesPools)
+            foreach (KeyValuePair<EnemyType, Pool<EnemyComponents>> enemy in _enemiesPools)
             {
                 enemy.Value.Clear();
             }
@@ -170,18 +237,24 @@ namespace TankLike
             _enemyPartsPools.Clear();
         }
 
-        private Pool<EnemyAIController> CreateEnemyPool(EnemyData enemyData)
+        private int _poolIndex = 0;
+
+        private Pool<EnemyComponents> CreateEnemyPool(EnemyData enemyData)
         {
-            var pool = new Pool<EnemyAIController>(
+            var pool = new Pool<EnemyComponents>(
                 () =>
                 {
-                    var obj = Instantiate(enemyData.Prefab);
+                    GameObject obj = Instantiate(enemyData.Prefab);
+                    obj.SetActive(false);
                     GameManager.Instance.SetParentToSpawnables(obj.gameObject);
-                    return obj.GetComponent<EnemyAIController>();
+                    EnemyComponents enemy = obj.GetComponent<EnemyComponents>();
+                    enemy.gameObject.name = ((EnemyData)enemy.Stats).EnemyName + $" {_poolIndex++}";
+                    enemy.SetUp();
+                    return enemy;
                 },
-                (EnemyAIController obj) => obj.GetComponent<IPoolable>().OnRequest(),
-                (EnemyAIController obj) => obj.GetComponent<IPoolable>().OnRelease(),
-                (EnemyAIController obj) => obj.GetComponent<IPoolable>().Clear(),
+                (EnemyComponents obj) => obj.GetComponent<IPoolable>().OnRequest(),
+                (EnemyComponents obj) => obj.GetComponent<IPoolable>().OnRelease(),
+                (EnemyComponents obj) => obj.GetComponent<IPoolable>().Clear(),
                 0
             );
             return pool;
@@ -211,27 +284,22 @@ namespace TankLike
             return parts;
         }
 
-        public EnemyAIController SpawnEnemyAtPoint(EnemyType type, Vector3 point)
+        public EnemyComponents RequestEnemy(EnemyType type)
         {
-            EnemyAIController enemy = _enemiesPools[type].RequestObject(Vector3.zero, Quaternion.identity);
-
-            enemy.transform.position = point;
-
-            enemy.gameObject.SetActive(true);
-
-            _spawnedEnemies.Add(enemy.transform);
+            EnemyComponents enemy = _enemiesPools[type].RequestObject(Vector3.zero, Quaternion.identity);
+            _spawnedEnemies.Add(enemy);
 
             return enemy;
         }
 
         public void AddEnemy(TankComponents enemy)
         {
-            _spawnedEnemies.Add(enemy.transform);
+            _spawnedEnemies.Add(enemy);
         }
 
         public void RemoveEnemy(TankComponents enemy)
         {
-            _spawnedEnemies.Remove(enemy.transform);
+            _spawnedEnemies.Remove(enemy);
         }
 
         public List<Transform> GetSpawnedEnemies()
@@ -245,13 +313,8 @@ namespace TankLike
         {
             for (int i = _spawnedEnemies.Count - 1; i >= 0; i--)
             {
-                _spawnedEnemies[i].GetComponent<TankComponents>().Health.Die();
+                _spawnedEnemies[i].Health.Die();
             }
-        }
-
-        public List<WaveData> GetWavesToSpawn()
-        {
-            return _wavesToSpawn;
         }
 
         public void SetDifficulty(float difficulty)
@@ -264,11 +327,6 @@ namespace TankLike
             _spawnEnemies = enable;
         }
 
-        public bool SpawnEnemies()
-        {
-            return _spawnEnemies;
-        }
-
         public void SetFightActivated(bool value)
         {
             _fightActivated = value;
@@ -277,6 +335,23 @@ namespace TankLike
         public bool IsFightActivated()
         {
             return _fightActivated;
+        }
+
+        public void SetTutorialWaves(List<WaveData> waves)
+        {
+            _tutorialWaves = waves;
+        }
+
+        public void ActivateSpawnedEnemies()
+        {
+            _spawnedEnemies.ForEach(e => e.Activate());
+            EnemiesAreActivated = true;
+        }
+
+        public void DeactivateSpawnedEnemies()
+        {
+            _spawnedEnemies.ForEach(e => e.Deactivate());
+            EnemiesAreActivated = false;
         }
     }
 }

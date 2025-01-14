@@ -1,18 +1,23 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 namespace TankLike.UI.Notifications
 {
+    using Utils;
+
     public class CollectionNotificationBar : MonoBehaviour
     {
+        public NotificationBarSettings_SO Data { get; private set; }
         public bool IsAvailable { get; private set; }
         public bool CanAddTo { get; private set; } = true;
+
         public RectTransform Rect;
-        public NotificationType Type { get; private set; }
-        [SerializeField] private TextMeshProUGUI _notificationText;
+        //public NotificationType Type { get; private set; }
+        
+        [SerializeField] private TextMeshProUGUI _notificationAmountText;
+        [SerializeField] private TextMeshProUGUI _notificationDescriptionText;
         [SerializeField] private Image _notificationIcon;
 
         [Header("Animations")]
@@ -22,7 +27,6 @@ namespace TankLike.UI.Notifications
 
         private Coroutine _countDownCoroutine;
         private WaitForSeconds _countDownWait = new WaitForSeconds(4);
-
         private int _itemAmount = 0;
 
         public void SetUp()
@@ -30,32 +34,43 @@ namespace TankLike.UI.Notifications
             IsAvailable = true;
         }
 
-        public void Display(string text, Sprite iconSprite, NotificationType notificationType, int amount)
+        public void Dispose()
         {
+            _itemAmount = 0;
+
+            if(_countDownCoroutine != null)
+            {
+                StopCoroutine(_countDownCoroutine);
+            }
+
+            this.PlayAnimation(_animation, _hideClip);
+            IsAvailable = true;
+            CanAddTo = true;
+        }
+
+        public void Display(NotificationBarSettings_SO data, int amount)
+        {
+            Data = data;
+
             _itemAmount += amount;
 
-            if (_itemAmount <= 0)
-            {
-                _notificationText.text = $"{text}";
-            }
-            else
-            {
-                _notificationText.text = $"+{_itemAmount} {text}";
-            }
+            _notificationAmountText.text = _itemAmount == 0 ? string.Empty : $"+{_itemAmount}";
+            _notificationAmountText.color = data.AmountColor;
+            _notificationDescriptionText.text = data.Name;
 
-            _notificationIcon.sprite = iconSprite;
-            Type = notificationType;
+            _notificationIcon.color = data.AmountColor;
+            _notificationIcon.sprite = data.Icon;
+            //Type = data.Type;
 
             if (IsAvailable)
             {
                 IsAvailable = false;
-
                 this.PlayAnimation(_animation, _showClip);
-
                 transform.SetAsLastSibling();
             }
 
             this.StopCoroutineSafe(_countDownCoroutine);
+
             _countDownCoroutine = StartCoroutine(CountDownProcess());
         }
 
@@ -63,6 +78,7 @@ namespace TankLike.UI.Notifications
         {
             yield return _countDownWait;
 
+            _itemAmount = 0;
             this.PlayAnimation(_animation, _hideClip);
             IsAvailable = true;
             CanAddTo = true;

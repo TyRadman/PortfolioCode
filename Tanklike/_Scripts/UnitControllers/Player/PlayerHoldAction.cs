@@ -1,52 +1,76 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Combat;
-using TankLike.UI.InGame;
-using TankLike.Utils;
 using UnityEngine;
-using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerHoldAction : TankOnHoldAction, IController, IInput, IDisplayedInput
+    using UI.HUD;
+    using Combat.SkillTree;
+    using Combat.Abilities;
+    using UI.InGame;
+    using Utils;
+    using Sound;
+
+
+    public class PlayerHoldAction : TankOnHoldAction, IController, IInput, IDisplayedInput, IConstraintedComponent, IResumable, ISkill
     {
-        [SerializeField] private float _holdDuration;
-        private Coroutine _holdCoroutine;
-        private Coroutine _holdUpCoroutine;
-        private bool _successfulHold;
-        [SerializeField] private PlayerComponents _components;
-        [SerializeField] private PlayerOverHeat _overHeat;
-        private Ability _currentOnHoldAbility;
-        [SerializeField] private HoldAbilityHolder _holdSkillPrefab;
-        [SerializeField] private List<Ability> _onHoldDownSkills = new List<Ability>();
-        [SerializeField] private SegmentedBar _bar;
+        public bool IsActive { get; private set; }
+        public bool IsConstrained { get; set; }
+
+        [HideInInspector] public bool IsHolding { get; private set; } = false;
+
+        [SerializeField] private ChargeAttackBars _crosshairBars;
 
         [Header("Effects")]
         [SerializeField] private ParticleSystem _holdChargeEffect;
         [SerializeField] private ParticleSystem _holdReadyEffect;
         [SerializeField] private ParticleSystem _holdReleaseEffect;
+
+        [Header("Audio")]
+        [SerializeField] private Audio _holdChargeAudio;
+        [SerializeField] private Audio _holdReadyAudio;
+        [SerializeField] private Audio _holdReleaseAudio;
+
+        private Dictionary<HoldAbilityHolder, HoldAbilityHolder> _abilityHolders = new Dictionary<HoldAbilityHolder, HoldAbilityHolder>();
+        private PlayerComponents _playerComponents;
+        private TankConstraints _constraints;
+        private PlayerShooter _playerShooter;
+
         private HoldAbilityHolder _currentAbilityHolder;
+        private Ability _currentChargeAbility;
+        private Ability _currentPerfectChargeAbility;
 
-        public bool IsActive { get; private set; }
+        private PlayerHUD _HUD;
+        private Coroutine _holdUpCoroutine;
+        private Coroutine _holdCoroutine;
+        private WaitForSeconds _abilityCooldownWait;
+        private AudioSource _currentAudio;
+        private InputAction _chargeInputAction;
+        private Vector2 _perfectChargeRange = new Vector2(0.8f, 0.9f);
+        private Vector2 _perfectChargeValueRange = new Vector2(0.0f, 0.1f);
+        private float _chargeAmount;
+        private float _holdDuration;
+        private bool _successfulHold;
+        private bool _canCharge = false;
+        private bool _hasAbilityEquipped = false;
+        private bool _hasPerfectChargeAbility = false;
 
-        public void SetUp()
+        public void SetUp(IController controller)
         {
-            SetUpInput(_components.PlayerIndex);
-            IsActive = false;
-
-            if (_components.AbilityData != null)
+            if (controller is not PlayerComponents playerComponents)
             {
-                AddHoldDownSkill(_components.AbilityData.GetHoldAbility());
-            }
-            else
-            {
-                AddHoldDownSkill(_holdSkillPrefab);
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
 
-            _bar.SetUp();
-            _bar.SetTotalAmount(0f);
+            _playerComponents = playerComponents;
+            _constraints = _playerComponents.Constraints;
+            _playerShooter = _playerComponents.Shooter as PlayerShooter;
+
+            _HUD = GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex];
+
+            GameManager.Instance.StartingSkillsDB.GetStartingChargeAttack(_playerComponents.PlayerIndex).EquipSkill(_playerComponents);
         }
 
         #region Input
@@ -54,16 +78,25 @@ namespace TankLike.UnitControllers
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap playerMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            playerMap.FindAction(c.Player.Hold.name).performed += OnHoldDown;
-            playerMap.FindAction(c.Player.Hold.name).canceled += OnHoldUp;
+            _chargeInputAction = playerMap.FindAction(c.Player.Hold.name);
+
+            _chargeInputAction.performed += OnHoldDown;
+            _chargeInputAction.canceled += OnHoldUp;
         }
 
         public void DisposeInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
-            InputActionMap playerMap = InputManager.GetMap(_components.PlayerIndex, ActionMap.Player);
-            playerMap.FindAction(c.Player.Hold.name).performed -= OnHoldDown;
-            playerMap.FindAction(c.Player.Hold.name).canceled -= OnHoldUp;
+            InputActionMap playerMap = InputManager.GetMap(_playerComponents.PlayerIndex, ActionMap.Player);
+
+            if(_chargeInputAction == null)
+            {
+                Helper.ThrowInputActionError();
+                return;
+            }
+
+            _chargeInputAction.performed -= OnHoldDown;
+            _chargeInputAction.canceled -= OnHoldUp;
         }
 
         public void UpdateInputDisplay(int playerIndex)
@@ -72,188 +105,398 @@ namespace TankLike.UnitControllers
             int holdActionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.Player.Hold.name, playerIndex);
 
             // TODO: Skill tree fixes
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownInfo(_currentAbilityHolder.GetIcon(), Helper.GetInputIcon(holdActionIconIndex));
+            GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].SetHoldDownInfo(_currentAbilityHolder.GetIcon(), Helper.GetInputIcon(holdActionIconIndex));
         }
         #endregion
 
         private void OnHoldDown(InputAction.CallbackContext context)
         {
-            if (!IsActive)
+            bool canNotHoldDown = !IsActive || !_canCharge || !_hasAbilityEquipped || IsConstrained;
+
+            if (canNotHoldDown)
             {
                 return;
             }
 
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
+            _canCharge = false;
 
+            _constraints.ApplyConstraints(true, _currentAbilityHolder.OnHoldConstraints);
+
+            this.StopCoroutineSafe(_holdCoroutine);
             _holdCoroutine = StartCoroutine(HoldRoutine());
         }
 
         private void OnHoldUp(InputAction.CallbackContext context)
         {
-            if (!IsActive)
+            bool canNotHoldUp = !IsActive || !_hasAbilityEquipped || IsConstrained || !IsHolding;
+
+            if (canNotHoldUp)
             {
                 return;
             }
 
+            IsHolding = false;
             _holdChargeEffect.Stop();
+            StopChargeAudio();
+            _constraints.ApplyConstraints(false, _currentAbilityHolder.OnHoldConstraints);
 
             if (_successfulHold)
             {
-                _currentOnHoldAbility.PerformAbility();
-                _overHeat.ReduceAmmoBarByOne();
-                _holdReadyEffect.Stop();
-                _holdReleaseEffect.Play();
+                OnFullyChargedAttack();
             }
-
-            if (_holdCoroutine != null)
+            else if (_perfectChargeRange.HasFloatInRange(_chargeAmount) && _hasPerfectChargeAbility)
             {
-                StopCoroutine(_holdCoroutine);
+                OnPerfectChargedAttack();
             }
-
-            if (_holdUpCoroutine != null)
+            else
             {
-                StopCoroutine(_holdUpCoroutine);
+                OnFailedChargedAttack();
             }
 
+            this.StopCoroutineSafe(_holdCoroutine);
             _holdUpCoroutine = StartCoroutine(HoldUpRoutine());
+        }
 
-            _successfulHold = false;
+        private void OnFullyChargedAttack()
+        {
+            _constraints.ApplyConstraints(true, _currentAbilityHolder.OnPerformConstraints);
+            _currentChargeAbility.PerformAbility();
+            _holdReadyEffect.Stop(true);
+            _holdReleaseEffect.Play();
+            StartCoroutine(AbilityCooldownRoutine());
+        }
+
+        private void OnPerfectChargedAttack()
+        {
+            _constraints.ApplyConstraints(true, _currentAbilityHolder.OnPerformConstraints);
+            _currentPerfectChargeAbility.PerformAbility();
+            _holdReadyEffect.Stop(true);
+            _holdReleaseEffect.Play();
+            StartCoroutine(AbilityCooldownRoutine());
+        }
+
+        private void OnFailedChargedAttack()
+        {
+            _playerShooter.Shoot();
+            _canCharge = true;
         }
 
         private IEnumerator HoldRoutine()
         {
             float timer = 0f;
             _successfulHold = false;
+            IsHolding = true;
             _holdChargeEffect.Play();
+            _currentAudio = GameManager.Instance.AudioManager.Play(_holdChargeAudio, _holdDuration);
+            _chargeAmount = 0f;
 
             while (timer < _holdDuration)
             {
                 timer += Time.deltaTime;
-                float amount = timer / _holdDuration;
-                _bar.SetTotalAmount(amount);
-                GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownChargeAmount(1 - amount, _components.PlayerIndex);
+                _chargeAmount = timer / _holdDuration;
+                _HUD.SetHoldDownChargeAmount(1 - _chargeAmount, _playerComponents.PlayerIndex);
+
+                UpdateBars();
+
                 yield return null;
             }
 
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownChargeAmount(0f, _components.PlayerIndex);
+            _HUD.SetHoldDownChargeAmount(0f, _playerComponents.PlayerIndex);
             _successfulHold = true;
             _holdChargeEffect.Stop();
             _holdReadyEffect.Play();
+            StopChargeAudio();
+            GameManager.Instance.AudioManager.Play(_holdReadyAudio);
         }
 
         private IEnumerator HoldUpRoutine()
         {
-            float t = Mathf.InverseLerp(1f, 0f, _bar.GetAmount());
-            float timer = Mathf.Lerp(0, 0.2f, t);
+            float progress = Mathf.InverseLerp(1f, 0f, _crosshairBars.GetMainBarAmount());
+            float timer = Mathf.Lerp(0, 0.2f, progress);
 
             while (timer < 0.2f)
             {
                 timer += Time.deltaTime;
-                float amount = Mathf.Clamp(1 - timer / 0.2f, 0f, 1f);
-                _bar.SetTotalAmount(amount); 
-                GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetHoldDownChargeAmount(1 - amount, _components.PlayerIndex);
+                float t = timer / 0.2f;
+                _chargeAmount = Mathf.Clamp(1 - t, 0f, 1f);
+                _HUD.SetHoldDownChargeAmount(1 - _chargeAmount, _playerComponents.PlayerIndex);
+
+                UpdateBars();
 
                 yield return null;
             }
 
-            _bar.SetTotalAmount(0f); 
+            _crosshairBars.SetMainBarAmount(0f);
         }
 
-        public void AddHoldDownSkill(HoldAbilityHolder ability)
+        private void UpdateBars()
         {
-            if(ability == null || ability.Ability == null)
+
+            _crosshairBars.UpdateBarsValue(_chargeAmount);
+
+            if (_hasPerfectChargeAbility)
+            {
+                _crosshairBars.UpdatePerfectChargeBarsValue(_chargeAmount, _perfectChargeRange, _perfectChargeValueRange);
+            }
+        }
+
+        private IEnumerator AbilityCooldownRoutine()
+        {
+            yield return _abilityCooldownWait;
+            _canCharge = true;
+            _constraints.ApplyConstraints(false, _currentAbilityHolder.OnPerformConstraints);
+        }
+
+        #region Skill Addition
+        public void AddSkill(SkillHolder newAbilityHolder)
+        {
+            if(newAbilityHolder == null)
             {
                 Debug.LogError($"No ability passed");
                 return;
             }
 
-            _currentAbilityHolder = Instantiate(ability);
-            _currentOnHoldAbility = Instantiate(_currentAbilityHolder.Ability);
-            UpdateInputDisplay(_components.PlayerIndex);
-            _onHoldDownSkills.Add(_currentOnHoldAbility);
-            _currentOnHoldAbility.SetUp(_components);
-            _holdDuration = ability.HoldDownDuration;
-        }
-
-        public Ability GetHoldDownSkill()
-        {
-            return _currentOnHoldAbility;
-        }
-
-        public List<Ability> GetHoldDownSkills()
-        {
-            return _onHoldDownSkills;
-        }
-
-        public void SetOnHoldSkill(Ability ability)
-        {
-            _currentOnHoldAbility = ability;
-
-            if (!_onHoldDownSkills.Exists(s => s == ability))
+            if (newAbilityHolder is not HoldAbilityHolder holdAbilityHolder)
             {
-                _onHoldDownSkills.Add(ability);
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(HoldAbilityHolder).Name, newAbilityHolder.GetType().Name);
+                return;
             }
+
+            if (_abilityHolders.ContainsKey(holdAbilityHolder))
+            {
+                Debug.LogError($"Ability {holdAbilityHolder.Ability.name} exists");
+                return;
+            }
+
+            // main ability
+            HoldAbilityHolder newHolder = Instantiate(holdAbilityHolder);
+            _abilityHolders.Add(holdAbilityHolder, newHolder);
+            Ability newAbility = Instantiate(holdAbilityHolder.Ability);
+            newHolder.SetAbility(newAbility);
+
+            // perfect charge ability
+
+            if (_currentAbilityHolder == null)
+            {
+                EquipSkill(holdAbilityHolder);
+            }
+        }
+
+        public void EquipSkill(SkillHolder newAbilityHolder)
+        {
+            if (newAbilityHolder == null)
+            {
+                Debug.LogError($"No ability passed");
+                return;
+            }
+
+            if (newAbilityHolder is not HoldAbilityHolder holdAbilityHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(HoldAbilityHolder).Name, newAbilityHolder.GetType().Name);
+                return;
+            }
+
+            if (!_abilityHolders.ContainsKey(holdAbilityHolder))
+            {
+                AddSkill(newAbilityHolder);
+            }
+
+            _hasAbilityEquipped = true;
+
+            _currentAbilityHolder = _abilityHolders[holdAbilityHolder];
+            _currentChargeAbility = _currentAbilityHolder.Ability;
+
+            SetUpPerfectChargeValues(holdAbilityHolder);
+
+            SetPerfectChargeValues();
+
+            _currentChargeAbility.SetUp(_playerComponents);
+
+            _holdDuration = holdAbilityHolder.HoldDownDuration;
+
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
+
+            _abilityCooldownWait = new WaitForSeconds(holdAbilityHolder.Ability.GetDuration());
+        }
+
+        public void ReEquipSkill()
+        {
+            EquipSkill(_currentAbilityHolder);
+        }
+        #endregion
+
+        private void SetUpPerfectChargeValues(HoldAbilityHolder abilityToEquip)
+        {
+            if (abilityToEquip.PerfectChargeAbility == null && _currentAbilityHolder.PerfectChargeAbility == null)
+            {
+                _crosshairBars.HidePerfectChargeBars();
+                return;
+            }
+
+            if (abilityToEquip.PerfectChargeAbility != null && _currentAbilityHolder.PerfectChargeAbility == null)
+            {
+                Ability perfectChargeAbilityInstance = Instantiate(abilityToEquip.PerfectChargeAbility);
+                _currentAbilityHolder.SetPerfectChargeAbility(perfectChargeAbilityInstance);
+                _hasPerfectChargeAbility = true;
+            }
+        }
+
+        public void AddPerfectChargeAbility(Ability perfectChargeAbility)
+        {
+            if (perfectChargeAbility == null)
+            {
+                Debug.LogError($"No ability passed");
+                return;
+            }
+
+            if (_currentAbilityHolder == null)
+            {
+                Debug.LogError($"No ability holder equipped");
+                return;
+            }
+
+            Ability perfectChargeAbilityInstance = Instantiate(perfectChargeAbility);
+            _currentAbilityHolder.SetPerfectChargeAbility(perfectChargeAbilityInstance);
+            _hasPerfectChargeAbility = true;
+
+            SetPerfectChargeValues();
+        }
+
+        public void SetPerfectChargeValues()
+        {
+            if(_currentAbilityHolder == null || _currentAbilityHolder.PerfectChargeAbility == null)
+            {
+                return;
+            }
+
+            _currentPerfectChargeAbility = _currentAbilityHolder.PerfectChargeAbility;
+            _perfectChargeRange = _currentAbilityHolder.PerfectChargeRange;
+            _perfectChargeValueRange = new Vector2(0.0f, _perfectChargeRange.y - _perfectChargeRange.x);
+            _crosshairBars.SetSize(_perfectChargeRange);
+            _currentPerfectChargeAbility.SetUp(_playerComponents);
+        }
+
+        public HoldAbilityHolder GetAbilityHolder()
+        {
+            return _currentAbilityHolder;
+        }
+
+        // TODO: not needed as we're not doing the ability swapping
+        public List<HoldAbilityHolder> GetAbilityHolders()
+        {
+            List<HoldAbilityHolder> abilities = new List<HoldAbilityHolder>();
+
+            foreach (KeyValuePair<HoldAbilityHolder, HoldAbilityHolder> holder in _abilityHolders)
+            {
+                abilities.Add(holder.Value);
+            }
+
+            return abilities;
         }
 
         public void ForceStopHoldAction()
         {
-            _successfulHold = false;
-
-            if (_holdCoroutine != null)
+            if (!IsHolding)
             {
-                StopCoroutine(_holdCoroutine);
+                return;
             }
 
-            _bar.SetTotalAmount(0f);
-            _holdChargeEffect.Stop();
-            _holdReadyEffect.Stop();
-            _holdReleaseEffect.Stop();
+            _constraints.ApplyConstraints(false, _currentAbilityHolder.OnHoldConstraints);
+
+            _successfulHold = false;
+
+            this.StopCoroutineSafe(_holdCoroutine);
+
+            _crosshairBars.ResetBarsAmount();
+
+            StopChargeEffect();
         }
 
-        public void Enable(bool enable)
+        private void StopChargeEffect()
         {
-            IsActive = enable;
+            _holdChargeEffect.Stop();
+            _holdReadyEffect.Stop(true);
+            _holdReleaseEffect.Stop();
+            StopChargeAudio();
+        }
 
-            if (!IsActive)
+        private void StopChargeAudio()
+        {
+            if (_currentAudio == null)
+            {
+                return;
+            }
+
+            _currentAudio.Stop();
+            _currentAudio.clip = null;
+        }
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canUseAbility = (constraints & AbilityConstraint.HoldDownAction) == 0;
+
+            if (IsConstrained == !canUseAbility)
+            {
+                return;
+            }
+
+            IsConstrained = !canUseAbility;
+
+            if (IsConstrained)
             {
                 ForceStopHoldAction();
             }
+            else
+            {
+                ResumeComponent();
+            }
         }
+
+        public void ResumeComponent()
+        {
+            _canCharge = true;
+
+            if (_chargeInputAction.inProgress)
+            {
+                OnHoldDown(new InputAction.CallbackContext());
+            }
+        }
+        #endregion
 
         #region IController
         public void Activate()
         {
             IsActive = true;
+
+            _canCharge = true;
+
+            ResumeComponent();
         }
 
         public void Deactivate()
         {
             IsActive = false;
+
             ForceStopHoldAction();
+
+            _canCharge = false;
         }
 
         public void Restart()
         {
-            DisposeInput(_components.PlayerIndex);
-            IsActive = false;
+            SetUpInput(_playerComponents.PlayerIndex);
 
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
-
-            if (_holdUpCoroutine != null)
-            {
-                StopCoroutine(_holdUpCoroutine);
-            }
+            _crosshairBars.SetUp();
+            _crosshairBars.ResetBarsAmount();
         }
 
         public void Dispose()
         {
-            IsActive = false;
+            DisposeInput(_playerComponents.PlayerIndex);
+
+            StopAllCoroutines();
+            StopChargeAudio();
         }
         #endregion
     }

@@ -1,14 +1,20 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
 namespace TankLike.UnitControllers
 {
+    /// <summary>
+    /// Interface for all unit controllers.
+    /// </summary>
     public interface IController
     {
+        /// <summary>
+        /// Checks if the unit is currently active.
+        /// </summary>
         public bool IsActive { get; }
         /// <summary>
-        /// Make the unit playable.
+        /// Setting up the unit upon spawning. Called only once when the unit is first instantiated.
+        /// </summary>
+        public void SetUp(IController controller);
+        /// <summary>
+        /// Make the unit playable after being deactivated or when the unit spawns for the first time in the game.
         /// </summary>
         public void Activate();
         /// <summary>
@@ -16,11 +22,11 @@ namespace TankLike.UnitControllers
         /// </summary>
         public void Deactivate();
         /// <summary>
-        /// Disables the unit and resets all its components' values.
+        /// Resets all its components' values.
         /// </summary>
         public void Restart();
         /// <summary>
-        /// For when the game is closed? Clean up your mess before you leave the room young man!
+        /// For when the unit is to be removed from the game entirely. More like a cleaning script.
         /// </summary>
         public void Dispose();
     }

@@ -15,7 +15,7 @@ namespace TankLike.UnitControllers
         {
             base.ApplyModifier(enemy, difficulty);
 
-            ((AttackState)((EnemyComponents)enemy).EnemyController.GetStateByType(EnemyStateType.ATTACK)).SetAttackRate(_shootingRateRange.Lerp(difficulty));
+            ((AttackState)((EnemyComponents)enemy).AIController.GetStateByType(EnemyStateType.ATTACK)).SetAttackRate(_shootingRateRange.Lerp(difficulty));
         }
     }
 }

@@ -8,9 +8,35 @@ using UnityEngine;
 /// </summary>
 namespace TankLike.UnitControllers
 {
-    public class TankAdditionalInfo : MonoBehaviour
+    public class TankAdditionalInfo : MonoBehaviour, IController
     {
         [field: SerializeField] public float ShieldScale { get; private set; }
-        [field: SerializeField] public Transform[] BrockShootingPoints { get; private set; }
+
+        public bool IsActive { get; private set; }
+
+        public virtual void Activate()
+        {
+
+        }
+
+        public virtual void Deactivate()
+        {
+
+        }
+
+        public virtual void Dispose()
+        {
+
+        }
+
+        public virtual void Restart()
+        {
+
+        }
+
+        public virtual void SetUp(IController controller)
+        {
+
+        }
     }
 }

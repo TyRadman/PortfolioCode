@@ -1,15 +1,17 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using TankLike.Environment;
 using UnityEngine;
 
 namespace TankLike.UI.Map
 {
+    using Utils;
+    using Environment;
+
     /// <summary>
-    /// Responsible for drawing the map icons for the rooms
+    /// Responsible for drawing the map icons for the rooms.
     /// </summary>
-    public class LevelMapDisplayer : MonoBehaviour
+    public class LevelMapDisplayer : MonoBehaviour, IManager
     {
         [SerializeField] private GameObject _roomIconPrefab;
         [SerializeField] private GameObject _gateIconPrefab;
@@ -18,14 +20,34 @@ namespace TankLike.UI.Map
         [SerializeField] private GameObject _shopIconPrefab;
         [SerializeField] private GameObject _workshopIconPrefab;
         [SerializeField] private Transform _iconsParent;
-        [SerializeField] private List<RoomIconData> _icons = new List<RoomIconData>();
         [SerializeField] private RectTransform _playerIcon;
 
-        private int _roomSpacing = 0;
+        private List<RoomIconData> _icons = new List<RoomIconData>();
         private Vector2Int _levelCenterPoint;
+        
+        private int _roomSpacing = 0;
+
+        public bool IsActive { get; private set; }
+
+        #region IManager
+        public void SetUp()
+        {
+            IsActive = true;
+        }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            _icons.ForEach(i => i.Dispose());
+            _icons.Clear();
+        }
+        #endregion
 
         public void CreateLevelMap(Room[,] roomsGrid)
         {
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
             _levelCenterPoint = Vector2Int.zero;
             List<Room> rooms = new List<Room>();
 
@@ -45,9 +67,10 @@ namespace TankLike.UI.Map
             }
 
             _levelCenterPoint /= rooms.Count;
-            //Room centerRoom = rooms.Find(r => r.Location == center);
-            _roomSpacing = (int)(_roomIconPrefab.GetComponent<RectTransform>().rect.width +
-                _gateIconPrefab.GetComponent<RectTransform>().rect.height);
+
+            float roomIconWidth = _roomIconPrefab.GetComponent<RectTransform>().rect.width;
+            float gateIconHeight = _gateIconPrefab.GetComponent<RectTransform>().rect.height;
+            _roomSpacing = (int)(roomIconWidth + gateIconHeight);
 
             // draw the rooms
             for (int i = 0; i < rooms.Count; i++)
@@ -65,13 +88,19 @@ namespace TankLike.UI.Map
 
         private void GenerateRoom(Room room)
         {
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
             RoomIconData data = new RoomIconData();
             _icons.Add(data);
             data.Room = room;
 
             RectTransform icon = Instantiate(_roomIconPrefab).GetComponent<RectTransform>();
+
             data.RoomIcon = icon.gameObject;
+            
             icon.parent = _iconsParent;
+            icon.localScale = Vector3.one;
+            icon.localEulerAngles = Vector3.zero;
             Vector2Int position = (room.Location - _levelCenterPoint) * _roomSpacing;
             icon.localPosition = new Vector3(position.x, position.y, 0f);
             Transform questionMark = Instantiate(_questionMarkPrefab, _iconsParent).transform;
@@ -100,32 +129,44 @@ namespace TankLike.UI.Map
             for (int j = 0; j < gates.Count; j++)
             {
                 RectTransform gateIcon;
+                GateDirection direction = gates[j].Direction;
 
-                if (room.RoomType == RoomType.BossGate && gates[j].Direction == GateDirection.North)
+                if (room.RoomType == RoomType.BossGate && direction == GateDirection.North)
                 {
-                    gateIcon = Instantiate(_bossGateIcon).GetComponent<RectTransform>();
-                    gateIcon.parent = icon;
+                    gateIcon = Instantiate(_bossGateIcon, icon).GetComponent<RectTransform>();
                     gateIcon.localPosition = Vector3.zero;
-                    gateIcon.eulerAngles += Vector3.forward * ((int)gates[j].Direction - 90);
-                    gateIcon.localPosition += gateIcon.up * gateIcon.rect.height / 2;
+                    gateIcon.localEulerAngles = Vector3.zero;
+
+                    float angle = (int)direction - 90;
+                    gateIcon.localEulerAngles = Vector3.forward * angle;
+                    gateIcon.anchoredPosition = Vector3.up * gateIcon.rect.height / 2;
                     gateIcon.parent = _iconsParent;
-                    gateIcon.SetAsLastSibling();
+                    //gateIcon.SetAsLastSibling();
                 }
                 else
                 {
-                    gateIcon = Instantiate(_gateIconPrefab).GetComponent<RectTransform>();
-                    gateIcon.parent = icon;
+                    gateIcon = Instantiate(_gateIconPrefab, icon).GetComponent<RectTransform>();
                     gateIcon.localPosition = Vector3.zero;
-                    gateIcon.eulerAngles += Vector3.forward * ((int)gates[j].Direction - 90);
-                    gateIcon.localPosition += gateIcon.up * gateIcon.rect.height;
+                    gateIcon.localEulerAngles = Vector3.zero;
+
+                    float angle = (int)direction - 90;
+                    gateIcon.localEulerAngles = Vector3.forward * angle;
+                    gateIcon.anchoredPosition = GetPositionFromDirection(direction) * gateIcon.rect.height * 2f;
                 }
 
+                gateIcon.parent = _iconsParent;
+                gateIcon.SetAsFirstSibling();
                 data.GateIcons.Add(gateIcon.gameObject);
             }
 
             data.SetUp();
-
             GameManager.Instance.RoomsManager.OnRoomEntered += RevealRoom;
+        }
+
+        private Vector2 GetPositionFromDirection(GateDirection direction)
+        {
+            float angleRadian = Mathf.Deg2Rad * (int)direction;
+            return new Vector2(Mathf.Cos(angleRadian), Mathf.Sin(angleRadian));
         }
 
         /// <summary>
@@ -133,6 +174,8 @@ namespace TankLike.UI.Map
         /// </summary>
         public void RevealRoom(Room room)
         {
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
             // cache the icon corresponding to the active room
             RoomIconData roomIcon = _icons.Find(i => i.Room == room);
 
@@ -147,10 +190,10 @@ namespace TankLike.UI.Map
 
         public void OnMapOpened()
         {
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
             // position the player icon where they currently are
-            _playerIcon.localPosition =
-                _icons.Find(i => i.Room == GameManager.Instance.RoomsManager.CurrentRoom).
-                GetRoomIconLocalPosition();
+            _playerIcon.localPosition = _icons.Find(i => i.Room == GameManager.Instance.RoomsManager.CurrentRoom).GetRoomIconLocalPosition();
         }
     }
 }

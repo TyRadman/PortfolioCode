@@ -2,226 +2,57 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
-using System;
-using TankLike.Combat;
-using TankLike.Utils.Editor;
 
-namespace TankLike
+namespace TankLike.EditorTools
 {
     public class GameEditor : EditorWindow
     {
-        private int _playersNumber;
-        private int _buildIndex = 0;
-        private int _gameDifficulty;
-        private GameManager _gameManager;
-        private bool _stretchProperties;
         private static Texture _windowIcon;
+
+        public static List<BaseGameEditorPage> Pages = new List<BaseGameEditorPage>()
+        {
+            new MainGameEditorPage(), new EnemiesGameEditorPage(), new ScenesGameEditorPage(),
+            new PlayerGameEditorPage(), new LevelGameEditorPage()
+        };
+
+        public BaseGameEditorPage SelectedPage;
 
         private void OnEnable()
         {
-            _stretchProperties = EditorPrefs.GetBool(nameof(_stretchProperties));
+            Pages.ForEach(p => p.GameEditorInstance = this);
+            SelectedPage = Pages.Find(p => p.PageTag() == EGameEditorPageTag.Main);
+            SelectedPage.OnEnable();
         }
 
-        private GameManager GetGameManager()
+        public static void OpenPage(EGameEditorPageTag pageTag)
         {
-            if(_gameManager == null)
-            {
-                _gameManager = FindObjectOfType<GameManager>();
-            }
-
-            return _gameManager;
+            GetWindow<GameEditor>().SelectedPage = Pages.Find(p => p.PageTag() == pageTag);
+            GetWindow<GameEditor>().SelectedPage.OnEnable();
         }
 
         [MenuItem("Tanklike/Game Editor")]
         public static void ShowWindow()
         {
             GameEditor window = GetWindow<GameEditor>("Game Editor");
-            CacheTabIcon();
+            _windowIcon = GetIcon("Assets/UI/EditorIcons/T_Controller.png");
             window.titleContent = new GUIContent("Game Editor", _windowIcon);
         }
 
-        private static void CacheTabIcon()
+        public static Texture GetIcon(string path)
         {
-            _windowIcon = AssetDatabase.LoadAssetAtPath<Texture>("Assets/UI/EditorIcons/Controller.png");
+            Texture texture = AssetDatabase.LoadAssetAtPath<Texture>(path);
+
+            if(texture == null)
+            {
+                Debug.LogError($"No icon found at path: {path}");
+            }
+
+            return texture;
         }
 
         private void OnGUI()
         {
-            // header
-            RenderHeader("Game Editor", 30);
-
-            GUILayout.BeginVertical(GUI.skin.box);
-            RenderHeader("Editor Settings", 20, 10);
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            RenderStretchSettings();
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.Label("", GUILayout.Height(10));
-            GUILayout.EndVertical();
-            GUILayout.Space(20);
-
-            RenderSection("Players", RenderPlayersNumber);
-            RenderSection("Level", RenderSelectingScenes, RenderStartRoom);
-            RenderSection("Enemies", RenderGameDifficultyAndSpawn);
-            RenderSection("Databases", RenderRefreshDataBases);
-        }
-
-        private void RenderRefreshDataBases()
-        {
-            if (GetGameManager() == null)
-            {
-                return;
-            }
-
-            if (GUILayout.Button("Add all ammunitions to DB"))
-            {
-                AmmunitionDatabase database = GetGameManager().BulletsDatabase;
-                database.ClearAmmunitionList();
-                List<AmmunationData> ammunitionData = AssetUtils.GetAllInstances<AmmunationData>(true, new string[] { database.DirectoryToCover });
-
-                foreach (AmmunationData b in ammunitionData)
-                {
-                    database.AddAmmunition(b);
-                }
-
-                // Mark the database as dirty and save the changes
-                EditorUtility.SetDirty(database);
-                AssetDatabase.SaveAssets();
-            }
-        }
-
-        private void RenderStretchSettings()
-        {
-            GUILayout.Label("Stretch Settings");
-            _stretchProperties = GUILayout.Toggle(_stretchProperties, "");
-            EditorPrefs.SetBool(nameof(_stretchProperties), _stretchProperties);
-        }
-
-        private void RenderGameDifficultyAndSpawn()
-        {
-            if(GetGameManager() == null)
-            {
-                return;
-            }
-
-            EnemiesManager enemies = GetGameManager().EnemiesManager;
-
-            GUILayout.Label("Spawn Enemies");
-            bool spawnEnemies = GUILayout.Toggle(enemies.SpawnEnemies(), "");
-            enemies.EnableSpawnEnemies(spawnEnemies);
-
-            float difficulty = EditorGUILayout.Slider("Difficulty", enemies.Difficulty, 0f, 1f);
-            enemies.SetDifficulty(difficulty);
-
-            EditorUtility.SetDirty(enemies);
-        }
-
-        private void RenderSelectingScenes()
-        {
-            GUILayout.Label("Select Scene");
-
-            _buildIndex = GUILayout.Toolbar(_buildIndex, new string[] { "Bootstrap", "Main Menu", "Ability Selection", "Lobby", "Gameplay", "Bosses" });
-
-            if (GUILayout.Button("Load Scene"))
-            {
-                if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                {
-                    EditorSceneManager.OpenScene(SceneUtility.GetScenePathByBuildIndex(_buildIndex));
-                }
-            }
-
-            // play the scene without leaving the original scene
-            if(GUILayout.Button("Play Scene"))
-            {
-                EditorSceneManager.OpenScene(SceneUtility.GetScenePathByBuildIndex(_buildIndex));
-                EditorApplication.isPlaying = true;
-            }
-        }
-
-        private void RenderStartRoom()
-        {
-            if (GetGameManager() == null)
-            {
-                return;
-            }
-
-            PlayerTempInfoSaver data = GetGameManager().PlayersTempInfoSaver;
-            
-            if (data == null)
-            {
-                return;
-            }
-
-            GUILayout.Space(10);
-            
-            RoomType startRoom = data.StartRoomType;
-            int roomNumber = (int)startRoom;
-            string[] roomTypes = new string[Enum.GetValues(typeof(RoomType)).Length];
-
-            for (int i = 0; i < roomTypes.Length; i++)
-            {
-                roomTypes[i] = ((RoomType)i).ToString();
-            }
-
-            GUILayout.Label("Start Room");
-            roomNumber = EditorGUILayout.Popup(roomNumber, roomTypes);
-            //roomNumber = GUILayout.Toolbar(roomNumber, roomTypes);
-            startRoom = (RoomType)roomNumber;
-            data.SetStartRoom(startRoom);
-            EditorUtility.SetDirty(data);
-        }
-
-        private void RenderPlayersNumber()
-        {
-            if (GetGameManager() == null)
-            {
-                return;
-            }
-
-            GamePlayPlayerControlsStarter starter = GetGameManager().InputManager.ControlsStarter;
-
-            if (starter == null)
-            {
-                return;
-            }
-
-            _playersNumber = starter.PlayersCount - 1;
-            GUILayout.Space(10);
-            GUILayout.Label("Number of players");
-            _playersNumber = GUILayout.Toolbar(_playersNumber, new string[] { "1 Player", "2 Players" }) + 1;
-            GameManager.Instance.InputManager.ControlsStarter.PlayersCount = _playersNumber;
-            EditorUtility.SetDirty(starter);
-            GUILayout.Space(10);
-        }
-
-        private void RenderHeader(string title, int fontSize, int beforeSpace = 20, int afterSpace = 20)
-        {
-            GUILayout.Space(beforeSpace);
-            GUIStyle headerStyle = new GUIStyle(EditorStyles.boldLabel);
-            headerStyle.alignment = TextAnchor.MiddleCenter;
-            headerStyle.fontSize = fontSize;
-            GUILayout.Label(title, headerStyle);
-            GUILayout.Space(afterSpace);
-        }
-
-        private void RenderSection(string title, params Action[] renders)
-        {
-            GUILayout.BeginVertical(GUI.skin.box);
-            RenderHeader(title, 20, 10);
-            GUILayout.BeginHorizontal();
-
-            for (int i = 0; i < renders.Length; i++)
-            {
-                renders[i]?.Invoke();
-            }
-
-            if (!_stretchProperties) GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.Label("", GUILayout.Height(10));
-            GUILayout.EndVertical();
+            SelectedPage.OnGUI();
         }
     }
 }

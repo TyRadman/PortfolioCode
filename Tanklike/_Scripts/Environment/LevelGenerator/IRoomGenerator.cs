@@ -1,8 +1,6 @@
-
 using TankLike.Environment;
 using TankLike.Environment.LevelGeneration;
 using TankLike.Environment.MapMaker;
-using TankLike.LevelGeneration;
 
 namespace TankLike
 {

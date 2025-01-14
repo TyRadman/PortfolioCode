@@ -16,7 +16,7 @@ namespace TankLike.UnitControllers
             base.ApplyModifier(enemy, difficulty);
 
             Vector2 aimRange = new Vector2(_aimDurationRange.Lerp(difficulty) - _aimRangeOffset, _aimDurationRange.Lerp(difficulty) + _aimRangeOffset);
-            ((AimState)((EnemyComponents)enemy).EnemyController.GetStateByType(EnemyStateType.AIM)).SetAimDurationRange(aimRange);
+            ((AimState)((EnemyComponents)enemy).AIController.GetStateByType(EnemyStateType.AIM)).SetAimDurationRange(aimRange);
         }
     }
 }

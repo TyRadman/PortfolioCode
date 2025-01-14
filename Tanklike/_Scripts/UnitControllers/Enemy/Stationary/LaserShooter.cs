@@ -1,19 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Cam;
-using TankLike.Combat;
-using TankLike.Misc;
-using TankLike.Sound;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using Cam;
+    using Combat;
+    using Misc;
+
     public class LaserShooter : EnemyShooter
     {
         public System.Action OnLaserFacedTarget;
 
+        [Header("Laser Settings")]
         [SerializeField] private LayerMask _wallLayers;
+        [SerializeField] private IndicatorEffects.IndicatorType _indicatorType;
 
         public override void DefaultShot(Transform shootingPoint = null, float angle = 0)
         {
@@ -24,7 +25,7 @@ namespace TankLike.UnitControllers
 
             OnShootStarted?.Invoke();
 
-            foreach (Transform point in _shootingPoints)
+            foreach (Transform point in ShootingPoints)
             {
                 _currentWeapon.OnShot(point, angle);
             }
@@ -40,7 +41,7 @@ namespace TankLike.UnitControllers
 
             float timer = 0f;
 
-            foreach (Transform point in _shootingPoints)
+            foreach (Transform point in ShootingPoints)
             {
                 ParticleSystemHandler vfx = GameManager.Instance.VisualEffectsManager.Telegraphs.EnemyTelegraph;
                 vfx.transform.SetLocalPositionAndRotation(point.position, point.rotation);
@@ -51,9 +52,9 @@ namespace TankLike.UnitControllers
                 _activePoolables.Add(vfx);
                 activeEffects.Add(vfx);
 
-                if(_currentWeapon.IndicatorType != IndicatorEffects.IndicatorType.None)
+                if(_indicatorType != IndicatorEffects.IndicatorType.None)
                 {
-                    Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_currentWeapon.IndicatorType);
+                    Indicator indicator = GameManager.Instance.VisualEffectsManager.Indicators.GetIndicatorByType(_indicatorType);
                     indicator.gameObject.SetActive(true);
                     var pos = point.position;
                     pos.y = 0.52f; // dirty 
@@ -70,9 +71,9 @@ namespace TankLike.UnitControllers
             // Update indicators
             while (timer < _telegraphDuration)
             {
-                for (int i = 0; i < _shootingPoints.Count; i++)
+                for (int i = 0; i < ShootingPoints.Count; i++)
                 {
-                    var point = _shootingPoints[i];
+                    var point = ShootingPoints[i];
                     Ray ray = new Ray(point.position, point.forward);
                     bool cast = Physics.SphereCast(ray, ((LaserWeapon)_currentWeapon).Thickness, out RaycastHit hit, 50, _wallLayers);
                     Vector3 hitPoint = point.position + point.forward * ((LaserWeapon)_currentWeapon).MaxLength;
@@ -125,17 +126,17 @@ namespace TankLike.UnitControllers
 
             Vector3 direction = (target.position - transform.position).normalized;
 
-            Vector3 closestDirection = _shootingPoints[0].forward;
+            Vector3 closestDirection = ShootingPoints[0].forward;
             float maxDot = Vector3.Dot(direction, closestDirection);
 
-            for (int i = 1; i < _shootingPoints.Count; i++)
+            for (int i = 1; i < ShootingPoints.Count; i++)
             {
-                float dot = Vector3.Dot(direction, _shootingPoints[i].forward);
+                float dot = Vector3.Dot(direction, ShootingPoints[i].forward);
 
                 if (dot > maxDot)
                 {
                     maxDot = dot;
-                    closestDirection = _shootingPoints[i].forward;
+                    closestDirection = ShootingPoints[i].forward;
                 }
             }
 
@@ -149,7 +150,6 @@ namespace TankLike.UnitControllers
             float angleThreshold = Mathf.Lerp(13f, 2.3f, distanceToPlayer / 13f);
 
             float angleToTarget = Quaternion.Angle(Quaternion.LookRotation(direction), Quaternion.LookRotation(closestDirection));
-            Debug.Log(angleToTarget + " " + angleThreshold);
 
             if (angleToTarget < angleThreshold)
             {

@@ -54,7 +54,10 @@ namespace TankLike.Environment.MapMaker
         {
             base.RemoveTile(ref tiles, x, y);
 
-            if (tiles[x, y] == null) return;
+            if (tiles[x, y] == null)
+            {
+                return;
+            }
 
             Destroy(tiles[x, y].TileObject);
         }

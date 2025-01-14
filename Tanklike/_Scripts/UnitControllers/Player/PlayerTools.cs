@@ -1,18 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UI;
 using UnityEngine.InputSystem;
-using TankLike.Utils;
-using TankLike.Combat;
-using TankLike.Sound;
 
 namespace TankLike.UnitControllers
 {
+    using Utils;
+    using Combat;
+    using Sound;
+
     /// <summary>
     /// Holds the tools that the player possesses and handles the logic of the input to start those tools.
     /// </summary>
-    public class PlayerTools : TankTools, IInput, IDisplayedInput
+    public class PlayerTools : TankTools, IInput, IDisplayedInput, IConstraintedComponent
     {
         [System.Serializable]
         public struct ToolToAdd
@@ -21,17 +21,29 @@ namespace TankLike.UnitControllers
             public bool Add;
         }
 
+        public bool IsConstrained { get; set; }
+
         [SerializeField] private List<ToolToAdd> _toolsToAdd;
         [SerializeField] private int _currentIndex = 0;
-        private bool _canChangeTools = true;
-        private const float CHANGING_TOOLS_COOLDOWN = 0.1f;
-        private PlayerComponents _playerComponents;
         [SerializeField] private Audio _onSwitchAudio;
-        private bool _canUseTools = true;
 
-        public void SetUp(PlayerComponents components)
+        private bool _canChangeTools = true;
+        private PlayerComponents _playerComponents;
+
+        private const float CHANGING_TOOLS_COOLDOWN = 0.1f;
+
+        public override void SetUp(IController controller)
         {
-            _playerComponents = components;
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = playerComponents;
+
+            base.SetUp(_playerComponents);
+
             UpdateInputDisplay(_playerComponents.PlayerIndex);
             _toolsToAdd.FindAll(t => t.Add).ForEach(t => AddTool(t.Tool, t.Tool.ToolReference.GetMaxAmount()));
         }
@@ -124,22 +136,9 @@ namespace TankLike.UnitControllers
 
         public override void UseTool()
         {
-            if (_currentTool == null)
-            {
-                return;
-            }
+            bool canUseTools = _currentTool != null && !IsConstrained && _currentTool.Tool != null && _currentTool.Tool.CanUseTool();
 
-            if (!_canUseTools)
-            {
-                return;
-            }
-
-            if (_currentTool.Tool == null)
-            {
-                return;
-            }
-
-            if (!_currentTool.Tool.CanUseTool())
+            if (!canUseTools)
             {
                 return;
             }
@@ -200,27 +199,34 @@ namespace TankLike.UnitControllers
             GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].UpdateTools(_tools[_currentIndex].Tool, nextTool, previousTool);
         }
 
-        public void EnableToolsUsage(bool enable)
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
         {
-            _canUseTools = enable;
+            bool canUseTools = (constraints & AbilityConstraint.Tools) == 0;
+            IsConstrained = !canUseTools;
         }
+        #endregion
 
         #region IController
         public override void Activate()
         {
             base.Activate();
+        }
+
+        public override void Deactivate()
+        {
+            base.Deactivate();
+        }
+
+        public override void Restart()
+        {
+            base.Restart();
             SetUpInput(_playerComponents.PlayerIndex);
         }
 
         public override void Dispose()
         {
             base.Dispose();
-            DisposeInput(_playerComponents.PlayerIndex);
-        }
-
-        public override void Restart()
-        {
-            base.Restart();
             DisposeInput(_playerComponents.PlayerIndex);
         }
         #endregion

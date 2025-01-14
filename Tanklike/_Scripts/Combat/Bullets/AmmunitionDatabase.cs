@@ -68,6 +68,12 @@ namespace TankLike.Combat
 
         public void AddAmmunition(AmmunationData ammo)
         {
+            if(string.IsNullOrEmpty(ammo.GUID))
+            {
+                string guid = ammo.GetInstanceID().ToString();
+                ammo.GUID = guid;
+            }
+
             _ammunitions.Add(ammo);
         }
 

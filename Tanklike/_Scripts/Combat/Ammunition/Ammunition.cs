@@ -1,12 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Sound;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using Sound;
+    using UnitControllers;
+
+    /// <summary>
+    /// A base class for every object that entities can spawn that deals damage.
+    /// </summary>
     public class Ammunition : MonoBehaviour, IPoolable
     {
         [SerializeField] protected List<string> _targetTags = new List<string>();
@@ -20,9 +24,10 @@ namespace TankLike.Combat
 
         protected bool _isActive;
         [Tooltip("This is the damage a projectile inflicts on hit and the damage a laser beam inflicts every second")]
-        protected int _damage = 3;
-        [HideInInspector] public TankComponents Instigator;
+        public int Damage { get; protected set; } = 3;
+        [HideInInspector] protected UnitComponents Instigator { get; set; }
         public Action<IPoolable> OnReleaseToPool { get; private set; }
+        public bool CanBeDeflected { get; protected set; }
 
         #region Pool
         public virtual void Init(Action<IPoolable> OnRelease)

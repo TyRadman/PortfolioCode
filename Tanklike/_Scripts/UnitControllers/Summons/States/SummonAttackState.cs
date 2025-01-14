@@ -11,7 +11,7 @@ namespace TankLike.UnitControllers
         private SummonMovement _movement;
         private SummonShooter _shooter;
 
-        private EnemyAIController _target;
+        private EnemyComponents _target;
         private float _stopDistance;
         private float _timer;
 

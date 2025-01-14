@@ -132,7 +132,7 @@ namespace TankLike.Combat
                     {
                         if (damagable.IsInvincible) continue;
 
-                        damagable.TakeDamage(_damage, Vector3.zero, Instigator, transform.position);
+                        damagable.TakeDamage(Damage, Vector3.zero, Instigator, transform.position);
                     }
                 }
             }

@@ -5,36 +5,55 @@ using UnityEngine;
 
 namespace TankLike
 {
+    using Utils;
+
     public class TankVisuals : MonoBehaviour, IController
     {
+        public bool IsActive { get; private set; }
+
         [Header("Hit Flash")]
         [SerializeField] private Material _hitFlashMaterial;
         [SerializeField] private float _hitFlashTime;
 
         [SerializeField] private List<Renderer> _tankMeshes = new List<Renderer>();
-        private const float TRANSITION_DURATION = 0.5f;
+        
+        [Header("Flashing")]
+        [SerializeField] private Color _flashingColor;
+        [SerializeField] private float _flashingSpeed = 1.0f;
+
+        private TankComponents _components;
         private Material _originalMaterial; // maybe save the material of each mesh by using a dictionary instead of a list
         private Color _originalColor;
         private Coroutine _hitFlashCoroutine;
         private Coroutine _switchColorCoroutine;
+        private Coroutine _flashingCoroutine;
 
-        public bool IsActive { get; private set; }
-
-        public void Setup(TankComponents components)
+        private const string BASE_COLOR_KEY = "_BaseColor";
+        private const string TEXTURE_IMPACT_KEY = "_TextureImpact";
+        private const string BASE_MAP_KEY = "_BaseMap";
+        private const float TRANSITION_DURATION = 0.5f;
+        
+        public void SetUp(IController controller)
         {
+            if (controller is not TankComponents components)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _components = components;
             TankBodyParts parts = components.TankBodyParts;
 
             parts.Parts.ForEach(p => AddMeshes(p.Meshes));
 
             _originalMaterial = _tankMeshes[0].material;
             _originalColor = _tankMeshes[0].material.color;
-            components.Health.OnHit += OnHitHandler;
 
         }
 
         public void SetTextureForMainMaterial(Texture2D texture)
         {
-            _originalMaterial.SetTexture("_BaseMap", texture);
+            _originalMaterial.SetTexture(BASE_MAP_KEY, texture);
             SwitchMaterial(_originalMaterial);
         }
 
@@ -55,7 +74,7 @@ namespace TankLike
 
         public void AddMaterial(Material material)
         {
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
                 Material[] sharedMaterials = mesh.sharedMaterials;
                 Material[] newMats = new Material[sharedMaterials.Length + 1];
@@ -67,7 +86,7 @@ namespace TankLike
 
         public void RemoveMaterial()
         {
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
                 Material[] sharedMaterials = mesh.sharedMaterials;
                 Material[] newMats = new Material[sharedMaterials.Length - 1];
@@ -80,7 +99,10 @@ namespace TankLike
         {
             //_tankMeshes.ForEach(m => m.material.color += color);
             if (_switchColorCoroutine != null)
+            {
                 StopCoroutine(_switchColorCoroutine);
+            }
+
             _switchColorCoroutine = StartCoroutine(SwitchToColor(Color.white, color));
         }
 
@@ -88,7 +110,10 @@ namespace TankLike
         {
             //_tankMeshes.ForEach(m => m.material.color -= color);
             if (_switchColorCoroutine != null)
+            {
                 StopCoroutine(_switchColorCoroutine);
+            }
+
             _switchColorCoroutine = StartCoroutine(SwitchToColor(color, Color.white));
         }
 
@@ -117,7 +142,7 @@ namespace TankLike
 
         public void HideVisuals()
         {
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
                 mesh.enabled = false;
             }
@@ -125,37 +150,82 @@ namespace TankLike
 
         public void ShowVisuals()
         {
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
                 mesh.enabled = true;
             }
         }
 
-        private void OnHitHandler()
+        public void OnHitHandler()
         {
             if (_hitFlashMaterial != null)
             {
-                if (_hitFlashCoroutine != null)
-                    StopCoroutine(_hitFlashCoroutine);
+                this.StopCoroutineSafe(_hitFlashCoroutine);
                 _hitFlashCoroutine = StartCoroutine(HitFlashRoutine());
             }
         }
 
         private IEnumerator HitFlashRoutine()
         {
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
-                //mesh.material = _hitFlashMaterial;
-                mesh.material.SetColor("_BaseColor", Color.red);
+                mesh.material.SetFloat(TEXTURE_IMPACT_KEY, 0);
             }
 
             yield return new WaitForSeconds(_hitFlashTime);
 
-            foreach (var mesh in _tankMeshes)
+            foreach (Renderer mesh in _tankMeshes)
             {
-                //mesh.material = _originalMaterial;
-                mesh.material.SetColor("_BaseColor", _originalColor);
+                mesh.material.SetFloat(TEXTURE_IMPACT_KEY, 1);
+            }
+        }
 
+        public void StartFlashing()
+        {
+            if (_flashingCoroutine != null)
+            {
+                StopCoroutine(_flashingCoroutine);
+            }
+
+            _flashingCoroutine = StartCoroutine(FlashingRoutine());
+        }
+
+        private IEnumerator FlashingRoutine()
+        {
+            float t = 0f;
+
+            while (true)
+            {
+                // Lerp between the two colors over time
+                t = Mathf.PingPong(Time.time * _flashingSpeed, 1f);
+                foreach (Renderer mesh in _tankMeshes)
+                {
+                    mesh.material.SetColor(BASE_COLOR_KEY, Color.Lerp(_originalColor, _flashingColor, t));
+                }
+
+                yield return null;
+            }
+        }
+
+        public void StopFlashing()
+        {
+
+            if(_flashingCoroutine != null)
+            {
+                StopCoroutine(_flashingCoroutine);
+            }
+
+            foreach (Renderer mesh in _tankMeshes)
+            {
+                mesh.material.SetColor(BASE_COLOR_KEY, _originalColor);
+            }
+        }
+
+        public void ResetMaterialTextureImpact()
+        {
+            foreach (Renderer mesh in _tankMeshes)
+            {
+                mesh.material.SetFloat(TEXTURE_IMPACT_KEY, 1);
             }
         }
 
@@ -172,21 +242,15 @@ namespace TankLike
 
         public void Restart()
         {
-            IsActive = false;
-
-            if (_hitFlashCoroutine != null)
-                StopCoroutine(_hitFlashCoroutine);
-
             _tankMeshes.ForEach(m => m.material = _originalMaterial);
-
-            if (_switchColorCoroutine != null)
-                StopCoroutine(_switchColorCoroutine);
-
             _tankMeshes.ForEach(m => m.material.color = _originalColor);
         }
 
         public void Dispose()
         {
+            StopAllCoroutines();
+            StopFlashing();
+            ResetMaterialTextureImpact();
         }
         #endregion
     }

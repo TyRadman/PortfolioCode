@@ -6,223 +6,469 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
-    using System;
     using UI.InGame;
-    
-    public class PlayerAimAssist : MonoBehaviour, IController, IInput
+    using Sound;
+    using TankLike.Utils;
+
+    public class PlayerAimAssist : MonoBehaviour, IController, IInput, IConstraintedComponent, IResumable
     {
         public bool IsActive { get; private set; }
         public bool IsAiming { get; private set; } = false;
+        public bool IsConstrained { get; set; }
 
         [SerializeField] private Transform _turret;
         [SerializeField] private LayerMask _layersToDetect;
         [SerializeField] private LayerMask _targetLayer;
         [SerializeField] private float _detectionRange = 20f;
+
+        [Header("Angles")]
         [SerializeField] private float _aimAssistAngle = 45f;
-        [SerializeField] private Vector2 _crosshairRadiusRange;
+        [SerializeField] private float _focusedAimAssistAngle = 90f;
+        [SerializeField] private SpriteRenderer _indicatorSprite;
 
-        private PlayerComponents _components;
-        private PlayerCrosshairController _crosshairController;
-        private Crosshair _crossHair;
+        [Header("Audio")]
+        [SerializeField] private Audio _switchTargetsAudio;
+
+        [Header("Debug")]
+        [SerializeField] private bool _debug = false;
+
+        private List<Transform> _currentTargets = new List<Transform>();
+        private Transform _currentTarget;
         private Transform _tank;
-        private float _angleRad;
+        private PlayerComponents _playerComponents;
+        private PlayerCrosshairController _crosshairController;
+        private MainCameraFollow _cameraFollowController;
+        private Crosshair _crossHair;
+        private Coroutine _aimAssistCoroutine;
+        private InputAction _aimAssistInputAction;
+        private float _normalAngleRad;
+        private float _focusedAngleRad;
+        private float _currentAngleRad;
         private bool _isInputDown = false;
+        private bool _wasInputDown;
 
-        public void SetUp(PlayerComponents components)
+        private const float SWITCH_TARGET_THRESHOLD = 0.2f;
+
+        public void SetUp(IController controller)
         {
-            _components = components;
+            _debug = true;
+            PlayerComponents playerComponents = controller as PlayerComponents;
+            Helper.CheckForComponentValidity(playerComponents != null, GetType());
 
-            _tank = _components.transform;
+            _playerComponents = playerComponents;
 
-            _crossHair = _components.Crosshair.GetCrosshair();
+            _tank = _playerComponents.transform;
+            _crossHair = _playerComponents.CrosshairController.GetCrosshair();
+            _crosshairController = _playerComponents.CrosshairController;
 
-            _crosshairController = _components.Crosshair;
+            // convert the angle to a rad for when checking the dot product to determine if the target is within the range
+            _normalAngleRad = Mathf.Cos((_aimAssistAngle / 2) * Mathf.Deg2Rad);
+            _focusedAngleRad = Mathf.Cos((_focusedAimAssistAngle / 2) * Mathf.Deg2Rad);
 
-            // convert the angle to a rad for the math
-            _angleRad = Mathf.Cos((_aimAssistAngle / 2) * Mathf.Deg2Rad);
+            _cameraFollowController = GameManager.Instance.CameraManager.PlayerCameraFollow;
         }
 
+        #region Input
         public void SetUpInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap gameplayMap = InputManager.GetMap(playerIndex, ActionMap.Player);
+            _aimAssistInputAction = gameplayMap.FindAction(c.Player.Aim.name);
 
-            gameplayMap.FindAction(c.Player.Aim.name).performed += OnAimAssistInputDown;
-            gameplayMap.FindAction(c.Player.Aim.name).canceled += OnAimAssistInputUp;
+            _aimAssistInputAction.performed += OnAimAssistInputDown;
+            _aimAssistInputAction.canceled += OnAimAssistInputUp;
+
+            gameplayMap.FindAction(c.Player.TurretRotation.name).performed += UpdateAimTargets;
         }
 
         public void DisposeInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
-            InputActionMap gameplayMap = InputManager.GetMap(_components.PlayerIndex, ActionMap.Player);
-            gameplayMap.FindAction(c.Player.Aim.name).performed -= OnAimAssistInputDown;
-            gameplayMap.FindAction(c.Player.Aim.name).canceled -= OnAimAssistInputUp;
+            InputActionMap gameplayMap = InputManager.GetMap(playerIndex, ActionMap.Player);
+
+            if(_aimAssistInputAction == null)
+            {
+                Helper.ThrowInputActionError();
+                return;
+            }
+
+            _aimAssistInputAction.performed -= OnAimAssistInputDown;
+            _aimAssistInputAction.canceled -= OnAimAssistInputUp;
+
+            gameplayMap.FindAction(c.Player.TurretRotation.name).performed -= UpdateAimTargets;
         }
+        #endregion
 
         private void OnAimAssistInputDown(InputAction.CallbackContext _)
         {
+            if (!IsActive || IsConstrained)
+            {
+                return;
+            }
+
             _isInputDown = true;
-            StartCoroutine(AimAssistProcess());
+            this.StopCoroutineSafe(_aimAssistCoroutine);
+            _aimAssistCoroutine = StartCoroutine(AimAssistProcess());
         }
 
-        private void OnAimAssistInputUp(InputAction.CallbackContext obj)
+        private void OnAimAssistInputUp(InputAction.CallbackContext _)
         {
+            StopAiming();
+            // reset the flag used to continue the aim input after applying constraints
+            _wasInputDown = false;
+        }
+
+        private void StopAiming()
+        {
+            _cameraFollowController.SetPlayerTargetToCrosshairMode(_playerComponents.PlayerIndex);
             _isInputDown = false;
             _crossHair.Visuals.StopAiming();
             _crosshairController.DisableIsAiming();
+            _currentTarget = null;
+
+            if (_indicatorSprite.enabled)
+            {
+                _indicatorSprite.enabled = false;
+            }
+        }
+
+        private void UpdateAimTargets(InputAction.CallbackContext ctx)
+        {
+            if (!_isInputDown)
+            {
+                return;
+            }
+
+            Vector2 inputValue = ctx.ReadValue<Vector2>();
+
+            HandleTargetSwitching(inputValue);
+        }
+
+        private void HandleTargetSwitching(Vector2 input)
+        {
+            Vector3 turretForward = _turret.forward;
+            Vector2 turretForward2D = new Vector2(turretForward.x, turretForward.z);
+
+            // get the cross product of the tank's forward direction and the input direction
+            float crossProduct = turretForward2D.x * input.y - turretForward2D.y * input.x;
+
+            // if the cross value is close to zero, then the tank's forward direction and the input direction are almost aligned
+            if (Mathf.Abs(crossProduct) > SWITCH_TARGET_THRESHOLD)
+            {
+                bool isClockwise = crossProduct > 0;
+
+                Transform closestTarget = FindNextTarget(_turret, isClockwise);
+
+                if (closestTarget != null && closestTarget != _currentTarget)
+                {
+                    PlayAudio();
+                    _currentTarget = closestTarget;
+                }
+            }
+        }
+
+        private Transform FindNextTarget(Transform turret, bool isClockwise)
+        {
+            Transform bestTarget = null;
+            float closestAngle = isClockwise ? Mathf.Infinity : -Mathf.Infinity;
+
+            for (int i = 0; i < _currentTargets.Count; i++)
+            {
+                Transform target = _currentTargets[i];
+
+                if(target == null)
+                {
+                    _currentTargets.Remove(target);
+                }
+
+                Vector3 directionToTarget = (target.position - turret.position).normalized;
+
+                // get the directions in 2D
+                Vector2 direction2D = new Vector2(directionToTarget.x, directionToTarget.z);
+                Vector2 turretForward = new Vector2(turret.forward.x, turret.forward.z);
+
+                float angle = Vector2.SignedAngle(turretForward, direction2D);
+
+                if (isClockwise && angle > 0 && angle < closestAngle)
+                {
+                    closestAngle = angle;
+                    bestTarget = target;
+                }
+                else if (!isClockwise && angle < 0 && angle > closestAngle)
+                {
+                    closestAngle = angle;
+                    bestTarget = target;
+                }
+            }
+
+            return bestTarget;
         }
 
         private IEnumerator AimAssistProcess()
         {
             while (_isInputDown)
             {
-                PerformAimAssist();
+                CacheTargets();
+                PerformOnAimingLogic();
                 yield return null;
             }
         }
 
-        private void PerformAimAssist()
+        private void CacheTargets()
         {
-            if (!IsActive)
+            if (!IsActive || IsConstrained)
             {
                 return;
             }
 
-            List<Transform> enemies = GameManager.Instance.EnemiesManager.GetSpawnedEnemies();
-            Transform target = GetClosestTargetWithinRange(enemies);
+            _currentAngleRad = _currentTarget == null ? _normalAngleRad : _focusedAngleRad;
+            _currentTargets.Clear();
 
-            if(target == null)
+            List<Transform> hostileTargets = GetHostileTargets();
+
+            if (!hostileTargets.IsEmpty())
             {
-                List<Transform> droppers = GameManager.Instance.RoomsManager.CurrentRoom.GetDroppers();
-                target = GetClosestTargetWithinRange(droppers);
+                _currentTargets.AddRange(hostileTargets);
+
+                List<Transform> explosives = GetExplosives();
+                
+                if(!explosives.IsEmpty())
+                {
+                    _currentTargets.AddRange(explosives);
+                }
+            }
+            else
+            {
+                List<Transform> nonHostileTargets = AddedNonHostileTargets();
+
+                if (!nonHostileTargets.IsEmpty())
+                {
+                    _currentTargets = nonHostileTargets;
+                }
+                else
+                {
+                }
             }
 
-            if (target == null)
+            if (_currentTargets.Count == 0)
             {
                 IsAiming = false;
-                _crosshairController.DisableIsAiming();
-                _crossHair.Visuals.PlayInActiveAimAnimation();
                 return;
             }
 
-            _crossHair.Visuals.PlayActiveAimAnimation();
-            _crosshairController.EnableIsAiming();
-            _crosshairController.SetAimingPosition(target.position);
+            // if there is no target or the current target is not within the player's aim range, then cache the closest target
+            if (_currentTarget == null || !_currentTargets.Contains(_currentTarget))
+            {
+                PlayAudio();
+                _currentTarget = _currentTargets.OrderBy(t => (t.position - _tank.position).sqrMagnitude).FirstOrDefault();
+            }
 
             IsAiming = true;
         }
 
-        private Transform GetClosestTargetWithinRange(List<Transform> targets)
+        private List<Transform> AddedNonHostileTargets()
         {
-            if (targets.Count == 0)
+            var targets = GameManager.Instance.RoomsManager.CurrentRoom.Spawnables.GetAimAssistTargets();
+            List<Transform> droppers = GetTargetsWithinRange(targets);
+            return droppers;
+        }
+
+        private List<Transform> GetHostileTargets()
+        {
+            List<Transform> hostileTargets = GetTargetsWithinRange(GameManager.Instance.EnemiesManager.GetSpawnedEnemies());
+
+            return hostileTargets;
+        }
+
+        private List<Transform> GetExplosives()
+        {
+            List<Transform> hostileTargets = GetTargetsWithinRange(GameManager.Instance.RoomsManager.CurrentRoom.Spawnables.GetExplosives());
+            return hostileTargets;
+        }
+
+        private void PlayAudio()
+        {
+            GameManager.Instance.AudioManager.Play(_switchTargetsAudio);
+        }
+
+        private List<Transform> GetTargetsWithinRange(List<Transform> targets)
+        {
+            if (targets.IsEmpty())
             {
-                return null;
+                return new List<Transform>();
             }
 
-            // filter out far enemies
+            List<Transform> targetsWithinRange = new List<Transform>();
+
+            // filter out far enemies based on their distance to the player
+
             targets = targets.FindAll(e => Vector2.Distance(
                 new Vector2(e.position.x, e.position.z),
                 new Vector2(_tank.position.x, _tank.position.z)) <= _detectionRange);
 
+
             if (targets.Count == 0)
             {
-                return null;
+                return new List<Transform>();
             }
-
-            targets = targets.OrderBy(e => (e.position - _tank.position).sqrMagnitude).ToList();
-
-            Transform targetToLockTo = null;
 
             for (int i = 0; i < targets.Count; i++)
             {
-                Vector3 direcitonToEnemy = (targets[i].position - _tank.position).normalized;
+                float height = Constants.AimAssistRayHeight;
+                Vector3 rayOrigin = _tank.position.Where(y: height);
+                
+                Vector3 direcitonToTarget = (targets[i].position.Where(y: height) - _tank.position.Where(y: height));
+                direcitonToTarget.Normalize();
+
                 Vector3 tankForward = _turret.forward;
 
-                if (Physics.Raycast(_tank.position, direcitonToEnemy, out RaycastHit hit, _detectionRange, _layersToDetect))
+                if (Physics.Raycast(rayOrigin, direcitonToTarget, out RaycastHit hit, _detectionRange, _layersToDetect))
                 {
-                    // FUTURE REMINDER
-                    //  hit.collider.gameObject.layer = 10 // assuming it's an enemy
-                    // 1 << 10 = 00000000 00000000 00000100 00000000 // turning the int value into an index in a 32 binary map sort of thing
-                    // _targetLayer.value = 00000000 00000000 00000101 00000000 // indices of the wall and enemy layer in a 32 binary map
-                    // & = AND in binary
-                    // 00000000 00000000 00000100 00000000 AND 00000000 00000000 00000101 00000000
-                    // = 00000000 00000000 00000100 00000000
-                    // if it equals 0 then there are no mutual layers
                     if ((_targetLayer.value & (1 << hit.collider.gameObject.layer)) == 0)
                     {
-                        Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.red);
+                        Debug.DrawRay(rayOrigin, direcitonToTarget * _detectionRange, Color.red);
                         continue;
                     }
                     else
                     {
-                        Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.yellow);
+                        Debug.DrawRay(rayOrigin, direcitonToTarget * _detectionRange, Color.yellow);
                     }
                 }
 
-                float dotProduct = Vector3.Dot(tankForward, direcitonToEnemy);
+                float dotProduct = Vector3.Dot(tankForward, direcitonToTarget);
 
-                if (dotProduct >= _angleRad)
+                if (dotProduct >= _currentAngleRad)
                 {
-                    Debug.DrawRay(_tank.position, direcitonToEnemy * _detectionRange, Color.green);
-                    targetToLockTo = targets[i];
-                    break;
+                    if (_debug)
+                    {
+                        Debug.DrawRay(rayOrigin, direcitonToTarget * _detectionRange, Color.green);
+                    }
+
+                    targetsWithinRange.Add(targets[i]);
                 }
             }
 
-            if(targetToLockTo == null)
+            if (targetsWithinRange.Count == 0)
             {
                 return null;
             }
 
+            if (_debug)
+            {
+                Vector3 direction = (_crossHair.transform.position - _tank.position).normalized; // TODO: do we need to use the rayOrigin here too?
+                direction.y = 0f;
 
-            Vector3 direction = _crossHair.transform.position - _tank.position;
-            direction.y = 0f;
-            direction.Normalize(); // Normalize to get the direction unit vector
+                float halfAngle = _aimAssistAngle / 2;
+                Vector3 leftDirection = Quaternion.Euler(0, -halfAngle, 0) * direction;
+                Vector3 rightDirection = Quaternion.Euler(0, halfAngle, 0) * direction;
+                Debug.DrawRay(_tank.position, leftDirection * _detectionRange, Color.blue);
+                Debug.DrawRay(_tank.position, rightDirection * _detectionRange, Color.blue);
+            }
 
-            // Calculate perpendicular vectors to the direction for left and right spread
-            Vector3 perpendicular = new Vector3(-direction.z, 0, direction.x); // This creates a perpendicular vector on the XZ plane
-            perpendicular.Normalize(); // Normalize the perpendicular vector
-
-            // Calculate the left and right direction vectors using the aim assist angle
-            float angleRadians = _aimAssistAngle / 2; // Convert angle from degrees to radians
-            Vector3 leftDirection = Quaternion.Euler(0, -angleRadians, 0) * direction;
-            Vector3 rightDirection = Quaternion.Euler(0, angleRadians, 0) * direction;
-
-            // Draw rays from the tank's position in the left and right directions
-            Debug.DrawRay(_tank.position, leftDirection * _detectionRange, Color.blue);
-            Debug.DrawRay(_tank.position, rightDirection * _detectionRange, Color.blue);
-
-            return targetToLockTo;
+            return targetsWithinRange;
         }
 
-        public void EnableAimAssist(bool enable)
+        private void PerformOnAimingLogic()
         {
-            IsAiming = enable;
+            if (IsAiming)
+            {
+                if (_indicatorSprite.enabled)
+                {
+                    _indicatorSprite.enabled = false;
+                }
+
+                _cameraFollowController.SetPlayerTargetToAimMode(_playerComponents.PlayerIndex);
+
+                _crossHair.Visuals.PlayActiveAimAnimation();
+                _crosshairController.EnableIsAiming();
+                _crosshairController.SetAimingPosition(_currentTarget.position);
+            }
+            else
+            {
+                if (!_indicatorSprite.enabled)
+                {
+                    _indicatorSprite.enabled = true;
+                }
+
+                _cameraFollowController.SetPlayerTargetToCrosshairMode(_playerComponents.PlayerIndex);
+                _crosshairController.DisableIsAiming();
+                _crossHair.Visuals.PlayInactiveAimAnimation();
+            }
         }
+
+        public void SaveLastInputState()
+        {
+            _wasInputDown = _isInputDown;
+        }
+
+        public void RecoverLastInput()
+        {
+            if (!_wasInputDown)
+            {
+                return;
+            }
+
+            _wasInputDown = false;
+            _isInputDown = true;
+            this.StopCoroutineSafe(_aimAssistCoroutine);
+            _aimAssistCoroutine = StartCoroutine(AimAssistProcess());
+        }
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canAim = (constraints & AbilityConstraint.AimAssist) == 0;
+
+            if (IsConstrained == !canAim)
+            {
+                return;
+            }
+
+            IsConstrained = !canAim;
+
+            if (IsConstrained)
+            {
+                IsAiming = false;
+                StopAiming();
+            }
+            else
+            {
+                ResumeComponent();
+            }
+        }
+
+        public void ResumeComponent()
+        {
+            if (_aimAssistInputAction.inProgress)
+            {
+                OnAimAssistInputDown(new InputAction.CallbackContext());
+            }
+        }
+        #endregion
 
         #region IController
         public void Activate()
         {
             IsActive = true;
-            SetUpInput(_components.PlayerIndex);
+            ResumeComponent();
         }
 
         public void Deactivate()
         {
             IsActive = false;
-            DisposeInput(_components.PlayerIndex);
-        }
-
-        public void Dispose()
-        {
-            IsActive = false;
-            DisposeInput(_components.PlayerIndex);
+            _wasInputDown = false;
         }
 
         public void Restart()
         {
-            IsActive = false;
-            DisposeInput(_components.PlayerIndex);
+            SetUpInput(_playerComponents.PlayerIndex);
+        }
+
+        public void Dispose()
+        {
+            StopAiming();
+            DisposeInput(_playerComponents.PlayerIndex);
+            StopAllCoroutines();
         }
         #endregion
     }

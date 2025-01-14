@@ -1,77 +1,79 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Sound;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerBoost : MonoBehaviour, IController, IInput, IDisplayedInput
+    using Sound;
+    using Utils;
+
+    public class PlayerBoost : MonoBehaviour, IController, IInput, IConstraintedComponent, IResumable
     {
         public bool IsActive { get; private set; }
         public bool IsBoosting { get; private set; }
+        public float DistanceTravelled { get; private set; } = 0f;
+        public bool IsConstrained { get; set; }
+
         public Action OnBoostStart;
         public Action OnBoostUpdate;
         public Action OnBoostEnd;
 
+        [SerializeField] private Light _boostLight;
+
         [Header("Settings")]
-        [SerializeField] private int _boostMaxAmount;
         [SerializeField] private AnimationCurve _boostCurve;
         [SerializeField] private AnimationCurve _accelerationCurve;
         [SerializeField] private AbilityConstraint _constraints;
         [SerializeField] private float _startBoostSpeed = 0.5f;
-        [field: SerializeField] public float BoostSpeedMultiplier { get; private set; } = 1.75f;
 
         [Header("Wiggles")]
         [SerializeField] protected Wiggle _boostWiggle;
 
         [Header("References")]
-        [SerializeField] protected TankAnimation _animation;
-        [SerializeField] protected PlayerMovement _movement;
-        [SerializeField] protected PlayerComponents _components;
         [SerializeField] private TankBumper _bumper;
+        [SerializeField] private ParticleSystem _outOfFuelParticles;
 
         [Header("Audio")]
         [SerializeField] private Audio _boostAudio;
+        [SerializeField] private Audio _failedBoostAudio;
 
-        [Header("Fuel")]
-        [SerializeField] private float _currentStartFuelConsumption;
-        [SerializeField] private float _consumptionRate;
+        private PlayerComponents _playerComponents;
+        private PlayerMovement _movement;
+        private List<ParticleSystem> _boostParticles = new List<ParticleSystem>();
+        private PlayerFuel _fuel;
+        private Coroutine _boostCoroutine;
+        private InputAction _boostInputAction;
 
+        // main modifiers
         private float _startFuelConsumption;
         private float _boostFuelConsumption;
         private float _currentSpeedMultiplier;
 
-        public float DistanceTravelled { get; private set; } = 0f;
         private bool _isBoostingInputOn = false;
-        private bool _canBoost;
-        private List<ParticleSystem> _boostParticles = new List<ParticleSystem>();
-        private PlayerFuel _fuel;
-        private Coroutine _boostCoroutine;
 
         private const float DECELERATION_DURATION = 0.3f;
         private const float LINES_EFFECT_START_TIME = 0.25f;
 
-
-        public void Setup(PlayerComponents components)
+        public void SetUp(IController controller)
         {
-            TankBodyParts parts = components.TankBodyParts;
-            _fuel = components.Fuel;
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
 
-            var body = (TankBody)parts.GetBodyPartOfType(BodyPartType.Body);
+            _playerComponents = playerComponents;
+            _movement = (PlayerMovement)_playerComponents.Movement;
+            _fuel = _playerComponents.Fuel;
+
+            TankBodyParts parts = _playerComponents.TankBodyParts;
+
+            TankBody body = (TankBody)parts.GetBodyPartOfType(BodyPartType.Body);
             _boostParticles = body.BoostParticles;
-            _boostParticles.ForEach(p => p.Stop());
-            _bumper.DisableBump();
 
-            SetUpInput(_components.PlayerIndex);
-            UpdateInputDisplay(_components.PlayerIndex);
-
-            _bumper.gameObject.SetActive(false);
-            _bumper.gameObject.SetActive(true);
-
-            ResetAllBoostFuelConsumptionRates();
-            ResetSpeedMultiplier();
+            _boostLight.enabled = false;
         }
 
         #region Input
@@ -79,40 +81,42 @@ namespace TankLike.UnitControllers
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap playerMap = InputManager.GetMap(playerIndex, ActionMap.Player);
-            playerMap.FindAction(c.Player.Boost.name).started += StartBoost;
-            playerMap.FindAction(c.Player.Boost.name).canceled += StopBoost;
+            _boostInputAction = playerMap.FindAction(c.Player.Boost.name);
+
+            _boostInputAction.started += StartBoost;
+            _boostInputAction.canceled += StopBoost;
         }
 
         public void DisposeInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
-            int index = _components.PlayerIndex;
-            InputActionMap playerMap = InputManager.GetMap(index, ActionMap.Player);
-            playerMap.FindAction(c.Player.Boost.name).started -= StartBoost;
-            playerMap.FindAction(c.Player.Boost.name).canceled -= StopBoost;
-        }
+            int index = _playerComponents.PlayerIndex;
 
-        public void UpdateInputDisplay(int playerIndex)
-        {
-            //string key = GameManager.Instance.InputManager.GetButtonBindingKey(
-            //    InputManager.Controls.Player.Boost.name, playerIndex);
-            //GameManager.Instance.HUDController.PlayerHUDs[playerIndex].SetBoostKey(key);
+            if(_boostInputAction == null)
+            {
+                Debug.LogError("Boost input action is null.");
+                return;
+            }
+
+            _boostInputAction.started -= StartBoost;
+            _boostInputAction.canceled -= StopBoost;
         }
         #endregion
 
         private void StartBoost(InputAction.CallbackContext _)
         {
+            if (!IsActive || IsConstrained)
+            {
+                return;
+            }
+
             if (!_fuel.HasEnoughFuel(_startFuelConsumption))
             {
+                OnOutOfFuel();
                 return;
             }
 
             OnBoostStart?.Invoke();
-
-            if (!IsActive || !_canBoost)
-            {
-                return;
-            }
 
             if (IsBoosting)
             {
@@ -124,22 +128,24 @@ namespace TankLike.UnitControllers
             _isBoostingInputOn = true;
 
             // apply constraints
-            _components.Constraints.ApplyConstraints(true, _constraints);
+            _playerComponents.Constraints.ApplyConstraints(true, _constraints);
 
             _boostParticles.ForEach(p => p.Play());
 
-            _components.TankWiggler.WiggleBody(_boostWiggle);
-            GameManager.Instance.CameraManager.PlayerCameraFollow.SetSpeedMultiplier(_currentSpeedMultiplier, _components.PlayerIndex);
+            _playerComponents.TankWiggler.WiggleBody(_boostWiggle);
+            GameManager.Instance.CameraManager.PlayerCameraFollow.SetSpeedMultiplier(_currentSpeedMultiplier, _playerComponents.PlayerIndex);
 
             _movement.StopMovement();
             _movement.SetCurrentSpeed(0.5f);
 
-            if (_boostCoroutine != null)
-            {
-                StopCoroutine(_boostCoroutine);
-            }
-
+            this.StopCoroutineSafe(_boostCoroutine);
             _boostCoroutine = StartCoroutine(BoostStartProcess());
+        }
+
+        private void OnOutOfFuel()
+        {
+            GameManager.Instance.AudioManager.Play(_failedBoostAudio);
+            _outOfFuelParticles.Play();
         }
 
         private void RecoverBoost()
@@ -162,6 +168,8 @@ namespace TankLike.UnitControllers
             {
                 yield break;
             }
+
+            _boostLight.enabled = true;
 
             _fuel.UseFuel(_startFuelConsumption);
 
@@ -195,7 +203,7 @@ namespace TankLike.UnitControllers
             float linesEffectTimer = 0f;
             float tankSpeed = _movement.GetMultipliedSpeed();
 
-            while (_isBoostingInputOn && _canBoost)
+            while (_isBoostingInputOn && !IsConstrained)
             {
                 float dt = Time.deltaTime;
 
@@ -250,6 +258,7 @@ namespace TankLike.UnitControllers
                 yield return null;
             }
 
+            _boostLight.enabled = false;
             OnBoostEnd?.Invoke();
             StopBoost();
         }
@@ -263,33 +272,16 @@ namespace TankLike.UnitControllers
         private void StopBoost()
         {
             IsBoosting = false;
+
             _bumper.DisableBump();
-            OnBoostFinishedHandler();
-            GameManager.Instance.CameraManager.PlayerCameraFollow.ResetSpeedMultiplier(_components.PlayerIndex);
-        }
 
-        private void OnBoostFinishedHandler()
-        {
             _boostParticles.ForEach(p => p.Stop());
+
             GameManager.Instance.EffectsUIController.StopSpeedLinesEffect();
-            // disable constraints
-            _components.Constraints.ApplyConstraints(false, _constraints);
-        }
 
-        public void EnableBoost(bool enable)
-        {
-            if(enable == _canBoost)
-            {
-                return;
-            }
+            _playerComponents.Constraints.ApplyConstraints(false, _constraints);
 
-            _canBoost = enable;
-
-            if (!enable)
-            {
-                _isBoostingInputOn = false;
-                _movement.StartDeceleration();
-            }
+            GameManager.Instance.CameraManager.PlayerCameraFollow.ResetSpeedMultiplier(_playerComponents.PlayerIndex);
         }
 
         public void ResetDistanceCalculator()
@@ -298,58 +290,60 @@ namespace TankLike.UnitControllers
         }
 
         #region Fuel Consumption Rate Modifiers
-        /// <summary>
-        /// Multipliers the start and update fuel consumption rate values by a provided value.
-        /// </summary>
-        /// <param name="multiplier"></param>
-        public void MultiplyAllBoostFuelConsumption(float multiplier)
-        {
-            _startFuelConsumption *= multiplier;
-            _boostFuelConsumption *= multiplier;
-        }
 
         /// <summary>
-        /// Multipliers the start fuel consumption rate values by a provided value.
+        /// Sets the start fuel consumption rate values as the provided value.
         /// </summary>
         /// <param name="multiplier"></param>
-        public void MultiplyStartBoostConsumptionRate(float multiplier)
+        public void SetStartConsumptionRate(float multiplier)
         {
-            _startFuelConsumption *= multiplier;
+            _startFuelConsumption = multiplier;
         }
 
         /// <summary>
-        /// Multipliers the update fuel consumption rate values by a provided value.
+        /// Sets the update fuel consumption rate values as the provided value.
         /// </summary>
         /// <param name="multiplier"></param>
-        public void MultiplyBoostConsumptionRate(float multiplier)
+        public void SetConsumptionRate(float multiplier)
         {
-            _boostFuelConsumption *= multiplier;
+            _boostFuelConsumption = multiplier;
         }
 
-        public void MultiplySpeedMultiplier(float multiplier)
+        public void SetSpeedMultiplier(float multiplier)
         {
-            _currentSpeedMultiplier *= multiplier;
+            _currentSpeedMultiplier = multiplier;
+        }
+        #endregion
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canBoost = (constraints & AbilityConstraint.Boost) == 0;
+
+            if (IsConstrained == !canBoost)
+            {
+                return;
+            }
+
+            IsConstrained = !canBoost;
+
+            if (IsConstrained)
+            {
+                _isBoostingInputOn = false;
+                _movement.StartDeceleration();
+            }
+            else
+            {
+                ResumeComponent();
+            }
         }
 
-        public void ResetSpeedMultiplier()
+        public void ResumeComponent()
         {
-            _currentSpeedMultiplier = BoostSpeedMultiplier;
-        }
-
-        public void ResetAllBoostFuelConsumptionRates()
-        {
-            _startFuelConsumption = _currentStartFuelConsumption;
-            _boostFuelConsumption = _consumptionRate;
-        }
-
-        public void ResetStartBoostFuelConsumptionRate()
-        {
-            _startFuelConsumption = _currentStartFuelConsumption;
-        }
-
-        public void ResetBoostFuelConsumptionRate()
-        {
-            _boostFuelConsumption = _consumptionRate;
+            if (_boostInputAction.inProgress)
+            {
+                StartBoost(new InputAction.CallbackContext());
+            }
         }
         #endregion
 
@@ -357,9 +351,7 @@ namespace TankLike.UnitControllers
         public void Activate()
         {
             IsActive = true;
-            UpdateInputDisplay(_components.PlayerIndex);
-            SetUpInput(_components.PlayerIndex);
-            EnableBoost(true);
+            ResumeComponent();
         }
 
         public void Deactivate()
@@ -377,12 +369,20 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
-            DisposeInput(_components.PlayerIndex);
+            SetUpInput(_playerComponents.PlayerIndex);
+
+            _boostParticles.ForEach(p => p.Stop());
+            _bumper.DisableBump();
+
+            IsConstrained = false;
         }
 
         public void Dispose()
         {
+            _isBoostingInputOn = false;
+            StopBoost();
+            DisposeInput(_playerComponents.PlayerIndex);
+            StopAllCoroutines();
         }
         #endregion
     }

@@ -1,20 +1,21 @@
 using System.Collections;
-using System.Collections.Generic;
-using TankLike.Utils;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using TankLike.Cam;
+    using TankLike.UnitControllers;
+
     public class BossRoom : Room
     {
+        [field: SerializeField] public Vector3 RoomSize { get; private set; }
+        
+        [SerializeField] private AbilityConstraint _onCinematicConstraints;
+        [SerializeField] private AbilityConstraint _onRoomEnterConstraints;
+
         private BossData _bossData;
         private GameObject _boss;
         private Transform _bossSpawnPoint;
-        [SerializeField] private AbilityConstraint _onCinematicConstraints;
-        [SerializeField] private AbilityConstraint _onRoomEnterConstraints;
-        [field: SerializeField] public Vector3 RoomSize { get; private set; }
-
 
         public override void SetUpRoom()
         {
@@ -78,7 +79,7 @@ namespace TankLike.Environment
 
             yield return new WaitForSeconds(_bossData.BossAnimationDuration);
 
-            GameManager.Instance.HUDController.EnableBossHUD(true);
+            GameManager.Instance.HUDController.BossHUD.DisplayBossHUD();
             GameManager.Instance.CameraManager.Zoom.SetToZoomValue(_bossData.ZoomValue);
 
             GameManager.Instance.PlayersManager.ApplyConstraints(false, _onCinematicConstraints);

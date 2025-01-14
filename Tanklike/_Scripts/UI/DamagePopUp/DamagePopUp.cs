@@ -1,20 +1,19 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
-using System;
 using TankLike.Utils;
-using UnityEngine.Events;
 
 namespace TankLike.UI.DamagePopUp
 {
+    [SelectionBase]
     public class DamagePopUp : MonoBehaviour, IPoolable
     {
+        public System.Action<IPoolable> OnReleaseToPool { get; private set; }
+        
         [SerializeField] private TextMeshPro _text;
         [SerializeField] private Animation _animation;
-        public Action<IPoolable> OnReleaseToPool { get; private set; }
-        private int _lastAmount = 0;
         [SerializeField] private MeshRenderer _mesh;
+
+        private int _lastAmount = 0;
 
         public void SetUp(int amount, DamagePopUpInfo info, float animationSpeed = 1f)
         {
@@ -27,7 +26,7 @@ namespace TankLike.UI.DamagePopUp
                 _animation[_animation.clip.name].speed = animationSpeed;
             }
 
-            _text.text = $"{info.Prefix} {amount}";
+            _text.text = $"{info.Prefix} {amount} {info.Suffix}";
             _text.color = info.TextColor;
 
             // resize the font based on the amount passed
@@ -42,7 +41,7 @@ namespace TankLike.UI.DamagePopUp
         }
 
         #region Pool
-        public void Init(Action<IPoolable> OnRelease)
+        public void Init(System.Action<IPoolable> OnRelease)
         {
             OnReleaseToPool = OnRelease;
         }

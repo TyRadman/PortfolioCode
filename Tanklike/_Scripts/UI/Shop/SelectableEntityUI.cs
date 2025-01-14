@@ -13,8 +13,6 @@ namespace TankLike.UI
         }
 
         [field: SerializeField] public SelectableType Type { get; private set; }
-        // the group cell that holds the last selected cell variable
-        [field: SerializeField] public GroupSelectableCell ParentCell {get; private set;}
 
         public virtual void MoveSelection(Direction direction, ref SelectableEntityUI cell, int playerIndex = 0)
         {

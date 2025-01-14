@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using TankLike.Cam;
+using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
@@ -15,16 +16,32 @@ namespace TankLike.UnitControllers
         [SerializeField] protected Vector3 _explosionDecalSize = Vector3.one;
         [SerializeField] protected float _explosionDecalheight = 0.1f;
 
+        [Header("Hit Impact")]
+        [SerializeField] ParticleSystem _onHitParticles;
+
         public bool IsActive { get; private set; }
 
-        public virtual void SetUp(TankComponents components)
+        private TankComponents _components;
+
+        public void SetUp(IController controller)
         {
+            TankComponents components = controller as TankComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _components = components;
         }
 
         public void PlayDeathEffects()
         {
             var explosion = GameManager.Instance.VisualEffectsManager.Explosions.DeathExplosion;
-            explosion.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
+            Vector3 pos = transform.position;
+            pos.y = Constants.GroundHeight;
+            explosion.transform.SetPositionAndRotation(pos, Quaternion.identity);
             explosion.transform.localScale = _explosionSize;
             explosion.gameObject.SetActive(true);
             explosion.Play();
@@ -32,10 +49,20 @@ namespace TankLike.UnitControllers
             var decal = GameManager.Instance.VisualEffectsManager.Explosions.ExplosionDecal;
             float randomAngle = Random.Range(0f, 360f);
             Quaternion randomRotation = Quaternion.Euler(0f, randomAngle, 0f);
-            decal.transform.SetPositionAndRotation(transform.position + Vector3.up * _explosionDecalheight, randomRotation);
+            decal.transform.SetPositionAndRotation(pos, randomRotation);
             decal.transform.localScale = _explosionDecalSize;
             decal.gameObject.SetActive(true);
             decal.Play();
+        }
+
+        public void PlayOnHitEffect()
+        {
+            if(_onHitParticles == null)
+            {
+                Debug.LogError("_onHitParticles for the unit " + gameObject.name + " is null!");
+                return;
+            }
+            _onHitParticles.Play();
         }
 
         #region IController
@@ -51,7 +78,7 @@ namespace TankLike.UnitControllers
 
         public virtual void Restart()
         {
-            IsActive = false;
+            
         }
 
         public virtual void Dispose()

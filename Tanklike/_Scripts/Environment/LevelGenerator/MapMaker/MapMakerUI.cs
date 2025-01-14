@@ -9,18 +9,41 @@ namespace TankLike.Environment.MapMaker
 {
     public class MapMakerUI : MonoBehaviour
     {
-        private MapMakerManager _mapMaker;
         [SerializeField] private TextMeshProUGUI _messageText;
-        private const float MESSAGE_DISPLAY_DURATION = 3f;
+        [SerializeField] private MapMakerSelector _selector;
+        
         [Header("Save menu references")]
         [SerializeField] private GameObject _saveMenu;
         [SerializeField] private TMP_InputField _mapNameInputField;
         [SerializeField] private TextMeshProUGUI _wanringText;
 
+        [Header("Level Dimension Input Fields")]
+        [SerializeField] private MapMakerDimensionsTextBox _XInputField;
+        [SerializeField] private MapMakerDimensionsTextBox _YInputField;
+
+        [Header("Mirror Options")]
+        [SerializeField] private List<Button> _mirrorButtons = new List<Button>();
+
+        [Header("Brush Sizes")]
+        [SerializeField] private MapMakerBrushSizeButton _brushSizeButton;
+
+        private MapMakerManager _mapMaker;
+
+        private const float MESSAGE_DISPLAY_DURATION = 3f;
+
         private void Awake()
+        {
+            SetUp();
+        }
+
+        public void SetUp()
         {
             _mapMaker = GetComponent<MapMakerManager>();
             _saveMenu.SetActive(false);
+
+            _XInputField.SetUp(_selector);
+            _YInputField.SetUp(_selector);
+            _brushSizeButton.SetUp(_selector);
         }
 
         public void SetActiveTile(int typeNumber)

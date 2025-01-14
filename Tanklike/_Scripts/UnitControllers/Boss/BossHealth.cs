@@ -5,48 +5,64 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using Combat;
+    using TankLike.Utils;
+
     public class BossHealth : EnemyHealth
     {
+        public System.Action<int, int> OnTakeDamage;
+
         [SerializeField] protected float _explosionEffectDelay = 0.3f;
 
-        private ThreeCannonBossAnimations _animations;
-
-        private Coroutine _deathEffectCoroutine;
-        public System.Action<int, int> OnTakeDamage;
         private BossComponents _bossComponents;
-        // TODO: should be the parameter passed for OnDeath
-        public System.Action<BossComponents> OnBossDeath;
+        private ThreeCannonBossAnimations _animations;
+        private Coroutine _deathEffectCoroutine;
 
-        public override void SetUp(TankComponents components)
+        public override void SetUp(IController controller)
         {
-            base.SetUp(components);
-            _bossComponents = (BossComponents)components;
-            _animations = (ThreeCannonBossAnimations)((BossComponents)components).Animations;
+            BossComponents components = controller as BossComponents;
 
-            GameManager.Instance.HUDController.BossHUD.SetupHealthBar(_maxHealth);
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
 
-            SetUpSubscriptions();
+            _bossComponents = components;
+
+            base.SetUp(_bossComponents);
+
+            _animations = (ThreeCannonBossAnimations)(_bossComponents).Animations;
+
         }
 
         private void SetUpSubscriptions()
         {
-            OnTakeDamage = GameManager.Instance.HUDController.BossHUD.UpdateHealthBar;
+            OnTakeDamage += GameManager.Instance.HUDController.BossHUD.UpdateHealthBar;
 
-            OnBossDeath += GameManager.Instance.ReportManager.ReportBossKill;
-            OnBossDeath += GameManager.Instance.BossesManager.RemoveBoss;
-            OnBossDeath += GameManager.Instance.EnemiesManager.RemoveEnemy;
-            OnBossDeath += a => GameManager.Instance.HUDController.BossHUD.Enable(false);
+            OnDeath += GameManager.Instance.ReportManager.ReportBossKill;
+            OnDeath += GameManager.Instance.BossesManager.RemoveBoss;
+            OnDeath += GameManager.Instance.EnemiesManager.RemoveEnemy;
+            OnDeath += _bossComponents => GameManager.Instance.HUDController.BossHUD.HideBossHUD();
             OnDeath += GameManager.Instance.ResultsUIController.DisplayVictoryScreen;
+            OnDeath += _bossComponents.OnDeathHandler;
+
+            OnHit += _bossComponents.Visuals.OnHitHandler;
         }
 
-        public override void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
+        public override void TakeDamage(int damage, Vector3 direction, UnitComponents shooter, Vector3 bulletPosition, Ammunition damageDealer = null)
         {
-            if (!_canTakeDamage)
+            if (!_canTakeDamage || IsConstrained)
             {
                 return;
             }
 
             base.TakeDamage(damage, direction, shooter, bulletPosition);
+
+            if (_bossComponents != null)
+            {
+                _bossComponents.VisualEffects.PlayOnHitEffect();
+            }
 
             OnTakeDamage?.Invoke(_currentHealth, _maxHealth);
         }
@@ -55,18 +71,14 @@ namespace TankLike.UnitControllers
         {
             _canTakeDamage = false;
             _animations.TriggerDeathAnimation();
-            OnDeath?.Invoke(_components);
-
-            OnBossDeath?.Invoke(_bossComponents);
-            
-            RemoveSubscriptions();
+            OnDeath?.Invoke(_bossComponents);
         }
 
         private void RemoveSubscriptions()
         {
-            OnBossDeath = null;
             OnTakeDamage = null;
             OnDeath = null;
+            OnHit = null;
         }
 
         public void ExplodeParts()
@@ -74,11 +86,23 @@ namespace TankLike.UnitControllers
             // Return to pool if we're using pooling
             Destroy(gameObject);
 
-            _components.TankBodyParts.HandlePartsExplosion((BossData)_stats);
-            _components.VisualEffects.PlayDeathEffects();
+            _bossComponents.TankBodyParts.HandlePartsExplosion();
+            _bossComponents.VisualEffects.PlayDeathEffects();
 
             // Switch back to the level BG music
             GameManager.Instance.BossesManager.SwitchBackBGMusic();
+        }
+
+        public override void Restart()
+        {
+            RestoreFullHealth();
+            GameManager.Instance.HUDController.BossHUD.SetupHealthBar();
+            SetUpSubscriptions();
+        }
+
+        public override void Dispose()
+        {
+            RemoveSubscriptions();
         }
     }
 }

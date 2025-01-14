@@ -11,8 +11,9 @@ namespace TankLike.Combat
 
     public class Laser : Ammunition
     {
-        [Header("Settings")]
-        [SerializeField] private Transform _muzzlePoint;
+        public Vector3 ForwardDirection;
+        public Vector3 ImpactPoint;
+        public GameObject ImpactedObject { get; private set; }
 
         [Header("Visuals")]
         [SerializeField] private LineRenderer _beam;
@@ -32,7 +33,7 @@ namespace TankLike.Combat
         private float _duration;
         private float _maxLength;
         private int _damageOverTime;
-        private float _damageInterval = 0.1f;
+        public const float DAMAGE_INTERVAL = 0.1f;
         private float _thickness = 0.3f;
         private float _damageTimer;
         private bool _isDealingDamage = false;
@@ -52,28 +53,37 @@ namespace TankLike.Combat
             _hitParticles.Stop();
             _muzzleFlashParticles.Stop();
 
-            _damageTimer = _damageInterval;
+            _damageTimer = DAMAGE_INTERVAL;
             _isActive = false;
             _beam.enabled = false;
-            _beam.SetPosition(0, _muzzlePoint.position);
-            _beam.SetPosition(1, _muzzlePoint.position);
+            _beam.SetPosition(0, transform.position);
+            _beam.SetPosition(1, transform.position);
         }
 
-        public void SetUp(TankComponents shooter = null, Action<IPoolable> RemoveFromActivePoolables = null)
+        public void SetUp(UnitComponents shooter = null, Action<IPoolable> RemoveFromActivePoolables = null)
         {
             OnRemoveFromActivePoolables = RemoveFromActivePoolables;
+
+            if (shooter != null)
+            {
+                Instigator = shooter;
+            }
         }
 
-        public void SetValues(float maxLength, float thickness, int damageOverTime, float damageInterval, float duration)
+        public void SetValues(float maxLength, float thickness, int damageOverTime, float duration, bool canBeDeflected)
         {
             _maxLength = maxLength;
             _thickness = thickness;
             _damageOverTime = damageOverTime;
             _duration = duration;
-            _damageInterval = damageInterval;
+            CanBeDeflected = canBeDeflected;
         }
 
-        public void Activate()
+        /// <summary>
+        /// Starts the laser.
+        /// </summary>
+        /// <param name="autoStop">Dictates whether the laser should stop by itself after a preset given time, or continue running until stopped by the weapon that started it.</param>
+        public void Activate(bool autoStop = true)
         {
             _audioSource = GameManager.Instance.AudioManager.Play(_onShootingAudio);
 
@@ -84,15 +94,13 @@ namespace TankLike.Combat
             _muzzleFlashParticles.Play();
             SetMaterialDisolveProperties(0);
 
-            if (_laserCoroutine != null)
+            if (autoStop)
             {
-                StopCoroutine(_laserCoroutine);
+                this.StopCoroutineSafe(_laserCoroutine);
+                _laserCoroutine = StartCoroutine(LaserCountdownRoutine());
             }
 
-            _laserCoroutine = StartCoroutine(LaserCountdownRoutine());
-
-            _damageTimer = _damageInterval;
-
+            _damageTimer = DAMAGE_INTERVAL;
         }
 
         private void SetMaterialDisolveProperties(float value)
@@ -119,44 +127,52 @@ namespace TankLike.Combat
 
         private void UpdateLaser()
         {
-            Vector3 forwardDirection = _muzzlePoint.forward;
-            forwardDirection.y = 0f;
-            Ray ray = new Ray(_muzzlePoint.position, forwardDirection);
+            ForwardDirection = transform.forward;
+            ForwardDirection.y = 0f;
+
+            Ray ray = new Ray(transform.position, ForwardDirection);
             bool cast = Physics.SphereCast(ray, _thickness, out RaycastHit hit, _maxLength, _targetLayerMask);
-            Vector3 hitPoint = _muzzlePoint.position + forwardDirection * _maxLength;
+            ImpactPoint = transform.position + ForwardDirection * _maxLength;
             _damageTimer += Time.fixedDeltaTime;
 
             if (cast && (1 << hit.transform.gameObject.layer & _targetLayerMask) == 1 << hit.transform.gameObject.layer)
             {
-                float distanceToTarget = Vector3.Distance(_muzzlePoint.position, hit.point);
-                hitPoint = _muzzlePoint.position + distanceToTarget * forwardDirection;
+                ImpactedObject = hit.collider.gameObject;
+                float distanceToTarget = Vector3.Distance(transform.position, hit.point);
+                ImpactPoint = transform.position + distanceToTarget * ForwardDirection;
 
                 // resize the texture on the laser
                 Vector2 textureSeizRange = new Vector2(1f, _maxLength / _textureTilingSize);
                 float tilingSize = textureSeizRange.Lerp(Mathf.InverseLerp(0f, _maxLength, distanceToTarget));
                 _material.SetFloat(LENGTH_ID, tilingSize);
 
-                if (_damageTimer >= _damageInterval)
+
+                if (_damageTimer >= DAMAGE_INTERVAL)
                 {
-                    // checks for damagables
                     if (cast && hit.transform.TryGetComponent(out IDamageable damagable))
                     {
+                        // checks for damagables
                         if (damagable.IsInvincible)
                         {
                             return;
                         }
 
-                        damagable.TakeDamage(_damageOverTime, Vector3.zero, null, hitPoint);
+                        damagable.TakeDamage(_damageOverTime, ForwardDirection, Instigator, ImpactPoint, this);
                     }
 
                     _damageTimer = 0f;
                 }
+
+                _beam.SetPosition(0, transform.position);
+                _beam.SetPosition(1, ImpactPoint);
+
+                _hitParticles.transform.position = ImpactPoint;
             }
+        }
 
-            _beam.SetPosition(0, _muzzlePoint.position);
-            _beam.SetPosition(1, hitPoint);
-
-            _hitParticles.transform.position = hitPoint;
+        public void UpdatePositionAndRotation(Vector3 position, Quaternion rotation)
+        {
+            transform.SetPositionAndRotation(position, rotation);
         }
 
         public void Deactivate()
@@ -173,7 +189,7 @@ namespace TankLike.Combat
         {
             StopEffects();
             _isDealingDamage = false;
-            _damageTimer = _damageInterval;
+            _damageTimer = DAMAGE_INTERVAL;
 
             float timeElapsed = 0f;
             StopAudio();
@@ -204,8 +220,8 @@ namespace TankLike.Combat
         private void ResetBeam()
         {
             _beam.enabled = false;
-            _beam.SetPosition(0, _muzzlePoint.position);
-            _beam.SetPosition(1, _muzzlePoint.position);
+            _beam.SetPosition(0, transform.position);
+            _beam.SetPosition(1, transform.position);
         }
 
         private void StopAudio()
@@ -216,8 +232,8 @@ namespace TankLike.Combat
                 return;
             }
 
-            _audioSource.loop = false;
             _audioSource.Stop();
+            _audioSource.loop = false;
             _audioSource.clip = null;
         }
 
@@ -226,6 +242,7 @@ namespace TankLike.Combat
             _targetLayerMask = 0;
             _targetLayerMask |= Constants.MutualHittableLayer;
             _targetLayerMask |= Constants.WallLayer;
+            _targetLayerMask |= Constants.DestructibleLayer;
 
             if (tag == TanksTag.Enemy.ToString())
             {
@@ -255,10 +272,7 @@ namespace TankLike.Combat
         {
             base.TurnOff();
 
-            if(_audioSource != null)
-            {
-                _audioSource.Stop();
-            }
+            StopAudio();
 
             OnReleaseToPool(this);
         }

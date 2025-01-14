@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
@@ -11,16 +12,29 @@ namespace TankLike.UnitControllers
         [Header("Boss")]
         [SerializeField] private float _walkableAreaRadius;
 
-        protected const float ROTATION_CORRECTION_THRESHOLD = 0.99f;
+        protected const float ROTATION_CORRECTION_THRESHOLD = 0.95f;
 
         private bool _targetIsFaced;
         private ThreeCannonBossAnimations _animations;
+        private BossComponents _bossComponents;
+
         public float WalkableAreaRadius => _walkableAreaRadius;
 
-        public override void SetUp(TankComponents components)
+        public override void SetUp(IController controller)
         {
-            base.SetUp(components);
-            _animations = (ThreeCannonBossAnimations)((BossComponents)components).Animations;
+            BossComponents components = controller as BossComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _bossComponents = components;
+
+            base.SetUp(_bossComponents);
+
+            _animations = (ThreeCannonBossAnimations)(_bossComponents).Animations;
         }
 
         public void FaceTarget(Transform target)
@@ -77,9 +91,12 @@ namespace TankLike.UnitControllers
             float angle = Vector3.SignedAngle(tankForward, direction, Vector3.up);
             float rotationAmount = 0f;
 
+
             // Check if the dot product is within the rotation threshold
             if (dot < ROTATION_CORRECTION_THRESHOLD)
             {
+                //Debug.Log("Dot => " + dot);
+
                 if (angle > 0f)
                 {
                     rotationAmount = 1f;
@@ -91,28 +108,30 @@ namespace TankLike.UnitControllers
             }
             else
             {
-                if (angle > 0f)
-                {
-                    rotationAmount = Mathf.Lerp(1f, 0f, Mathf.InverseLerp(ROTATION_CORRECTION_THRESHOLD, 1, dot));
-                }
-                else if (angle < 0f)
-                {
-                    rotationAmount = Mathf.Lerp(-1f, 0f, Mathf.InverseLerp(ROTATION_CORRECTION_THRESHOLD, 1, dot));
-                }
+                
+                // Determine if clockwise or counterclockwise rotation is closer
+                float t = Mathf.InverseLerp(ROTATION_CORRECTION_THRESHOLD, 1, dot);
+                //Debug.Log("t -> " + t);
+                rotationAmount = Mathf.Lerp(ROTATION_CORRECTION_THRESHOLD * Mathf.Sign(angle), 0f, t);
+                
+                //Debug.Log("angle => " + angle);
 
                 if (!_targetIsFaced && Mathf.Abs(rotationAmount) < 0.2f)
                 {
                     OnTargetFaced?.Invoke();
                     _targetIsFaced = true;
+                    //Debug.Log("Target is faced");
                 }
             }
+
+            //Debug.Log("rotationAmount => " + rotationAmount);
 
             transform.Rotate(_turnSpeed * rotationAmount * Time.deltaTime * Vector3.up);
         }
 
         public void ResetTargetIsFaced()
         {
-            Debug.Log("Reset target is faced");
+            //Debug.Log("Reset target is faced");
             _targetIsFaced = false;
         }
 

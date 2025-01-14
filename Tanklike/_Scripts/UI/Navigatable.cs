@@ -8,16 +8,17 @@ namespace TankLike.UI
     using Signifiers;
     using TankLike.Sound;
 
-    public abstract class Navigatable : MonoBehaviour, ISignifiersDisplayer
+    public abstract class Navigatable : MonoBehaviour, ISignifiersDisplayer, IManager
     {
-        public bool IsActive = false;
         public System.Action OnOpened { get; set; } 
         public System.Action OnClosed { get; set; }
         public System.Action<int> CloseAction;
+      
+        public bool IsOpened { get; set; } = false;
         public int PlayerIndex { get; private set; } = -1;
         public ISignifierController SignifierController { get; set; }
 
-        
+        public bool IsActive { get; set; }
 
         public virtual void NavigateLeft(InputAction.CallbackContext _)
         {
@@ -54,13 +55,13 @@ namespace TankLike.UI
 
         public virtual void Open(int playerIndex)
         {
-            IsActive = true;
+            IsOpened = true;
             SetPlayerIndex(playerIndex);
         }
 
         public virtual void Close(int playerIndex)
         {
-            IsActive = false;
+            IsOpened = false;
             CloseAction?.Invoke(playerIndex);
         }
 
@@ -71,16 +72,15 @@ namespace TankLike.UI
 
         public virtual void SetUp()
         {
-            IsActive = false;
-            SetUpInput();
+            IsOpened = false;
+        }
+
+        public virtual void Dispose()
+        {
+            IsOpened = false;
         }
 
         public virtual void Load(int playerIndex = 0)
-        {
-
-        }
-
-        public virtual void SetUpInput()
         {
 
         }

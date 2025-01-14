@@ -2,64 +2,135 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace TankLike.UnitControllers
+namespace TankLike.UnitControllers.Shields
 {
-    public class Shield : MonoBehaviour, IHittable
+    using Combat;
+    using Utils;
+
+    public class Shield : MonoBehaviour, IDamageable
     {
-        private const float FADING_DURATION = 0.3f;
+        public bool IsInvincible { get; private set; }
+        public Transform Transform { get; private set; }
+        public DamagePopUpAnchor PopUpAnchor { get; private set; }
+        public bool IsDead { get; private set; }
+        public float Size { get; private set; }
+
         [Header("References")]
         [SerializeField] private SphereCollider _collider;
         [SerializeField] private MeshRenderer _shieldMesh;
-        private Material _shieldMaterial;
+
         [Header("Damage Taking")]
-        private Material _shieldRippleMaterial;
         [SerializeField] private ParticleSystem _rippleParticles;
+        [SerializeField] private ParticleSystem _impactParticle;
+        [SerializeField] private Animation _animation;
+
+        [Header("Modules")]
+        [SerializeField] private List<ShieldOnImpactModule> _onImpactModules = new List<ShieldOnImpactModule>();
+        private List<ShieldOnImpactModule> _onImpactModulesInstances = new List<ShieldOnImpactModule>();
+
         [Header("Other")]
         [SerializeField] private float _playerRotationFollowSpeed = 0.3f;
-        private bool _isActive = false;
+        
+        /// <summary>
+        /// The transform that the shield follows when activated.
+        /// </summary>
+        private Transform _owner;
+        private TankHealth _tankHealth;
+        private Material _shieldMaterial;
+        private Material _shieldRippleMaterial;
+        private float _maxAlpha;
         private int _previousTankLayer;
+        private bool _isActive = false;
 
-        private void Awake()
+        private const string SHIELD_ALPHA_KEY = "_ShieldAlpha";
+        private const string SPHERE_CENTER_KEY = "_SphereCenter";
+        private const string RIPPLE_MASK_RADIUS = "_Radius";
+        private const string ALPHA = "_ShieldAlpha";
+        public const float FADING_DURATION = 0.2f;
+
+        public void SetUp(TankComponents components)
         {
             _shieldRippleMaterial = _rippleParticles.GetComponent<ParticleSystemRenderer>().material;
             _shieldMaterial = _shieldMesh.material;
             _collider.enabled = false;
+
+            if (components is PlayerComponents playerComponents)
+            {
+                _owner = playerComponents.Shield.GetShieldParent();
+            }
+            else
+            {
+                _owner = components.transform;
+            }
+            
+            
+            _tankHealth = components.Health;
+
+            _maxAlpha = _shieldMaterial.GetFloat(ALPHA);
+
+            SetShieldAlpha(0f);
+
+            for (int i = 0; i < _onImpactModules.Count; i++)
+            {
+                ShieldOnImpactModule module = Instantiate(_onImpactModules[i]);
+                module.SetUp(components, this);
+                _onImpactModulesInstances.Add(module);
+            }
         }
 
         #region Activation
-        public void ActivateShield(bool activate, Transform tank)
+        public void ActivateShield()
         {
-            _collider.enabled = activate;
-            StartCoroutine(ShowShield(activate ? 0f : 1f, activate ? 1f : 0f, activate));
+            _collider.enabled = true;
+            transform.parent = null;
 
-            // if the shield is activated then we set its parent to null and make it lerp its rotation to the player's rotation
-            if (activate)
+            transform.localScale = Vector3.one * Size;
+
+            _isActive = true;
+            StartCoroutine(ShieldFollowProcess(_owner));
+            StartCoroutine(ShowShieldRoutine());
+
+            // cache the owner's layer before changing it
+            _previousTankLayer = _tankHealth.GetDamageDetectorsLayer();
+
+            // change the layer of the owner's damagables
+            int layer = GameManager.Instance.Constants.Alignments.Find(a => a.Alignment == TankAlignment.NEUTRAL).LayerNumber;
+            _tankHealth.SetDamageDetectorsLayer(layer);
+        }
+
+        private IEnumerator ShowShieldRoutine()
+        {
+            float time = 0f;
+
+            while (time < FADING_DURATION)
             {
-                transform.parent = null;
-                StartCoroutine(ShieldFollowProcess(tank));
-                // set the tank's collider tag and layer to neutral so that it doesn't take any damage
-                _previousTankLayer = tank.gameObject.layer;
-                tank.gameObject.layer = GameManager.Instance.Constants.Alignments.Find(a => a.Alignment == TankAlignment.NEUTRAL).LayerNumber;
-            }
-            // otherwise, we make it a child of the tank again
-            else
-            {
-                transform.parent = tank;
-                tank.gameObject.layer = _previousTankLayer;
+                time += Time.deltaTime;
+                SetShieldAlpha(Mathf.Lerp(0f, _maxAlpha, time / FADING_DURATION));
+                yield return null;
             }
         }
 
-        private IEnumerator ShowShield(float minAlpha, float maxAlpha, bool activate)
+        public void DeactivateShield()
         {
-            float time = 0f;
-            _isActive = activate;
+            StartCoroutine(ShieldDeactivationRoutine());
+        }
 
-            while(time < FADING_DURATION)
+        private IEnumerator ShieldDeactivationRoutine()
+        {
+            float currentAlpha = _shieldMaterial.GetFloat(ALPHA);
+            float time = 0f;
+
+            while (time < FADING_DURATION)
             {
                 time += Time.deltaTime;
-                SetShieldAlpha(Mathf.Lerp(minAlpha, maxAlpha, time / FADING_DURATION));
+                SetShieldAlpha(Mathf.Lerp(currentAlpha, 0f, time / FADING_DURATION));
                 yield return null;
             }
+
+            transform.parent = _owner;
+            _isActive = false;
+            _collider.enabled = false;
+            _tankHealth.SetDamageDetectorsLayer(_previousTankLayer);
         }
 
         private IEnumerator ShieldFollowProcess(Transform target)
@@ -73,35 +144,62 @@ namespace TankLike.UnitControllers
 
         public void SetShieldAlpha(float value)
         {
-            _shieldMaterial.SetFloat("_ShieldAlpha", value);
+            _shieldMaterial.SetFloat(SHIELD_ALPHA_KEY, value);
         }
         #endregion
 
         public void SetShieldUser(TankAlignment side)
         {
-            // set up the alignment of the shield 
-            var sideInfo = GameManager.Instance.Constants.Alignments.Find(s => s.Alignment == side);
-            gameObject.tag = sideInfo.Tag;
+            TankSide sideInfo = GameManager.Instance.Constants.Alignments.Find(s => s.Alignment == side);
             gameObject.layer = sideInfo.LayerNumber;
         }
 
         public void ShowDamage(Vector3 contactPoint)
         {
-            if(_rippleParticles.isPlaying) _rippleParticles.Stop();
-
-            _shieldRippleMaterial.SetVector("_SphereCenter", contactPoint);
+            Vector3 position = (contactPoint - transform.position).normalized + transform.position;
+            _shieldRippleMaterial.SetVector(SPHERE_CENTER_KEY, position);
             _rippleParticles.Play();
         }
 
         public void SetSize(float size)
         {
+            Size = size;
             transform.localScale = Vector3.one * size;
-            //_collider.radius = size;
+            _shieldRippleMaterial.SetFloat(RIPPLE_MASK_RADIUS, size / 2f);
         }
 
-        public void OnHit(Vector3 point)
+        private void PlayImpactParticles(Vector3 position)
         {
-            ShowDamage(point);
+            _impactParticle.transform.position = position;
+            _impactParticle.Play();
+        }
+
+        public void TakeDamage(int damage, Vector3 direction, UnitComponents shooter, Vector3 bulletPosition, Ammunition damageDealer = null)
+        {
+            _onImpactModulesInstances.ForEach(m => m.OnImpact(damageDealer, direction, bulletPosition));
+
+            PlayImpactParticles(bulletPosition);
+
+            ShowDamage(bulletPosition);
+
+            this.PlayAnimation(_animation);
+        }
+
+        public T GetShieldOnImpactModule<T>() where T : ShieldOnImpactModule
+        {
+            ShieldOnImpactModule module = _onImpactModulesInstances.Find(m => m is T);
+
+            if (module == null)
+            {
+                Debug.LogError($"No module of type {typeof(T)} found in {this.name}");
+            }
+
+            return module as T;
+        }
+
+        public void Die()
+        {
+
         }
     }
 }

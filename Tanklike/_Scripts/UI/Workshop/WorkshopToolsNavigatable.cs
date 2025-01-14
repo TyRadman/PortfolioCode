@@ -62,14 +62,27 @@ namespace TankLike.UI.Workshop
 
         public override void SetUp()
         {
-            // create the bars
+            // TODO: call base.SetUp()?
+
+            // Create the bars
             for (int i = 0; i < Constants.MaxToolsUsageCount; i++)
             {
                 ToolAmountBar bar = Instantiate(_toolAmountBarReference, _barsParent);
                 bar.DisableImage();
-                bar.transform.parent = null;
+                // TODO: remove after making sure that it's not needed anymore
+                //bar.transform.parent = null;
                 _toolAmountBars.Add(bar);
             }
+        }
+
+        public override void Dispose()
+        {
+            // TODO: call base.Dispose()?
+
+            // Destroy the bars
+
+            _toolAmountBars.ForEach(b => Destroy(b.gameObject));
+            _toolAmountBars.Clear();
         }
 
         public override void SetUpActionSignifiers(ISignifierController signifierController)

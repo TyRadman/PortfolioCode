@@ -1,18 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Environment.MapMaker;
-using TankLike.Utils;
-using System.Linq;
 using UnityEngine;
-using TankLike.Cam;
-using TankLike.LevelGeneration;
 
 namespace TankLike.Environment.LevelGeneration
 {
-    public class LevelGenerator : MonoBehaviour
+    using MapMaker;
+    using Cam;
+
+    public class LevelGenerator : MonoBehaviour, IManager
     {
         [field: SerializeField] public RoomsBuilder RoomsBuilder { get; private set; }
         [field: SerializeField] public ShopsBuilder ShopsBuilder { get; private set; }
+
+        public bool IsActive { get; set; }
+
         [Header("Editor")]
         public MapTiles_SO MapToBuild;
         public LevelData LevelData;
@@ -20,23 +21,30 @@ namespace TankLike.Environment.LevelGeneration
         public BuildConfigs Configs;
         public LevelType LevelType;
 
+        private CameraLimits _startingRoomCameraLimits = new CameraLimits();
 
-        public void GenerateLevel()
+        public void SetUp()
         {
-            if (LevelType == LevelType.Random)
+            IsActive = true;
+
+            GenerateLevel();
+        }
+
+        private void GenerateLevel()
+        {
+            switch (LevelType)
             {
-                GenerateRandomLevel();
-            }
-            else
-            {
-                GenerateCustomLevel();
+                case LevelType.Custom:
+                    GenerateCustomLevel();
+                    break;
+                case LevelType.Random:
+                    GenerateRandomLevel();
+                    break;
             }
         }
 
         private void GenerateCustomLevel()
         {
-            //GameManager.Instance.LevelMap.CreateLevelMap(RoomsBuilder.GetRoomsGrid());
-            //GameManager.Instance.RoomsManager.SetCurrentRoom(tempRoomToStartFrom
             CameraLimits limits = new CameraLimits();
             limits.SetValues(GameManager.Instance.RoomsManager.CurrentRoom.CameraLimits);
             limits.AddOffset(GameManager.Instance.RoomsManager.CurrentRoom.transform.position);
@@ -52,19 +60,23 @@ namespace TankLike.Environment.LevelGeneration
             Room startingRoom = GameManager.Instance.RoomsManager.CurrentRoom;
 
             // set first room camera limits
-            CameraLimits limits = new CameraLimits();
-            limits.SetValues(startingRoom.CameraLimits);
-            limits.AddOffset(startingRoom.transform.position);
-            GameManager.Instance.CameraManager.SetCamerasLimits(limits);
+            _startingRoomCameraLimits.SetValues(startingRoom.CameraLimits);
+            _startingRoomCameraLimits.AddOffset(startingRoom.transform.position);
             Room currentRoom = GameManager.Instance.RoomsManager.CurrentRoom;
             GameManager.Instance.MinimapManager.PositionMinimapAtRoom(currentRoom.transform, currentRoom.RoomDimensions);
-
         }
 
+#if UNITY_EDITOR
         public void EditorGenerateLevel()
         {
             RoomsBuilder.BuildRandomRooms();
             ShopsBuilder.BuildShops();
+        }
+#endif
+
+        public void Dispose()
+        {
+            IsActive = false;
         }
     }
 }

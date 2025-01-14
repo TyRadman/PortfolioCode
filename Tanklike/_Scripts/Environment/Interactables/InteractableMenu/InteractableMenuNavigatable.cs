@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UI.Signifiers;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -8,14 +7,17 @@ using UnityEngine.InputSystem;
 
 namespace TankLike.UI.InGame
 {
+    using UI.Signifiers;
+
     public class InteractableMenuNavigatable : Navigatable, IInput
     {
-        private List<InteractableMenuButton> _buttons = new List<InteractableMenuButton>();
-        private MenuSelectable _highlightedButton;
-        private Transform _camera;
         [SerializeField] private InteractableMenuButton _buttonPrefab;
         [SerializeField] private Transform _buttonsParent;
         [SerializeField] private TextMeshProUGUI _messageText;
+
+        private List<InteractableMenuButton> _buttons = new List<InteractableMenuButton>();
+        private MenuSelectable _highlightedButton;
+        private Transform _camera;
 
         private const float MESSAGE_DISPLAY_DURATION = 2f;
 

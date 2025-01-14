@@ -5,12 +5,17 @@ using UnityEngine;
 namespace TankLike.UI.Inventory
 {
     [System.Serializable]
-    public class TabReferenceUI
+    public class TabReferenceUI : MonoBehaviour
     {
         public string TabName;
         public TabUI Tab;
-        public GameObject Content;
         public Navigatable Navigator;
-        public bool CanMoveToContent = true;
+
+        public void SetUp()
+        {
+            Tab.Dehighlight();
+            Tab.SetName(TabName);
+            Navigator.gameObject.SetActive(false);
+        }
     }
 }

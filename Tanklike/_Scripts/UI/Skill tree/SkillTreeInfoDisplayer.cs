@@ -5,18 +5,12 @@ using UnityEngine.UI;
 using TankLike.UI;
 using TMPro;
 using TankLike.UnitControllers;
-using TankLike.SkillTree;
+using TankLike.Combat.SkillTree;
 
 namespace TankLike.UI.SkillTree
 {
     public class SkillTreeInfoDisplayer : Navigatable
     {
-        public struct PlayerSkillTreeProfile
-        {
-            public PlayerUpgrades Upgrades;
-            public SkillTreeCell LastActiveCell;
-        }
-
         [Header("References")]
         [SerializeField] private SkillTreeBuilder _skillTreeBuilder;
         [SerializeField] private SkillTreeCell _centerCell;
@@ -33,7 +27,7 @@ namespace TankLike.UI.SkillTree
         {
             base.Open(playerIndex);
             _skillTreeHolder.Open();
-            IsActive = true;
+            IsOpened = true;
             //EnableInput(true);
             _skillTreeHolder.gameObject.SetActive(true);
             GameManager.Instance.InputManager.EnableUIInput();
@@ -41,11 +35,11 @@ namespace TankLike.UI.SkillTree
 
         public override void Close(int playerIndex = 0)
         {
-            if (!IsActive) return;
+            if (!IsOpened) return;
 
             base.Close(playerIndex);
             _skillTreeHolder.Close();
-            IsActive = false;
+            IsOpened = false;
             //EnableInput(false);
             _skillTreeHolder.gameObject.SetActive(false);
             CancelInvoke();
@@ -69,7 +63,7 @@ namespace TankLike.UI.SkillTree
         #region Input methods
         private void MoveSelection(Direction direction)
         {
-            if (!IsActive) return;
+            if (!IsOpened) return;
 
             _skillTreeHolder.Navigate(direction);
         }

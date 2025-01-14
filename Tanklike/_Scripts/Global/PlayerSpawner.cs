@@ -1,20 +1,24 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
-using TankLike.Environment;
-using UnityEngine;
-using TankLike.Utils;
 using System.Linq;
-using static TankLike.Environment.RoomSpawnPoints;
-using TankLike.Sound;
+using UnityEngine;
 
 namespace TankLike
 {
+    using UnitControllers;
+    using Utils;
+    using Sound;
+    using static Environment.RoomSpawnPoints;
+    using Cinemachine.Utility;
+
     public class PlayerSpawner : MonoBehaviour, IManager
     {
         [SerializeField] private Audio _spawnAudio;
 
-        private Vector3 _lastPosition;
+        // for playtest
+        public bool SpawnPlayerWithSkills { get; set; } = true;
+        public System.Action<PlayerComponents> OnPlayersSetupStarted { get; set; }
+
         private WaitForSeconds _initialWait = new WaitForSeconds(SPAWN_INITIAL_DELAY);
         private PlayersDatabase _playersDatabase;
 
@@ -38,107 +42,125 @@ namespace TankLike
         }
         #endregion
 
-        public void SpawnPlayers()
+        /// <summary>
+        /// Instantiates the player/s, resets their values, and sets them up
+        /// </summary>
+        public void SetUpPlayers()
         {
-            if (!IsActive)
-            {
-                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
-                return;
-            }
+            Helper.CheckForManagerActivity(IsActive, GetType());
 
-            int playersCount = GameManager.Instance.PlayersTempInfoSaver.PlayersCount;
-            List<SpawnPoint> spawnPoints = GameManager.Instance.RoomsManager.CurrentRoom.Spawner.SpawnPoints.Points;
-            _lastPosition = GameManager.Instance.RoomsManager.CurrentRoom.transform.position;
+            int playersCount = GameManager.Instance.GameData.PlayersCount;
+            //List<SpawnPoint> spawnPoints = GameManager.Instance.RoomsManager.CurrentRoom.Spawner.SpawnPoints.Points;
+            //_lastPosition = GameManager.Instance.RoomsManager.CurrentRoom.transform.position;
 
             for (int i = 0; i < playersCount; i++)
             {
-                // get the closest not-taken spawn points to the last registered position
-                SpawnPoint selectedSpawnPoint = spawnPoints.FindAll(s => !s.Taken).OrderBy(s =>
-                (s.Point.position - _lastPosition).sqrMagnitude).FirstOrDefault();
-                selectedSpawnPoint.Taken = true;
-                SpawnPlayer(i, selectedSpawnPoint.Point.position);
+                //SpawnPoint selectedSpawnPoint = spawnPoints.FindAll(s => !s.Taken).OrderBy(s =>
+                //(s.Point.position - _lastPosition).sqrMagnitude).FirstOrDefault();
+                //selectedSpawnPoint.Taken = true;
+
+                //_lastPosition = selectedSpawnPoint.Point.position;
+                Vector3 spawnPoint = GameManager.Instance.RoomsManager.CurrentRoom.Spawner.GetPlayerSpawnPoint(i);
+
+                PlayerData selectedCharacter = _playersDatabase.GetPlayerDataByType(PlayerType.PlayerOne); // TODO: Get selected character
+
+                PlayerComponents player = Instantiate(selectedCharacter.Prefab, spawnPoint, Quaternion.identity);
+
+                OnPlayersSetupStarted?.Invoke(player);
+
+                player.gameObject.name = $"Player {i + 1}";
+                player.SetIndex(i);
+                player.StartWithDefaultSkills = SpawnPlayerWithSkills;
+                player.SetUp();
+                player.Restart();
+                player.gameObject.SetActive(false);
+
+                GameManager.Instance.PlayersManager.AddPlayer(player);
             }
 
-            if(playersCount == 2)
+            if (playersCount == 2)
             {
                 GameManager.Instance.PlayersManager.OnTwoPlayersMode();
             }
+            else
+            {
+                GameManager.Instance.PlayersManager.OnSinglePlayerMode();
+            }
         }
 
-        private void SpawnPlayer(int playerIndex, Vector3 spawnPosition)
+        /// <summary>
+        /// Positions the players in the level and plays the spawn effect.
+        /// </summary>
+        public void SpawnPlayers()
         {
-            StartCoroutine(SpawnProcess(playerIndex, spawnPosition));
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
+            int playersCount = GameManager.Instance.GameData.PlayersCount;
+
+            for (int i = 0; i < playersCount; i++)
+            {
+                SpawnPlayer(i);
+            }
         }
 
-        private IEnumerator SpawnProcess(int playerIndex, Vector3 respawnPosition)
+        private void SpawnPlayer(int playerIndex)
         {
-            _lastPosition = respawnPosition;
-            respawnPosition.y += 2f;
-            PlayerData selectedCharacter = _playersDatabase.GetPlayerDataByType(PlayerType.PlayerOne); // TODO: Get selected character
-            GameObject player = Instantiate(selectedCharacter.Prefab, respawnPosition, Quaternion.identity);
+            StartCoroutine(SpawnProcess(playerIndex));
+        }
 
-            PlayerComponents components = player.GetComponent<PlayerComponents>();
-            components.PlayerIndex = playerIndex;
-            components.SetUp();
-            GameManager.Instance.PlayersManager.AddPlayer(components);
-            player.gameObject.SetActive(false);
+        private IEnumerator SpawnProcess(int playerIndex)
+        {
+            PlayerComponents player = GameManager.Instance.PlayersManager.GetPlayer(playerIndex);
+            Vector3 position = player.transform.position;
+            position.y += 2f;
+            player.transform.position = position;
 
             yield return _initialWait;
 
-            float effectDuration = GameManager.Instance.VisualEffectsManager.Misc.PlayPlayerSpawnVFX(respawnPosition);
-            GameManager.Instance.AudioManager.Play(_spawnAudio);
+            float effectDuration = PlaySpawnEffects(position);
+
             yield return new WaitForSeconds(effectDuration);
 
             player.gameObject.SetActive(true);
-            components.Activate();
+            player.Activate();
+            player.SpawnMinimapIcon();
 
-            GameManager.Instance.EffectsUIController.ShowLevelName(); // TODO: find the right place to call this
+            //GameManager.Instance.EffectsUIController.ShowLevelName(); // TODO: find the right place to call this
         }
 
-        public void RevivePlayer(int playerIndex, Vector3 respawnPosition)
+        public void RevivePlayer(int playerIndex, Vector3 respawnPosition, int healthAmount = -1)
         {
-            if (!IsActive)
-            {
-                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
-                return;
-            }
+            Helper.CheckForManagerActivity(IsActive, GetType());
 
-            StartCoroutine(RevivalProcess(playerIndex, respawnPosition));
+            StartCoroutine(RevivalProcess(playerIndex, respawnPosition, healthAmount));
         }
 
-        private IEnumerator RevivalProcess(int playerIndex, Vector3 respawnPosition)
+        private IEnumerator RevivalProcess(int playerIndex, Vector3 respawnPosition, int healthAmount)
         {
             respawnPosition.y += 2f;
 
-            //PlaySpawnEffects(out float spawnEffectDuration, respawnPosition);
-            float effectDuration = GameManager.Instance.VisualEffectsManager.Misc.PlayPlayerSpawnVFX(respawnPosition);
-            GameManager.Instance.AudioManager.Play(_spawnAudio);
+            float effectDuration = PlaySpawnEffects(respawnPosition);
+
             yield return new WaitForSeconds(effectDuration);
 
             PlayerComponents player = GameManager.Instance.PlayersManager.GetPlayer(playerIndex);
 
-            player.gameObject.SetActive(true);
-            player.OnRevived();
             player.transform.position = respawnPosition;
+            player.gameObject.SetActive(true);
+            player.OnRevived(healthAmount);
 
             GameManager.Instance.PlayersManager.AddPlayerTransform(player);
 
             // make the camera follow the newly added player too
             GameManager.Instance.CameraManager.PlayerCameraFollow.AddCameraFollower(playerIndex);
-            GameManager.Instance.OffScreenIndicator.EnableOffScreenIndicatorForPlayer(playerIndex, true);
+            GameManager.Instance.HUDController.OffScreenIndicator.EnableOffScreenIndicatorForPlayer(playerIndex, true);
         }
 
-        private void PlaySpawnEffects(out float effectDuration, Vector3 position)
+        private float PlaySpawnEffects(Vector3 position)
         {
-            var vfx = GameManager.Instance.VisualEffectsManager.Misc.PlayerSpawning;
-            vfx.transform.SetPositionAndRotation(position, Quaternion.identity);
-            vfx.gameObject.SetActive(true);
-            vfx.Play();
-
-            // play audio
             GameManager.Instance.AudioManager.Play(_spawnAudio);
-
-            effectDuration = vfx.Particles.main.startLifetime.constant / 2;
+            float effectDuration = GameManager.Instance.VisualEffectsManager.Misc.PlayPlayerSpawnVFX(position);
+            return effectDuration;
         }
     }
 }

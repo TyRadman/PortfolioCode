@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace TankLike.UI.Map
 {
+    [System.Serializable]
     public class RoomIconData
     {
         public Room Room;
@@ -13,11 +14,21 @@ namespace TankLike.UI.Map
         public GameObject QuestionMarkIcon;
         public bool IsRevealed = false;
 
+        private RectTransform _rectTransform;
+
         public void SetUp()
         {
             GateIcons.ForEach(i => i.SetActive(false));
             RoomIcon.SetActive(false);
             QuestionMarkIcon.SetActive(false);
+            _rectTransform = RoomIcon.GetComponent<RectTransform>();
+        }
+
+        public void Dispose()
+        {
+            Object.Destroy(RoomIcon);
+            GateIcons.ForEach(g => Object.Destroy(g.gameObject));
+            GateIcons.Clear();
         }
 
         public void Reveal()
@@ -29,7 +40,7 @@ namespace TankLike.UI.Map
 
         public Vector3 GetRoomIconLocalPosition()
         {
-            return RoomIcon.GetComponent<RectTransform>().localPosition;
+            return _rectTransform.localPosition;
         }
     }
 }

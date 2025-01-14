@@ -9,6 +9,6 @@ namespace TankLike.UnitControllers
     /// </summary>
     public class EnemyVisualEffects : UnitVisualEffects
     {
-
+        
     }
 }

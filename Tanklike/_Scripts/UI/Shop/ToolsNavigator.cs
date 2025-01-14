@@ -1,17 +1,17 @@
 using System.Collections.Generic;
-using TankLike.Combat;
-using TankLike.Sound;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using static TankLike.UnitControllers.TankTools;
 
 namespace TankLike.UI
 {
     using Signifiers;
+    using Combat;
+    using Sound;
+    using UnitControllers;
+    using Utils;
+    using static UnitControllers.TankTools;
 
-    public class ToolsNavigator : Navigatable, IInput
+    public class ToolsNavigator : Navigatable, IInput, IManager
     { 
         // the state of the select button
         public enum SelectState
@@ -22,7 +22,6 @@ namespace TankLike.UI
         [Header("Modifiers")]
         [SerializeField] private int _toolsToDisplayCount = 5;
         [SerializeField] private bool _showShopItems = true;
-        [SerializeField] private bool _canSelect = true;
 
         [Header("References")]
         [SerializeField] private ShopToolSelectableCellUI _firstCell;
@@ -44,23 +43,35 @@ namespace TankLike.UI
         private List<ToolPack> _toolsToDisplay = new List<ToolPack>();
         private PlayerComponents _currentPlayer;
 
+
         #region Constants
         private const string INSUFFICIENT_COINS_MESSAGE = "NOT ENOUGH COINS";
         private const string RETURN_ACTION_TEXT = "Return";
         private const string SELECT_ACTION_TEXT = "Select";
         #endregion
 
-        private void Awake()
+        public void SetReferences()
         {
             _shopParent.SetActive(false);
             _activeCell = _firstCell;
         }
 
+        #region IManager
         public override void SetUp()
         {
+            IsActive = true;
+
             base.SetUp();
             SetToolsInShop();
         }
+
+        public override void Dispose()
+        {
+            IsActive = false;
+
+            // TODO: Add dispose logic
+        }
+        #endregion
 
         #region Open and close
         public override void Open(int playerIndex)
@@ -76,7 +87,7 @@ namespace TankLike.UI
             LoadPlayerItemsIntoShop();
             // update the UI
             _currentPlayerInfo.UpdateUIOfSelectedCell(_firstCell);
-            IsActive = true;
+            IsOpened = true;
             //_currentPlayerInfo.gameObject.SetActive(true);
         }
 
@@ -184,7 +195,7 @@ namespace TankLike.UI
         {
             base.Navigate(direction);
 
-            if (!IsActive)
+            if (!IsOpened)
             {
                 return;
             }
@@ -255,7 +266,7 @@ namespace TankLike.UI
         #region Select
         public override void Select()
         {
-            if (!IsActive) return;
+            if (!IsOpened) return;
 
             switch (_shopState)
             {
@@ -353,7 +364,7 @@ namespace TankLike.UI
         #region Return
         public override void Return()
         {
-            if (!IsActive)
+            if (!IsOpened)
             {
                 return;
             }
@@ -414,7 +425,7 @@ namespace TankLike.UI
         public override void DehighlightCells()
         {
             base.DehighlightCells();
-            IsActive = false;
+            IsOpened = false;
             _activeCell.HighLight(false);
         }
 
@@ -428,7 +439,7 @@ namespace TankLike.UI
             _activeCell = _firstCell;
         }
 
-        public void SetToolsInShop()
+        private void SetToolsInShop()
         {
             if (!_showShopItems)
             {

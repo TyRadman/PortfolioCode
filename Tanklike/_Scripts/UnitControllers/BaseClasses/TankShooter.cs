@@ -1,21 +1,34 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.Combat;
-using TankLike.Elements;
-using TankLike.Utils;
-using TankLike.Misc;
-using TankLike.Sound;
-using TankLike.Cam;
 
 namespace TankLike.UnitControllers
 {
-    public abstract class TankShooter : MonoBehaviour, IController
+    using Combat;
+    using Elements;
+    using Utils;
+    using Misc;
+    using Sound;
+    using Cam;
+    using Combat.Abilities;
+    using TankLike.Combat.SkillTree.Upgrades;
+    using TankLike.Combat.SkillTree;
+
+    public abstract class TankShooter : UnitShooter, IController, IConstraintedComponent, ISkill
     {
-        public System.Action OnTargetHit;
-        public System.Action OnShootStarted;
-        public System.Action OnShootFinished;
-        protected float _coolDownTime = 3f;
+        public class WeaponData
+        {
+            public WeaponHolder OriginalHolder;
+            public WeaponHolder Holder;
+        }
+
+        public bool IsActive { get; protected set; }
+
+        public List<Transform> ShootingPoints { get; set; }
+
+        public System.Action OnShootStarted { get; set; }
+        public System.Action OnShootFinished { get; set; }
+        public bool IsConstrained { get; set; }
 
         [Header("Settings")]
         [SerializeField] protected bool _canShoot;
@@ -24,45 +37,42 @@ namespace TankLike.UnitControllers
 
         [Header("References")]
         [SerializeField] protected WeaponHolder _startWeaponHolder;
-        [SerializeField] private Weapon _customShot;
+        [SerializeField] protected SkillProfile _startWeaponProfile;
+
         [SerializeField] protected Audio _onShootAudio;
 
-        protected List<Transform> _shootingPoints;
         protected Animator _turretAnimator;
         protected Transform _turret;
-        public List<Transform> ShootingPoints => _shootingPoints;
-
-        public bool IsActive { get; protected set; }
-
-        // custom shots
-        // either normal or custom
-        private System.Action<Transform, float> ShootingMethod;
-
-        protected TankComponents _components;
+        protected float _coolDownTime = 3f;
+        protected bool _isOnCoolDown = false;
         protected Weapon _currentWeapon;
         protected WeaponHolder _currentWeaponHolder;
-        private List<Weapon> _normalShots = new List<Weapon>();
-
         protected List<IPoolable> _activePoolables = new List<IPoolable>();
 
-        private WaitForSeconds _shootWaitForSeconds;
+        private Dictionary<WeaponHolder, WeaponHolder> _weapons = new Dictionary<WeaponHolder, WeaponHolder>();
 
-        protected virtual void Awake()
-        {
-            _shootWaitForSeconds = new WaitForSeconds(_shootAnimationDelay);
-        }
+        private System.Action<Transform, float> ShootingMethod;
+        private TankComponents _components;
+        private WaitForSeconds _shootWaitForSeconds;
+        private SkillHolder _lastWeaponHolder;
 
         #region Shooting Method Overload
+        protected bool CanShoot(bool hasCoolDown)
+        {
+            bool cooldownInPlace = _isOnCoolDown && hasCoolDown;
+            return _canShoot && !cooldownInPlace && !IsConstrained;
+        }
+
         public virtual void Shoot(bool hasCoolDown = true, Transform shootingPoint = null, float angle = 0f)
         {
-            if (!_canShoot && hasCoolDown)
+            if (!CanShoot(hasCoolDown))
             {
                 return;
             }
 
             if (shootingPoint == null)
             {
-                shootingPoint = _shootingPoints[0];
+                shootingPoint = ShootingPoints[0];
             }
 
             // TODO: remove it after fixing the air drone shooter
@@ -74,7 +84,7 @@ namespace TankLike.UnitControllers
 
             if (hasCoolDown)
             {
-                _canShoot = false;
+                _isOnCoolDown = true;
                 EnableShooting();
             }
         }
@@ -91,23 +101,31 @@ namespace TankLike.UnitControllers
         /// <param name="weapon">The custom weapon</param>
         /// <param name="angle">The angle of the shot in degrees</param>
         /// <param name="hasCoolDown">True if you want the shot to trigger the down</param>
-        public virtual void Shoot(Weapon weapon, float angle, bool hasCoolDown = true)
+        public virtual void Shoot(Weapon weapon, float angle, bool hasCoolDown = true, bool canBeConstrained = false)
         {
-            if (!_canShoot && hasCoolDown) return;
+            bool cooldownInPlace = _isOnCoolDown && hasCoolDown;
+            bool isConstrained = IsConstrained && canBeConstrained;
+
+            if (!_canShoot && cooldownInPlace || isConstrained)
+            {
+                return;
+            }
 
             weapon.OnShot(null, angle);
             _components.Animation.PlayShootAnimation(2f); //dirty, get the speed from the weapon
 
             if (hasCoolDown)
             {
-                _canShoot = false;
+                _isOnCoolDown = true;
                 EnableShooting();
             }
         }
         #endregion
 
         #region Enable Shooting
-        // this method is virtual so that the player can override it and enable shooting through a coroutine which will allow them to update the BarImage of the weapon icon
+        /// <summary>
+        /// this method is virtual so that the player can override it and enable shooting through a coroutine which will allow them to update the BarImage of the weapon icon
+        /// </summary>
         protected virtual void EnableShooting()
         {
             Invoke(nameof(EnableShootingInvoke), _coolDownTime);
@@ -115,39 +133,29 @@ namespace TankLike.UnitControllers
 
         private void EnableShootingInvoke()
         {
-            _canShoot = true;
+            _isOnCoolDown = false;
         }
         #endregion
 
-        public virtual void SetUp(TankComponents components)
+        public virtual void SetUp(IController controller)
         {
-            TankBodyParts parts = components.TankBodyParts;
-
-            var turret = (TankTurret)parts.GetBodyPartOfType(BodyPartType.Turret);
-            _turret = turret.transform;
-
-            _components = components;
-            _shootingPoints = new List<Transform>();
-            SetupShootingPoints(turret.ShootingPoints);
-            _turretAnimator = turret.Animator;
-
-            ShootingMethod = DefaultShot;
-
-            if (_startWeaponHolder == null)
+            if (controller is not TankComponents components)
             {
-                Debug.LogWarning("Starting weapon is null for " + gameObject.name);
+                Helper.LogWrongComponentsType(GetType());
                 return;
             }
 
-            _canShoot = false;
+            _components = components;
+            TankBodyParts parts = _components.TankBodyParts;
 
-            SetWeapon(_startWeaponHolder);
-        }
+            TankTurret turret = (TankTurret)parts.GetBodyPartOfType(BodyPartType.Turret);
 
-        private void SetupShootingPoints(Transform[] shootingPoints)
-        {
-            _shootingPoints.Clear();
-            _shootingPoints.AddRange(shootingPoints);
+            _turret = turret.transform;
+            ShootingPoints = new List<Transform>();
+            ShootingPoints.AddRange(turret.ShootingPoints);
+            _turretAnimator = turret.Animator;
+
+            _shootWaitForSeconds = new WaitForSeconds(_shootAnimationDelay);
         }
 
         public void EnableShooting(bool canShoot)
@@ -155,17 +163,16 @@ namespace TankLike.UnitControllers
             _canShoot = canShoot;
         }
 
-        #region Setting Bullet Overloads
-        public void SetElement(ElementEffect element)
+        public void PlayShootingEffects()
         {
-            //_element = element;
-        }
+            if(_components.Animation == null)
+            {
+                return;
+            }
 
-        public void SetDeflection(Deflection deflection)
-        {
-            //_deflection = deflection;
+            _components.Animation.PlayShootAnimation(2f); //dirty, get the speed from the weapon
+            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
         }
-        #endregion
 
         public virtual void DefaultShot(Transform shootingPoint = null, float angle = 0)
         {
@@ -178,29 +185,6 @@ namespace TankLike.UnitControllers
             GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
         }
 
-        #region Custom Shooting
-        private void CustomShot(Transform shootingPoint = null, float angle = 0)
-        {
-            if (_customShot == null) return;
-
-            OnShootStarted?.Invoke();
-            _customShot.OnShot(shootingPoint, angle);
-            GameManager.Instance.CameraManager.Shake.ShakeCamera(CameraShakeType.SHOOT);
-
-            // return the shooting method to default
-            ShootingMethod -= CustomShot;
-            ShootingMethod += DefaultShot;
-            _customShot = null;
-        }
-
-        public void SetCustomShot(Weapon shot)
-        {
-            _customShot = shot;
-            ShootingMethod -= DefaultShot;
-            ShootingMethod += CustomShot;
-        }
-        #endregion
-
 
         #region Extra
         protected virtual void OnShootExitHandler()
@@ -210,7 +194,7 @@ namespace TankLike.UnitControllers
 
         public bool IsCanShoot()
         {
-            return _canShoot;
+            return _canShoot && !IsConstrained;
         }     
 
         public Weapon GetWeapon()
@@ -218,36 +202,85 @@ namespace TankLike.UnitControllers
             return _currentWeapon;
         }
 
-        public List<Weapon> GetWeapons()
+        public WeaponHolder GetWeaponHolder()
         {
-            return _normalShots;
+            return _currentWeaponHolder;
         }
 
         public void SetWeaponDamage(int damage)
         {
-            if (_startWeaponHolder != null)
+            if (_currentWeaponHolder != null)
             {
-                _startWeaponHolder.Weapon.SetDamage(damage);
+                _currentWeaponHolder.Weapon.SetDamage(damage);
+            }
+            else
+            {
+                Debug.LogError("WHY NULL");
             }
         }
 
-        public virtual void SetWeapon(WeaponHolder weaponHolder)
+        #region Addition and Equipment
+        public virtual void AddSkill(SkillHolder holder)
         {
-            if (weaponHolder == null)
+            if (holder == null)
             {
-                weaponHolder = _currentWeaponHolder;
+                Debug.LogError($"No weapon passed to {gameObject.name}");
+                return;
             }
+
+            if (holder is not WeaponHolder weaponHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(WeaponHolder).Name, holder.name);
+                return;
+            }
+
+            // ensure the entity doesn't hold duplicate weapons
+            if (_weapons.ContainsKey(weaponHolder))
+            {
+                Debug.LogError($"Entity {gameObject.name} already has the weapon {weaponHolder.name}");
+                return;
+            }
+
+            WeaponHolder newHolder = Instantiate(weaponHolder);
+            _weapons.Add(weaponHolder, newHolder);
 
             Weapon weapon = Instantiate(weaponHolder.Weapon);
-            _currentWeapon = weapon;
-            _coolDownTime = _currentWeapon.CoolDownTime;
-            _currentWeapon.SetTargetLayer(_targetLayers);
-            _currentWeapon.SetUp(_components);
+            newHolder.SetWeapon(weapon);
 
-            if (!_normalShots.Exists(w => w == weapon))
+            weapon.SetUp(_components);
+
+            if (_currentWeaponHolder == null)
             {
-                _normalShots.Add(weapon);
+                EquipSkill(weaponHolder);
             }
+        }
+
+        /// <summary>
+        /// Equips the entity with a weapon.
+        /// </summary>
+        /// <param name="weapon"></param>
+        public virtual void EquipSkill(SkillHolder holder)
+        {
+            if (holder is not WeaponHolder weaponHolder)
+            {
+                Helper.LogWrongSkillHolder(gameObject.name, typeof(WeaponHolder).Name, holder.name);
+                return;
+            }
+
+            // add the weapon the list of weapons if it was never added and set up
+            if (!_weapons.ContainsKey(weaponHolder))
+            {
+                AddSkill(weaponHolder);
+            }
+
+            _lastWeaponHolder = weaponHolder;
+            _currentWeaponHolder = _weapons[weaponHolder];
+            _currentWeapon = _currentWeaponHolder.Weapon;
+
+            _currentWeapon.SetTargetLayer(_targetLayers);
+            _currentWeapon.OnWeaponShot += PlayShootingEffects;
+
+            _coolDownTime = _currentWeapon.GetCoolDownTime();
 
             // set the audio if the bullet has special audios
             if (_currentWeapon.ShotAudio != null)
@@ -256,14 +289,15 @@ namespace TankLike.UnitControllers
             }
         }
 
-        public virtual void AddWeapon(Weapon weapon)
+        public void ReEquipSkill()
         {
-            _normalShots.Add(weapon);
+            EquipSkill(_lastWeaponHolder);
         }
+        #endregion
 
         public void SetWeaponSpeed(float bulletSpeed)
         {
-            _startWeaponHolder.Weapon.SetSpeed(bulletSpeed);
+            _currentWeaponHolder.Weapon.SetSpeed(bulletSpeed);
         }
 
         public void SetLaserDuration(float duration)
@@ -282,27 +316,52 @@ namespace TankLike.UnitControllers
             GameManager.Instance.AudioManager.Play(_onShootAudio);
         }
 
+        public virtual void UpgradeSkill(BaseWeaponUpgrade weaponUpgrade)
+        {
+
+        }
+
+        public override List<Transform> GetShootingPoints()
+        {
+            return ShootingPoints;
+        }
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canShoot = (constraints & AbilityConstraint.Shooting) == 0;
+            IsConstrained = !canShoot;
+        }
+        #endregion
+
         #region IController
         public virtual void Activate()
         {
+            IsActive = true;
             _canShoot = true;
         }
 
         public virtual void Deactivate()
         {
+            IsActive = false;
             _canShoot = false;
         }
 
         public virtual void Restart()
         {
-            _canShoot = true;
-            _currentWeapon.DisposeWeapon();
+            ShootingMethod = DefaultShot;
+            _isOnCoolDown = false;
+            IsConstrained = false;
         }
 
         public virtual void Dispose()
         {
-            ShootingMethod -= DefaultShot;
-            _currentWeapon.DisposeWeapon();
+            ShootingMethod = null;
+
+            if (_currentWeapon != null)
+            {
+                _currentWeapon.DisposeWeapon();
+            }
         }
         #endregion
     }

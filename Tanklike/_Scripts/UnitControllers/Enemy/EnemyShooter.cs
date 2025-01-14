@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Misc;
 using UnityEngine;
-using static TankLike.IndicatorEffects;
-using static TankLike.PlayersManager;
 
 namespace TankLike.UnitControllers
 {
+    using Misc;
+    using Utils;
+    using static PlayersManager;
+
     public class EnemyShooter : TankShooter
     {
         public System.Action OnTelegraphFinished;
@@ -21,6 +22,27 @@ namespace TankLike.UnitControllers
         protected Coroutine _telegraphCoroutine;
         protected Coroutine _attackCoroutine;
         protected PlayerTransforms _currentTarget;
+        protected EnemyComponents _enemyComponents;
+
+        public override void SetUp(IController controller)
+        {
+            EnemyComponents components = controller as EnemyComponents;
+
+            if (controller is null or not EnemyComponents and not BossComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _enemyComponents = components;
+
+            base.SetUp(controller);
+
+            if (_startWeaponHolder != null)
+            {
+                AddSkill(_startWeaponHolder);
+            }
+        }
 
         public bool IsWayToTargetBlocked(Transform target)
         {
@@ -81,7 +103,7 @@ namespace TankLike.UnitControllers
             _currentTarget = null;
         }
 
-        public virtual void TelegraphAttack()
+        public virtual void StartTelegraph()
         {
             if (_telegraphCoroutine != null)
                 StopCoroutine(_telegraphCoroutine);
@@ -91,7 +113,7 @@ namespace TankLike.UnitControllers
         protected virtual IEnumerator TelegraphRoutine()
         {
             ParticleSystemHandler vfx = GameManager.Instance.VisualEffectsManager.Telegraphs.EnemyTelegraph;
-            vfx.transform.parent = _shootingPoints[0];
+            vfx.transform.parent = ShootingPoints[0];
             vfx.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             vfx.transform.position += vfx.transform.forward * _telegraphOffset;
             vfx.gameObject.SetActive(true);
@@ -153,6 +175,28 @@ namespace TankLike.UnitControllers
         public override void Restart()
         {
             base.Restart();
+            if (_telegraphCoroutine != null)
+            {
+                StopCoroutine(_telegraphCoroutine);
+            }
+
+            if (_activePoolables.Count > 0)
+            {
+                _activePoolables.ForEach(e => e.TurnOff());
+            }
+
+            _activePoolables.Clear();
+
+            if (_attackCoroutine != null)
+            {
+                StopCoroutine(_attackCoroutine);
+            }
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+
             if (_telegraphCoroutine != null)
             {
                 StopCoroutine(_telegraphCoroutine);

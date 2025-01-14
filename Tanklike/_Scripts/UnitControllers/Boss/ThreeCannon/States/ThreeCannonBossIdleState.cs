@@ -9,7 +9,8 @@ namespace TankLike.UnitControllers.States
     {
         public override void OnEnter()
         {
-            Debug.Log("IDLE STATE");
+            base.OnEnter();
+
             _isActive = true;
         }
 

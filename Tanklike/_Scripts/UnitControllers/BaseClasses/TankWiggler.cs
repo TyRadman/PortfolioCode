@@ -4,28 +4,26 @@ using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
+    using TankLike.Utils;
+
     public class TankWiggler : MonoBehaviour, IController
     {
+        public bool IsActive { get; private set; }
+     
         [Header("Body References")]
         [SerializeField] private Transform _tankHolder;
-        [Header("Turret References")]
-        [SerializeField] private Transform _turretRotationReference;
-        private const float SWITCH_BETWEEN_WIGGLES_TIME = 0.1f;
-        
+        [SerializeField] private Transform _bodyRotationReference;
+
+        [SerializeField] private bool _debug = false;
+
         private bool _isWiggling = false;
-        private Transform _body;
-        private Transform _turret;
         private Quaternion _defaultRotation;
 
-        public bool IsActive { get; private set; }
 
-        public void SetUp(TankComponents components)
+        private const float SWITCH_BETWEEN_WIGGLES_TIME = 0.1f;
+
+        public void SetUp(IController controller)
         {
-            TankBodyParts parts = components.TankBodyParts;
-
-            _body = parts.GetBodyPartOfType(BodyPartType.Body).transform;
-            _turret = parts.GetBodyPartOfType(BodyPartType.Turret).transform;
-
             _defaultRotation = _tankHolder.rotation;
         }
 
@@ -33,25 +31,12 @@ namespace TankLike.UnitControllers
         {
             if (!_isWiggling)
             {
-                StartCoroutine(WigglingProcess(wiggle, _tankHolder, _body));
+                StartCoroutine(WigglingProcess(wiggle, _tankHolder, _bodyRotationReference));
             }
             else
             {
                 StopAllCoroutines();
-                StartCoroutine(SwitchWigglesProcess(wiggle, _tankHolder, _body));
-            }
-        }
-
-        public void WiggleTurret(Wiggle wiggle)
-        {
-            if (!_isWiggling)
-            {
-                StartCoroutine(WigglingProcess(wiggle, _turret, _turretRotationReference));
-            }
-            else
-            {
-                StopAllCoroutines();
-                StartCoroutine(SwitchWigglesProcess(wiggle, _turret, _turretRotationReference));
+                StartCoroutine(SwitchWigglesProcess(wiggle, _tankHolder, _bodyRotationReference));
             }
         }
 
@@ -59,25 +44,28 @@ namespace TankLike.UnitControllers
         {
             _isWiggling = true;
             float time = 0f;
-            Quaternion initialRotation = bodyToWiggle.rotation;
+            //Quaternion initialRotation = bodyToWiggle.rotation;
+            Vector3 initialRotation = bodyToWiggle.eulerAngles;
             AnimationCurve curve = wiggle.Curve;
             float direction = wiggle.Backward ? -1 : 1;
             float duration = wiggle.Duration;
             float angle = wiggle.MaxAngle;
+
+            Vector3 directionVector = Vector3.right;
 
             while (time < duration)
             {
                 time += Time.deltaTime;
                 float curveValue = curve.Evaluate(time / duration) * direction;
                 float rotationAngle = curveValue * angle;
-                // gets the right rotation of the body, rotates it (hypothetically) by the given angle, and returns the new rotation
-                Quaternion rotationDelta = Quaternion.AngleAxis(rotationAngle, referenceBody.right);
-                bodyToWiggle.rotation = initialRotation * rotationDelta;
-                //print($"initial: {initialRotation.eulerAngles}. reference: {referenceBody.eulerAngles}");
+
+                Vector3 rotationDelta = Quaternion.AngleAxis(rotationAngle, referenceBody.right).eulerAngles;
+                Vector3 finalRotation = initialRotation + rotationDelta;
+                bodyToWiggle.eulerAngles = finalRotation;
+
                 yield return null;
             }
 
-            //_tankHolder.rotation = Quaternion.AngleAxis(0f, _tankBody.right);
             _isWiggling = false;
         }
 
@@ -85,14 +73,20 @@ namespace TankLike.UnitControllers
         {
             float time = 0f;
 
-            while(time < SWITCH_BETWEEN_WIGGLES_TIME)
+            while (time < SWITCH_BETWEEN_WIGGLES_TIME)
             {
                 time += Time.deltaTime;
-                bodyToWiggle.rotation = Quaternion.Lerp(bodyToWiggle.rotation, _defaultRotation, time / SWITCH_BETWEEN_WIGGLES_TIME);
+                float t = Mathf.Min(time / SWITCH_BETWEEN_WIGGLES_TIME, 1f);
+                bodyToWiggle.rotation = Quaternion.Lerp(bodyToWiggle.rotation, _defaultRotation, t);
                 yield return null;
             }
 
             StartCoroutine(WigglingProcess(wiggle, bodyToWiggle, referenceBody));
+        }
+
+        private void ResetRotations()
+        {
+            _tankHolder.rotation = _defaultRotation;
         }
 
         #region IController
@@ -104,15 +98,17 @@ namespace TankLike.UnitControllers
         public void Deactivate()
         {
             IsActive = false;
+            ResetRotations();
         }
 
         public void Restart()
         {
-            IsActive = false;
+
         }
 
         public void Dispose()
         {
+            ResetRotations();
         }
         #endregion
     }

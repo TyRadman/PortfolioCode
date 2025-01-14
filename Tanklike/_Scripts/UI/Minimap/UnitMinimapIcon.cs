@@ -12,12 +12,13 @@ namespace TankLike.Minimap
 
         protected override void Start()
         {
-            base.Start();
-        }
+            if(!CanInitialize())
+            {
+                return;
+            }
 
-        private void OnEnable()
-        {
-            SpawnIcon();
+            base.Start();
+            //SpawnIcon();
         }
 
         public void SpawnIcon()

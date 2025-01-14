@@ -1,93 +1,215 @@
-using System.Collections;
-using System.Collections.Generic;
-using TankLike.Combat;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace TankLike.UI.HUD
 {
-    public class PlayerHUD : MonoBehaviour
+    using Combat;
+    using Utils;
+
+    public class PlayerHUD : MonoBehaviour, IManager
     {
-        [SerializeField] private GameObject _parent;
+        [field: SerializeField] public PlayerStatsModifiersDisplayer StatModifiersDisplayer { get; private set; }
+
+        [Header("Parents")]
+        [SerializeField] private GameObject _playerHUDParent;
+        [SerializeField] private GameObject _miniPlayerHUDParent;
+        [SerializeField] private Animation _parentsAnimation;
+        [SerializeField] private AnimationClip _defaultParentIdleClip;
+        [SerializeField] private AnimationClip _switchToMiniPlayerHUD;
+        [SerializeField] private AnimationClip _switchToPlayerHUD;
+
         [Header("Avatar")]
-        [SerializeField] private Image _avatarImage;        
+        [SerializeField] private Image _avatarImage;
+        
         [Header("Health")]
-        [SerializeField] private Image _healthFillImage;
-        [SerializeField] private ResizableBar _healthBar;
+        [SerializeField] private SlantedHealthBar _healthBar;
+
         [Header("Active Skills")]
         [SerializeField] private HUDSkillIcon _superAbility;
         [SerializeField] private HUDSkillIcon _weaponAbility;
         [SerializeField] private HUDSkillIcon _holdDownAbility;
         [SerializeField] private HUDSkillIcon _boostAbility;
+        [SerializeField] private PlayerHUDAnimation _weaponSwapAnimation;
+
         [Header("Tools")]
         [SerializeField] private ToolIcon _selectedToolIcon;
         [SerializeField] private ToolIcon _previousToolIcon;
         [SerializeField] private ToolIcon _nextToolIcon;
+
         [Header("Experience")]
         [SerializeField] private Image _experienceFillImage;
         [SerializeField] private TextMeshProUGUI _levelText;
+
         [Header("Fuel")]
-        [SerializeField] private Image _fuelFillImage;
+        [SerializeField] private SlantedBar _fuelBar;
+
         [Header("Energy")]
-        [SerializeField] private Image _energyFillImage;
+        [SerializeField] private SlantedBar _energyBar;
         [SerializeField] private TextMeshProUGUI _energyKeyText;
+
         [Header("Wealth")]
         [SerializeField] private TextMeshProUGUI _coinsText;
+
         [Header("Inventory")]
         [SerializeField] private TextMeshProUGUI _inventoryKeyText;
+
         [Header("Extra")]
         [SerializeField] private Sprite _emptyToolSprite;
 
-        private List<Image> _boostIcons = new List<Image>();
+        [Header("Defaults")]
+        [SerializeField] private Sprite _emptyAbilitySprite;
 
-        public void Enable(bool value)
+        [Header("Input Keys")]
+        [SerializeField] private TextMeshProUGUI _weaponSwapKeyText;
+        [SerializeField] private TextMeshProUGUI _useWeaponKeyText;
+
+        [Header("Mini Player HUD")]
+        [SerializeField] private HUDSkillIcon _miniPlayerWeaponAbility;
+        [SerializeField] private TextMeshProUGUI _useMiniPlayerWeaponKeyText;
+
+        public bool IsActive { get; private set; }
+
+        private int _selectedWeapon; // 0 = base, 1 = super
+
+        #region IManager
+        public void SetUp()
         {
-            _parent.SetActive(value);
+            IsActive = true;
+
+            _superAbility.SetUp();
+            StatModifiersDisplayer.SetUp();
+
+            _selectedWeapon = 0;
+
+            _parentsAnimation.clip = _defaultParentIdleClip;
+            _parentsAnimation.Play();
+        }
+
+        public void ResetAbilitiesIcons()
+        {
+            _superAbility.SetIconSprite(_emptyAbilitySprite);
+            _weaponAbility.SetIconSprite(_emptyAbilitySprite);
+            _holdDownAbility.SetIconSprite(_emptyAbilitySprite);
+            _boostAbility.SetIconSprite(_emptyAbilitySprite);
+        }
+
+        public void Dispose()
+        {
+            IsActive = false;
+
+            StopHealthBarFlash();
+        }
+
+        public void OnPlayerDeath()
+        {
+            StopHealthBarFlash();
+            _superAbility.StopPulseAnimation();
+            _weaponAbility.SetFillAmount(0f);
+            _superAbility.SetFillAmount(0f);
+        }
+        #endregion
+
+        public void Enable()
+        {
+            _playerHUDParent.SetActive(true);
+            _miniPlayerHUDParent.SetActive(true);
+            _superAbility.OnResumed();
+            _healthBar.OnResumed();
+        }
+
+        public void Disable()
+        {
+            _playerHUDParent.SetActive(false);
+            _miniPlayerHUDParent.SetActive(false);
+            _superAbility.OnPaused();
+            _healthBar.OnPaused();
         }
 
         #region Health
         public void SetupHealthBar(int maxHealth)
         {
-            if (_healthFillImage == null)
+            if (_healthBar == null)
             {
                 return;
             }
 
-            // TODO: must store this value somewhere
-            float highestHealthPossible = 600f;
-            _healthBar.SetMaxSize(maxHealth / highestHealthPossible, true);
+            // _healthBar.SetMaxSize(maxHealth / highestHealthPossible, true); // TODO: let's see if we're gonna update max health visually too
+            _healthBar.SetMaxHealth(1, true);
+
+            StopHealthBarFlash();
         }
 
-        public void UpdateHealthBar(int currentHealth, int maxHealth)
+        public void UpdateHealthBar(int lastCurrentHealth, int currentHealth, int maxHealth)
         {
-            if (_healthFillImage == null)
+            if (_healthBar == null)
             {
                 return;
             }
 
-            _healthBar.SetValue((float)currentHealth / (float)maxHealth);
+            _healthBar.SetValue((float)lastCurrentHealth, (float)currentHealth, (float)maxHealth);
             //_healthFillImage.fillAmount = (float)currentHealth / (float)maxHealth;
+        }
+
+        public void SetHealthBar(int currentHealth, int maxHealth)
+        {
+            if (_healthBar == null)
+            {
+                return;
+            }
+
+            _healthBar.SetFixedValue((float)currentHealth, (float)maxHealth);     
+        }
+
+        public void ResetHealthBar()
+        {
+            if (_healthBar == null)
+            {
+                return;
+            }
+
+            _healthBar.ResetValue();
+        }
+
+        public void StartHealthBarFlash()
+        {
+            _healthBar.StartHealthBarFlash();
+        }
+
+        public void StopHealthBarFlash()
+        {
+            _healthBar.StopHealthBarFlash();
         }
         #endregion
 
         #region Experience
         public void ResetExperienceBar()
         {
-            if (_experienceFillImage == null) return;
+            if (_experienceFillImage == null)
+            {
+                return;
+            }
 
             _experienceFillImage.fillAmount = 0f;
         }
 
         public void UpdateExperienceBar(int currentExperience, int maxExperience)
         {
-            if (_experienceFillImage == null) return;
+            if (_experienceFillImage == null)
+            {
+                return;
+            }
 
             _experienceFillImage.fillAmount = (float)currentExperience / (float)maxExperience;
         }
 
         public void UpdateLevelText(int currentLevel)
         {
+            if (_levelText == null)
+            {
+                return;
+            }
+
             _levelText.text = currentLevel.ToString();
         }
         #endregion
@@ -100,11 +222,19 @@ namespace TankLike.UI.HUD
             _superAbility.SetKey(key);
         }
 
-        public void SetSuperAbilityChargeAmount(float amount, int playerIndex)
+        public void SetSuperAbilityChargeAmount(float chargeAmount, int playerIndex)
         {
-            _superAbility.SetFillAmount(amount);
+            _superAbility.SetFillAmount(chargeAmount);
+        }
 
-            _superAbility.PlayAnimation(amount == 0f);
+        public void OnAbilityFullyCharged()
+        {
+            _superAbility.PlayPulseAnimation();
+        }
+
+        public void OnAbilityChargeEmptied()
+        {
+            _superAbility.StopPulseAnimation();
         }
         #endregion
 
@@ -112,12 +242,22 @@ namespace TankLike.UI.HUD
         public void SetWeaponInfo(Sprite icon, string key)
         {
             _weaponAbility.SetIconSprite(icon);
-            _weaponAbility.SetKey(key);
+            //_weaponAbility.SetKey(key);
         }
 
-        public void SetWeaponChargeAmount(float amount, int playerIndex)
+        public void SetUseWeaponKey(string key)
         {
-            _weaponAbility.SetFillAmount(amount);
+            _useWeaponKeyText.text = key;
+        }
+
+        public void SetWeaponChargeAmount(float amount)
+        {
+            _weaponAbility.SetFillAmount(1 - amount);
+        }
+
+        public void OnWeaponCooldownFinished()
+        {
+            _weaponAbility.PlayReadyAnimation();
         }
         #endregion
 
@@ -131,7 +271,7 @@ namespace TankLike.UI.HUD
         public void SetHoldDownChargeAmount(float amount, int playerIndex)
         {
             _holdDownAbility.SetFillAmount(amount);
-            _holdDownAbility.PlayAnimation(amount <= 0f);
+            //_holdDownAbility.PlayAnimation(amount <= 0f);
         }
         #endregion
 
@@ -195,18 +335,24 @@ namespace TankLike.UI.HUD
         #region Fuel
         public void UpdateFuelBar(float currentFuel, float maxFuel)
         {
-            if (_fuelFillImage == null) return;
+            if (_fuelBar == null)
+            {
+                return;
+            }
 
-            _fuelFillImage.fillAmount = currentFuel / maxFuel;
+            _fuelBar.UpdateBar(currentFuel, maxFuel);
         }
         #endregion
 
         #region Energy
         public void UpdateEnergyBar(float currentEnergy, float maxEnergy)
         {
-            if (_energyFillImage == null) return;
+            if (_energyBar == null)
+            {
+                return;
+            }
 
-            _energyFillImage.fillAmount = currentEnergy / maxEnergy;
+            _energyBar.UpdateBar(currentEnergy, maxEnergy);
         }
 
         public void SetEnergyKey(string key)
@@ -219,6 +365,65 @@ namespace TankLike.UI.HUD
         public void SetPlayerAvatar(Sprite avatar)
         {
             _avatarImage.sprite = avatar;
+        }
+        #endregion
+
+        #region Weapon Swapping
+        public void SetWeaponSwapKey(string key)
+        {
+            _weaponSwapKeyText.text = key;
+        }
+
+        public void OnBaseWeaponEquipped()
+        {
+            if(_selectedWeapon != 0)
+            {
+                _weaponSwapAnimation.OnBaseWeaponEquipped();
+                _selectedWeapon = 0;
+            }
+        }
+
+        public void OnSuperAbilityEquipped()
+        {
+            if (_selectedWeapon != 1)
+            {
+                _weaponSwapAnimation.OnSuperAbilityEquipped();
+                _selectedWeapon = 1;
+            }
+        }
+        #endregion
+
+        #region Mini Player
+        public void SwitchToMiniPlayerHUD()
+        {
+            _parentsAnimation.clip = _switchToMiniPlayerHUD;
+            _parentsAnimation.Play();
+        }
+
+        public void SwitchToPlayerHUD()
+        {
+            _parentsAnimation.clip = _switchToPlayerHUD;
+            _parentsAnimation.Play();
+        }
+
+        public void SetMiniPlayerWeaponChargeAmount(float amount)
+        {
+            _miniPlayerWeaponAbility.SetFillAmount(1 - amount);
+        }
+
+        public void OnMiniPlayerWeaponCooldownFinished()
+        {
+            _miniPlayerWeaponAbility.PlayReadyAnimation();
+        }
+
+        public void SetMiniPlayerWeaponInfo(Sprite icon)
+        {
+            _miniPlayerWeaponAbility.SetIconSprite(icon);
+        }
+
+        public void SetUseMiniPlayerWeaponKey(string key)
+        {
+            _useMiniPlayerWeaponKeyText.text = key;
         }
         #endregion
     }

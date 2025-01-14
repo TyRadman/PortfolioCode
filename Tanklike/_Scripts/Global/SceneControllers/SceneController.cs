@@ -9,14 +9,13 @@ namespace TankLike
     public abstract class SceneController : MonoBehaviour
     {
         public abstract void SetUp();
-
-        public abstract void StarterSetUp();
+        
+        public abstract void Dispose();
 
         protected abstract void SetUpManagers();
 
         protected IEnumerator SetupRoutine(string sceneName)
         {
-            // Wait until the S_AbilitySelection scene is loaded, 
             Scene scene = SceneManager.GetSceneByName(sceneName);
 
             while (!scene.isLoaded)

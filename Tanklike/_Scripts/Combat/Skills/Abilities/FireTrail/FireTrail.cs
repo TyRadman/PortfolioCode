@@ -1,9 +1,10 @@
 using UnityEngine;
 
-namespace TankLike.Combat
+namespace TankLike.Combat.Abilities
 {
     using Utils;
     using UnitControllers;
+    using Combat.SkillTree;
 
 	[CreateAssetMenu(fileName = PREFIX + "FireTrail", menuName = Directories.ABILITIES + "Fire Trail")]
 	public class FireTrail : Ability
@@ -22,6 +23,13 @@ namespace TankLike.Combat
         {
             base.SetUp(components);
             _fireTrailSpotPool = CreatePool(_fireTrailPrefab);
+        }
+
+        public override void PopulateSkillProperties()
+        {
+            base.PopulateSkillProperties();
+
+            AddSkillProperty("Fire damage per second", _fireTrailPrefab.GetDamage(), Colors.DarkOrange, PropertyUnits.POINTS);
         }
 
         public override void PerformAbility()
@@ -50,6 +58,36 @@ namespace TankLike.Combat
                 POOL_PREFILL_COUNT
            );
             return pool;
+        }
+
+        public override void OnAbilityHoldStart()
+        {
+
+        }
+
+        public override void OnAbilityHoldUpdate()
+        {
+
+        }
+
+        public override void OnAbilityFinished()
+        {
+
+        }
+
+        public override void OnAbilityInterrupted()
+        {
+
+        }
+
+        public override void SetUpIndicatorSpecialValues(AirIndicator indicator)
+        {
+
+        }
+
+        public override void Dispose()
+        {
+
         }
     }
 }

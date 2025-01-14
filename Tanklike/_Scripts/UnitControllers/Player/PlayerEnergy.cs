@@ -1,19 +1,33 @@
 using System.Collections;
-using System.Collections.Generic;
-using TankLike.Sound;
-using TankLike.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
+    using Sound;
+    using UI.HUD;
+    using Utils;
+    using Attributes;
+
+    /// <summary>
+    /// Player energy controller. Handles the player energy and healing ability.
+    /// </summary>
     public class PlayerEnergy : MonoBehaviour, IController, IInput, IDisplayedInput
     {
+        public bool IsActive { get; private set; }
+
+        public System.Action OnEnergyFull { get; set; }
+        /// <summary>
+        /// Event that gets triggered when the player's energy goes from full to anything less than full.
+        /// </summary>
+        public System.Action OnEnergyEmpty { get; set; }
+
         [Header("Settings")]
         [SerializeField] private float _maxEnergy;
         [SerializeField] private float _healRequiredEnergy = 20f;
         [SerializeField] private float _healChargeDuration = 1.5f;
         [SerializeField] private int _healAmount = 20;
+        [SerializeField, AllowCreationIfNull] private StatModifierType _energyFullStatType;
 
         [Header("Constraints")]
         [SerializeField] private AbilityConstraint _constraints;
@@ -25,21 +39,52 @@ namespace TankLike.UnitControllers
         [Header("Audio")]
         [SerializeField] private Audio _healBlastAudio;
 
-        private PlayerComponents _components;
-        private float _currentEnergy;
+        private PlayerComponents _playerComponents;
+        private PlayerHealth _health;
+        private PlayerExperience _experience;
+        private PlayerHUD _HUD;
         private Coroutine _holdCoroutine;
+        private StatIconReference _statIconReference;
+        private float _healMultiplier = 1f;
+        private float _currentEnergy;
+        private bool _canChargeEnergy = false;
+        private float _lastZoom;
+        private bool _isCharging;
+        private bool _isEnergyFull = false;
 
-        public bool IsActive { get; private set; }
+        private const float XP_MULTIPLIER = 0.5f;
 
-        public void Setup(PlayerComponents components)
+        public void SetUp(IController controller)
         {
-            _components = components;
-            _currentEnergy = 0f;
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
 
-            SetUpInput(_components.PlayerIndex);
-            UpdateInputDisplay(_components.PlayerIndex);
+            _playerComponents = playerComponents;
+            _health = _playerComponents.Health as PlayerHealth;
+            _experience = _playerComponents.Experience;
 
-            UpdateEnergyUI();
+            _HUD = GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex];
+
+            UpdateInputDisplay(_playerComponents.PlayerIndex);
+            _canChargeEnergy = true;
+
+            _statIconReference = GameManager.Instance.StatIconReferenceDB.GetStatIconReference(_energyFullStatType);
+
+            OnEnergyFull += AddEnergyFullStatIcon;
+            OnEnergyEmpty += RemoveEnergyFullStatIcon;
+        }
+
+        private void AddEnergyFullStatIcon()
+        {
+            _HUD.StatModifiersDisplayer.AddIcon(_statIconReference);
+        }
+
+        private void RemoveEnergyFullStatIcon()
+        {
+            _HUD.StatModifiersDisplayer.RemoveIcon(_statIconReference);
         }
 
         #region Input
@@ -54,7 +99,7 @@ namespace TankLike.UnitControllers
         public void DisposeInput(int playerIndex)
         {
             PlayerInputActions c = InputManager.Controls;
-            InputActionMap playerMap = InputManager.GetMap(_components.PlayerIndex, ActionMap.Player);
+            InputActionMap playerMap = InputManager.GetMap(_playerComponents.PlayerIndex, ActionMap.Player);
             playerMap.FindAction(c.Player.Energy.name).performed -= OnHoldDown;
             playerMap.FindAction(c.Player.Energy.name).canceled -= OnHoldUp;
         }
@@ -63,53 +108,46 @@ namespace TankLike.UnitControllers
         {
             int actionIconIndex = GameManager.Instance.InputManager.GetButtonBindingIconIndex(InputManager.Controls.Player.Energy.name, playerIndex);
 
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].SetEnergyKey(Helper.GetInputIcon(actionIconIndex));
+            GameManager.Instance.HUDController.PlayerHUDs[_playerComponents.PlayerIndex].SetEnergyKey(Helper.GetInputIcon(actionIconIndex));
         }
         #endregion
 
         private void OnHoldDown(InputAction.CallbackContext context)
         {
-            if (!IsActive || _currentEnergy < _healRequiredEnergy)
+            bool isHealthFull = _health.IsFull();
+            bool hasEnoughEnergy = _currentEnergy >= _healRequiredEnergy;
+
+            _lastZoom = GameManager.Instance.CameraManager.Zoom.ZoomAmount;
+
+            bool canCharge = IsActive && hasEnoughEnergy && !isHealthFull && _canChargeEnergy;
+
+            if (!canCharge)
             {
                 return;
             }
 
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
+            this.StopCoroutineSafe(_holdCoroutine);
 
-            _holdCoroutine = StartCoroutine(HoldRoutine());
+            _holdCoroutine = StartCoroutine(HoldDownRoutine());
         }
 
-        private void OnHoldUp(InputAction.CallbackContext context)
+        private IEnumerator HoldDownRoutine()
         {
-            _chargeEffect.Stop();
-            _components.Constraints.ApplyConstraints(false, _constraints);
+            _isCharging = true;
+            _playerComponents.Constraints.ApplyConstraints(true, _constraints);
 
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
+            GameManager.Instance.CameraManager.PlayerCameraFollow.SetPlayerTargetToPlayerMode(_playerComponents.PlayerIndex);
+            GameManager.Instance.CameraManager.Zoom.PerformFocusZoom();
 
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
-        }
-
-        private IEnumerator HoldRoutine()
-        {
-            _components.Constraints.ApplyConstraints(true, _constraints);
-
-            float timer = 0f;
             _chargeEffect.Play();
 
-            while (_currentEnergy >= _healRequiredEnergy)
+            float timer = 0f;
+
+            while (_currentEnergy >= _healRequiredEnergy && !_health.IsFull())
             {
                 timer += Time.deltaTime;
 
-                if(timer >= _healChargeDuration)
+                if (timer >= _healChargeDuration)
                 {
                     Heal();
                     timer = 0f;
@@ -119,22 +157,56 @@ namespace TankLike.UnitControllers
             }
 
             _chargeEffect.Stop();
-            _components.Constraints.ApplyConstraints(false, _constraints);
+
+            _playerComponents.Constraints.ApplyConstraints(false, _constraints);
+
+            GameManager.Instance.CameraManager.PlayerCameraFollow.SetPlayerTargetToLastMode(_playerComponents.PlayerIndex);
+            GameManager.Instance.CameraManager.Zoom.SetToZoomValue(_lastZoom);
+        }
+
+        private void OnHoldUp(InputAction.CallbackContext context)
+        {
+            if(!_canChargeEnergy || !_isCharging)
+            {
+                return;
+            }
+
+            _isCharging = false;
+
+            _chargeEffect.Stop();
+            _playerComponents.Constraints.ApplyConstraints(false, _constraints);
+
+            GameManager.Instance.CameraManager.PlayerCameraFollow.SetPlayerTargetToLastMode(_playerComponents.PlayerIndex);
+
+            GameManager.Instance.CameraManager.Zoom.SetToZoomValue(_lastZoom);
+
+            if (_holdCoroutine != null)
+            {
+                StopCoroutine(_holdCoroutine);
+            }
+
+            if (_holdCoroutine != null)
+            {
+                StopCoroutine(_holdCoroutine);
+            }
         }
 
         private void Heal()
         {
-            _components.Health.Heal(_healAmount);
+            int amountToheal = Mathf.CeilToInt((float)_healAmount * _healMultiplier);
+            _playerComponents.Health.Heal(_healAmount);
             _blastEffect.Play();
             GameManager.Instance.AudioManager.Play(_healBlastAudio);
-            _currentEnergy -= _healRequiredEnergy;
+            _currentEnergy -= _healRequiredEnergy * (1 / _healMultiplier);
+            CheckForFullEnergy();
             UpdateEnergyUI();
         }
 
         public void AddEnergy(float amount)
         {
             _currentEnergy += amount;
-            _currentEnergy = Mathf.Clamp(_currentEnergy, 0f, _maxEnergy);
+
+            CheckForFullEnergy();
 
             UpdateEnergyUI();
         }
@@ -142,19 +214,47 @@ namespace TankLike.UnitControllers
         public void SetEnergyAmount(float amount)
         {
             _currentEnergy = amount;
-            _currentEnergy = Mathf.Clamp(_currentEnergy, 0f, _maxEnergy);
+
+            CheckForFullEnergy();
+
             UpdateEnergyUI();
+        }
+
+        private void CheckForFullEnergy()
+        {
+            if (_currentEnergy >= _maxEnergy)
+            {
+                int xpPointsToAdd = Mathf.CeilToInt((_currentEnergy - _maxEnergy) * XP_MULTIPLIER);
+                _experience.AddExperience(xpPointsToAdd);
+
+                _currentEnergy = _maxEnergy;
+
+                if (!_isEnergyFull)
+                {
+                    OnEnergyFull?.Invoke();
+                    _isEnergyFull = true;
+                }
+            }
+            else
+            {
+                if (_isEnergyFull)
+                {
+                    OnEnergyEmpty?.Invoke();
+                    _isEnergyFull = false;
+                }
+            }
         }
 
         public void MaxFillEnergy()
         {
             _currentEnergy = _maxEnergy;
+            CheckForFullEnergy();
             UpdateEnergyUI();
         }
 
         private void UpdateEnergyUI()
         {
-            GameManager.Instance.HUDController.PlayerHUDs[_components.PlayerIndex].UpdateEnergyBar(_currentEnergy, _maxEnergy);
+            _HUD.UpdateEnergyBar(_currentEnergy, _maxEnergy);
         }
 
         public float GetCurrentEnergy()
@@ -172,10 +272,28 @@ namespace TankLike.UnitControllers
             return _currentEnergy / _maxEnergy;
         }
 
+        public void EnableFuelUsage(bool enable)
+        {
+            _canChargeEnergy = enable;
+        }
+
+        public void SetHealMultiplier(float multiplier)
+        {
+            _healMultiplier *= multiplier;
+        }
+
+        public void ResetHealMultiplier()
+        {
+            _healMultiplier = 1f;
+        }
+
         #region IController
         public void Activate()
         {
             IsActive = true;
+
+            // Cache last camera zoom amount
+            _lastZoom = GameManager.Instance.CameraManager.Zoom.ZoomAmount;
         }
 
         public void Deactivate()
@@ -185,17 +303,21 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
-            DisposeInput(_components.PlayerIndex);
-
-            if (_holdCoroutine != null)
-            {
-                StopCoroutine(_holdCoroutine);
-            }
+            SetUpInput(_playerComponents.PlayerIndex);
+            _currentEnergy = 0f;
+            UpdateEnergyUI();
         }
 
         public void Dispose()
         {
+            DisposeInput(_playerComponents.PlayerIndex);
+            _currentEnergy = 0f;
+            UpdateEnergyUI();
+
+            this.StopCoroutineSafe(_holdCoroutine);
+
+
+            OnEnergyFull = null;
         }
         #endregion
     }

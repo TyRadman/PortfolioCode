@@ -6,21 +6,43 @@ using UnityEngine;
 
 namespace TankLike.Cam
 {
-    public class CameraShake : MonoBehaviour
+    public class CameraShake : MonoBehaviour, IManager
     {
         [SerializeField] private CameraShakeSettings _defaultShakeSettings;
         [SerializeField] private List<CameraShakeSettings> _cameraShakeSettings;
+
+        public bool IsActive { get; private set; }
+
         private CinemachineBasicMultiChannelPerlin _mainBasicMultiChannelPerlin;
 
-        public void SetUp(CinemachineVirtualCamera camera)
+        public void SetReferences(CinemachineVirtualCamera camera)
         {
             _mainBasicMultiChannelPerlin = camera.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
+        }
+
+        #region IManager
+        public void SetUp()
+        {
+            IsActive = true;
+
             _mainBasicMultiChannelPerlin.m_AmplitudeGain = 0f;
             _mainBasicMultiChannelPerlin.m_FrequencyGain = _defaultShakeSettings.Frequency;
         }
 
+        public void Dispose()
+        {
+            IsActive = false;
+        }
+        #endregion
+
         public void ShakeCamera(CameraShakeType type)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+            
             CameraShakeSettings setting = _cameraShakeSettings.Find(s => s.Type == type);
 
             if(setting == null) 
@@ -35,6 +57,12 @@ namespace TankLike.Cam
 
         public void ShakeCamera(CameraShakeSettings shake)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             if (shake == null)
             {
                 Debug.LogError($"No Shake passed");

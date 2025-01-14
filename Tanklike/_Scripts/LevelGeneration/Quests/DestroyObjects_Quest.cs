@@ -1,19 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Utils;
 using UnityEngine;
-using TankLike.Environment;
-using TankLike.Combat.Destructible;
 
 namespace TankLike.LevelGeneration.Quests
 {
+    using Utils;
+    using Combat.Destructible;
+
     [CreateAssetMenu(fileName = "DestroyObjectsQuest", menuName = "Other/ Quest Types/ Destroy Objects")]
     public class DestroyObjects_Quest : Quest_SO
     {
         [SerializeField] private Vector2Int _objectCountRange = new Vector2Int() { x = 2, y = 7 };
         private int _currentDestroyedObjectCount;
         private int _requiredObjectCount;
-        [SerializeField] private DestructableTag _destructableTag;
+        [SerializeField] private DropperTag _destructableTag;
 
         public override void SetUp(LevelQuestSettings settings)
         {
@@ -24,13 +24,16 @@ namespace TankLike.LevelGeneration.Quests
             GameManager.Instance.ReportManager.OnObjectDestroyed += OnProgress;
         }
 
-        public void OnProgress(DestructableTag tag, int playerIndex)
+        public void OnProgress(DropperTag tag, int playerIndex)
         {
-            if (tag != _destructableTag) return;
+            if (tag != _destructableTag)
+            {
+                return;
+            }
 
             _currentDestroyedObjectCount++;
 
-            OnProgress();
+            OnProgress(this);
         }
 
         public override void OnCompletion()
@@ -68,7 +71,7 @@ namespace TankLike.LevelGeneration.Quests
             newQuest.SetValues(_destructableTag, _objectCountRange);
         }
 
-        public void SetValues(DestructableTag tag, Vector2Int objectsCountRange)
+        public void SetValues(DropperTag tag, Vector2Int objectsCountRange)
         {
             _destructableTag = tag;
             _objectCountRange = objectsCountRange;

@@ -10,6 +10,11 @@ namespace TankLike
         [SerializeField] private Image _barImage;
         [SerializeField] private List<Graphic> _visuals;
 
+        private void OnEnable()
+        {
+
+        }
+
         public void EnableImage()
         {
             _visuals.ForEach(v => v.enabled = true);

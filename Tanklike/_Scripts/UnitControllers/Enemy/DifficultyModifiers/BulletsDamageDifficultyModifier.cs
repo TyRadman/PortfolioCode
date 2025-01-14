@@ -15,12 +15,17 @@ namespace TankLike.UnitControllers
         {
             base.ApplyModifier(enemy, difficulty);
 
-            if(_debug)
+            if (_debug)
             {
-                Debug.Log("Activated");
+                Debug.Log("Difficulty Modifier Activated");
             }
 
             enemy.Shooter.SetWeaponDamage((int)_damageRange.Lerp(difficulty));
+        }
+
+        public void SetDamageRange(Vector2 damageRange)
+        {
+            _damageRange = damageRange;
         }
     }
 }

@@ -1,22 +1,33 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using TankLike.Combat.SkillTree;
+    using UnitControllers;
+
     [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "BulletDeflection", menuName = MENU_ROOT + "Bullet Deflection")]
     public class BulletDeflectionSkill : Skill
     {
         [Header("Special Values")]
-        [SerializeField] private Deflection _deflectionInfo;
+        [SerializeField] private FiniteDeflections _deflectionInfo;
 
-        public override void SetUp(TankComponents components)
+        public override void ApplyStats(TankComponents components)
         {
-            base.SetUp(components);
+            //components.Shooter.SetDeflection(_deflectionInfo);
+        }
 
-            TankShooter shooter = components.Shooter;
-            shooter.SetDeflection(_deflectionInfo);
+        public override void PopulateStatProperties()
+        {
+            SkillProperties deflectionsCount = new SkillProperties()
+            {
+                Name = "Number of deflections",
+                Value = _deflectionInfo.MaxDeflections.ToString(),
+                DisplayColor = Colors.Gray
+            };
+
+            StatProperties.Add(deflectionsCount);
         }
     }
 }

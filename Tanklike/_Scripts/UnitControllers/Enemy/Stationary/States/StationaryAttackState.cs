@@ -31,10 +31,10 @@ namespace TankLike.UnitControllers.States
         public override void OnEnter()
         {
             _isActive = true;
-            _target = _isImageTarget ? _shooter.GetCurrentTarget().PlayerTransform : _shooter.GetCurrentTarget().ImageTransform;
+            _target = !_isImageTarget ? _shooter.GetCurrentTarget().PlayerTransform : _shooter.GetCurrentTarget().ImageTransform;
             _targetTransform = _shooter.GetCurrentTarget();
 
-            _shooter.TelegraphAttack();
+            _shooter.StartTelegraph();
         }
 
         public override void OnUpdate()

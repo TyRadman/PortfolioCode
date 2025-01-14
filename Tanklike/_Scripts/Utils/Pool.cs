@@ -37,6 +37,7 @@ namespace TankLike.Utils
             {
                 list += _pool[i].ToString() + " ";
             }
+
             return list;
         }
 

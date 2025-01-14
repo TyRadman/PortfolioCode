@@ -10,7 +10,12 @@ namespace TankLike.UnitControllers.States
     {
         public override void SetUp(StateMachine<EnemyStateType> stateMachine, EnemyComponents enemyComponents)
         {
-            _stateMachine = stateMachine;
+            base.SetUp(stateMachine, enemyComponents);
+        }
+
+        public override void OnEnter()
+        {
+            base.OnEnter();
         }
     }
 }

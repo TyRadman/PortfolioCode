@@ -9,10 +9,9 @@ namespace TankLike.UnitControllers
         [Header("Settings")]
         [SerializeField] private Transform _summonShooterPoint;
 
-        protected override void Awake()
+        protected void Awake()
         {
-            base.Awake();
-            _shootingPoints.Add(_summonShooterPoint);
+            ShootingPoints.Add(_summonShooterPoint);
         }
 
         public bool ShouldAttackEnemies()
@@ -25,7 +24,7 @@ namespace TankLike.UnitControllers
             return true;
         }
 
-        public EnemyAIController GetClosestTarget()
+        public EnemyComponents GetClosestTarget()
         {
             if (GameManager.Instance.RoomsManager.CurrentRoom == null)
             {
@@ -44,7 +43,7 @@ namespace TankLike.UnitControllers
                 return null;
             }
 
-            EnemyAIController closestEnemy = enemiesList[0];
+            EnemyComponents closestEnemy = enemiesList[0];
             float dist = Vector3.Distance(transform.position, closestEnemy.transform.position);
 
             for (int i = 1; i < enemiesList.Count; i++)
@@ -61,10 +60,10 @@ namespace TankLike.UnitControllers
 
         public void ShootTarget(Transform target)
         {
-            Vector3 dir = target.position - _shootingPoints[0].position;
+            Vector3 dir = target.position - ShootingPoints[0].position;
             dir.Normalize();
-            _shootingPoints[0].rotation = Quaternion.LookRotation(dir);
-            _currentWeapon.OnShot(_shootingPoints[0]);
+            ShootingPoints[0].rotation = Quaternion.LookRotation(dir);
+            _currentWeapon.OnShot(ShootingPoints[0]);
         }
     }
 }

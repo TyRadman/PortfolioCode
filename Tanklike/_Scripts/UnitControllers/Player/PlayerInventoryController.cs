@@ -1,20 +1,30 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerInventoryController : MonoBehaviour, IInput, IController
+    using Utils;
+
+    public class PlayerInventoryController : MonoBehaviour, IInput, IController, IConstraintedComponent
     {
         public bool IsActive { get; private set; }
-        private PlayerComponents _components;
+        public bool IsConstrained { get; set; }
 
-        public void SetUp(PlayerComponents components)
+        private PlayerComponents _playerComponents;
+
+        public void SetUp(IController controller)
         {
-            _components = components;
-            SetUpInput(_components.PlayerIndex);
+            PlayerComponents components = controller as PlayerComponents;
+
+            if (components == null)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _playerComponents = components;
         }
 
         #region Input
@@ -51,25 +61,39 @@ namespace TankLike.UnitControllers
 
         private void OpenInventory(InputAction.CallbackContext _)
         {
-            // disable the Pause menu controller so that the inputs don't interfere 
-            _components.UIController.EnablePauseMenuController(false);
-            GameManager.Instance.InputManager.DisableInputs();
-            GameManager.Instance.InputManager.EnableUIInput(_components.PlayerIndex);
-            GameManager.Instance.Inventory.Open(_components.PlayerIndex);
-        }
+            if (IsConstrained)
+            {
+                return;
+            }
 
-        public void CloseInventory(InputAction.CallbackContext _)
-        {
             if (!GameManager.Instance.Inventory.IsActive)
             {
                 return;
             }
 
-            print("Performed");
+            // disable the Pause menu controller so that the inputs don't interfere 
+            _playerComponents.UIController.EnablePauseMenuController(false);
+            GameManager.Instance.InputManager.DisableInputs();
+            GameManager.Instance.InputManager.EnableUIInput(_playerComponents.PlayerIndex);
+            GameManager.Instance.Inventory.Open(_playerComponents.PlayerIndex);
+
+            GameManager.Instance.HUDController.HideHUD();
+        }
+
+        public void CloseInventory(InputAction.CallbackContext _)
+        {
+            if (!GameManager.Instance.Inventory.IsOpened)
+            {
+                return;
+            }
+
+            //print("Performed");
             // enable the input for the pause manager
-            _components.UIController.EnablePauseMenuController(true);
+            _playerComponents.UIController.EnablePauseMenuController(true);
             GameManager.Instance.InputManager.EnablePlayerInput();
-            GameManager.Instance.Inventory.Close(_components.PlayerIndex);
+            GameManager.Instance.Inventory.Close(_playerComponents.PlayerIndex);
+
+            GameManager.Instance.HUDController.DisplayHUD();
         }
 
         public void TabRight(InputAction.CallbackContext _)
@@ -82,25 +106,31 @@ namespace TankLike.UnitControllers
             GameManager.Instance.Inventory.SwitchTabs(Direction.Left);
         }
 
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canOpenInventory = (constraints & AbilityConstraint.Inventory) == 0;
+            IsConstrained = !canOpenInventory;
+        }
+
         #region IController
         public void Activate()
         {
-
+            IsActive = true;
         }
 
         public void Deactivate()
         {
-
-        }
-
-        public void Dispose()
-        {
-            DisposeInput(_components.PlayerIndex);
+            IsActive = false;
         }
 
         public void Restart()
         {
-            DisposeInput(_components.PlayerIndex);
+            SetUpInput(_playerComponents.PlayerIndex);
+        }
+
+        public void Dispose()
+        {
+            DisposeInput(_playerComponents.PlayerIndex);
         }
         #endregion
     }

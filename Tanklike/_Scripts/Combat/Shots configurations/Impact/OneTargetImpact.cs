@@ -15,7 +15,8 @@ namespace TankLike.UnitControllers
             // whatever definition the target has for this method
             if (target != null)
             {
-                target.TakeDamage(damage, Vector3.zero, bullet.GetInstigator(), bullet.transform.position); //not sure if we need the direction yet
+                Transform bulletTransform = bullet.transform;
+                target.TakeDamage(damage, bulletTransform.forward, bullet.GetInstigator(), bulletTransform.position, bullet); //not sure if we need the direction yet
             }
 
             // play the effect 

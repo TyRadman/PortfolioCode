@@ -25,7 +25,8 @@ namespace TankLike.UnitControllers.States
 
         public override void OnEnter()
         {
-            Debug.Log("TAUNT STATE");
+            base.OnEnter();
+
             _isActive = true;
 
             _components.StartCoroutine(IntroductionRoutine());
@@ -49,7 +50,7 @@ namespace TankLike.UnitControllers.States
             ((ThreeCannonBossAnimations)_animations).TriggerGroundPoundAnimation();
             yield return new WaitForSeconds(1f); //dirty
 
-            _components.AIController.FinishBossIntroduction();       
+            _components.Activate();       
         }
 
         private void OnGroundPoundImpactHandler()

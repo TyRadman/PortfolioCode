@@ -6,7 +6,7 @@ using System.Linq;
 using TankLike.UnitControllers;
 using TankLike.Utils;
 using TankLike.Combat;
-using TankLike.SkillTree;
+using TankLike.Combat.SkillTree;
 
 namespace TankLike.UI.SkillTree
 {
@@ -23,7 +23,6 @@ namespace TankLike.UI.SkillTree
         [SerializeField] private Transform _linesParent;
         [SerializeField] private SkillTreeCell _centerCell;                                                                                                                                        
         [Header("Values")]
-        [SerializeField][Range(70f, 600f)] private float _parentsOffsetFromCenter = 180f;
         [SerializeField] private float _distanceBetweenCells = 50f;
         private List<SkillTreeCell> _cells = new List<SkillTreeCell>();
         private Vector2[] _parentsDirections = new Vector2[] { Vector2.up, Vector2.left, Vector2.down, Vector2.right };
@@ -45,7 +44,7 @@ namespace TankLike.UI.SkillTree
         public void BuildSkillTree(SkillTreePrefab skillTreePrefab)
         {
             _skillTree = skillTreePrefab;
-            _paths = skillTreePrefab.Paths;
+            //_paths = skillTreePrefab.Paths;
             CreateSkillTree();
         }
 
@@ -65,7 +64,6 @@ namespace TankLike.UI.SkillTree
         {
             DeleteCells();
             GenerateRandomBranch();
-            CreateMainPaths();
             SetUpInput(0);
             SetUpProgressionPaths();
             HideRandomBranch(_paths[BRANCHES_NUMBER - 1]);
@@ -84,31 +82,6 @@ namespace TankLike.UI.SkillTree
         }
 
         #region Tree Generation
-        private void OffsetParentsFromCenter()
-        {
-            for (int i = 0; i < _skillTreeParents.Length; i++)
-            {
-                _skillTreeParents[i].localPosition = (Vector3)_parentsDirections[i] * _parentsOffsetFromCenter;
-            }
-        }
-
-        public void CreateMainPaths()
-        {
-            return;
-            //_centerCell.SetUp(null);
-            _cells.Add(_centerCell);
-            OffsetParentsFromCenter();
-
-            for (int i = 0; i < _paths.Count; i++)
-            {
-                BuildPaths(_paths[i], _skillTreeParents[i], _skillTreeParents[i].position);
-                // The main cell in each branch
-                CreateCell(_cellPrefab, _skillTreeParents[i].position, _skillTreeParents[i], _linesParent.position, _paths[i]);
-                // set it to unlockable
-                _paths[i].Cell.ChangeCellState(CellState.Locked);
-            }
-        }
-
         private void BuildPaths(Path path, Transform parent, Vector2 lastPosition)
         {
             // make sure there are no more than 3
@@ -141,9 +114,6 @@ namespace TankLike.UI.SkillTree
             float angle = Mathf.Atan2(parentPosition.y - previousPosition.y, parentPosition.x - previousPosition.x) * Mathf.Rad2Deg + 90;
             Vector2 position = parentPosition;
             SkillTreeLine line = Instantiate(_linePrefab, position, Quaternion.identity, _linesParent);
-            line.LineTransfrom.sizeDelta = new Vector2(line.LineTransfrom.sizeDelta.x, Vector2.Distance(parentPosition, previousPosition) + line.LineTransfrom.sizeDelta.x / 2);
-            line.LineTransfrom.eulerAngles = new Vector3(0f, 0f, angle);
-            _lines.Add(line.LineTransfrom);
             path.Lines.Add(line);
             
             if (cellPrefab == null) return;
@@ -398,7 +368,7 @@ namespace TankLike.UI.SkillTree
                 return;
             }
 
-            _skillTree.CopyPaths(_paths);
+            //_skillTree.CopyPaths(_paths);
         }
 
         public void SaveAsNewSkillTree(string name)
@@ -406,7 +376,7 @@ namespace TankLike.UI.SkillTree
             if(name.Length == 0) name = "Skill tree";
 
             _skillTree = ScriptableObject.CreateInstance<SkillTreePrefab>();
-            _skillTree.CopyPaths(_paths);
+            //_skillTree.CopyPaths(_paths);
 #if UNITY_EDITOR
             AssetDatabase.CreateAsset(_skillTree, SKILL_TREE_PATH + name + ".asset");
             AssetDatabase.SaveAssets();
@@ -422,7 +392,7 @@ namespace TankLike.UI.SkillTree
                 return;
             }
 
-            _paths = _skillTree.Paths;
+            //_paths = _skillTree.Paths;
 
             if(_paths.Count < 3)
             {

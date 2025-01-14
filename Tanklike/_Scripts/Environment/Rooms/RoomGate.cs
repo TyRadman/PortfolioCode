@@ -1,11 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Minimap;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using TankLike.Minimap;
+
     public class RoomGate : MonoBehaviour
     {
         public int GateID { set; get; } = -1;
@@ -28,6 +28,9 @@ namespace TankLike.Environment
         [SerializeField] protected MinimapIcon _minimapIcon;
         [SerializeField] protected Material _openGateIconMaterial;
         [SerializeField] protected Material _closedGateIconMaterial;
+        [SerializeField] protected GameObject _unknownGateIcon;
+        [SerializeField] protected Vector3 _unknownGateIconScale = new Vector3(1.5f, 1.5f, 1.5f);
+        [SerializeField] protected Vector3 _unknownGateIconRotation = new Vector3(90f, -90f, 0f);
         [field: SerializeField] public GateDirection Direction { set; get; }
         public Transform[] StartPoints => _startPoints;
         private bool _isActive = true;
@@ -48,7 +51,38 @@ namespace TankLike.Environment
                 _barrier.SetActive(false);
             }
 
-            _minimapIcon.SwitchMeshMaterial(_openGateIconMaterial);
+            if (ConnectedRoom.WasVisited || ConnectedRoom.RoomType == RoomType.Boss)
+            {
+                if (ConnectedRoom.WasVisited)
+                {
+                    _minimapIcon.gameObject.SetActive(true);
+                    _minimapIcon.SwitchMeshMaterial(_openGateIconMaterial);
+
+                    if (_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(false);
+                        _unknownGateIcon.transform.parent = _minimapIcon.transform;
+                    }
+
+                }
+                else
+                {
+                    _minimapIcon.gameObject.SetActive(false);
+
+                    if(_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(true);
+                        _unknownGateIcon.transform.parent = null;
+                        _unknownGateIcon.transform.rotation = Quaternion.Euler(_unknownGateIconRotation);
+                        _unknownGateIcon.transform.localScale = _unknownGateIconScale;
+                    }
+                }
+            }
+        }
+
+        public Transform GetGateGraphicsTransform()
+        {
+            return _gateVisuals.transform;
         }
 
         /// <summary>
@@ -58,6 +92,34 @@ namespace TankLike.Environment
         {
             _newRoomEnterTrigger.OnTriggerEnterEvent += SwitchRoom;
             _gateExitTrigger.OnTriggerEnterEvent += OnRoomEntered;
+
+            if (ConnectedRoom != null)
+            {
+                if (ConnectedRoom.WasVisited || ConnectedRoom.RoomType == RoomType.Boss)
+                {
+                    _minimapIcon.gameObject.SetActive(true);
+                    _minimapIcon.SwitchMeshMaterial(_openGateIconMaterial);
+
+                    if (_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(false);
+                        _unknownGateIcon.transform.parent = _minimapIcon.transform;
+                    }
+
+                }
+                else
+                {
+                    _minimapIcon.gameObject.SetActive(false);
+
+                    if (_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(true);
+                        _unknownGateIcon.transform.parent = null;
+                        _unknownGateIcon.transform.rotation = Quaternion.Euler(_unknownGateIconRotation);
+                        _unknownGateIcon.transform.localScale = _unknownGateIconScale;
+                    }
+                }
+            }
         }
 
         public void DisableGate()
@@ -88,14 +150,47 @@ namespace TankLike.Environment
             _barrier.SetActive(true);
             _gateAnimator.Play("Close");
             _gateExitTrigger.gameObject.SetActive(false);
+            _minimapIcon.gameObject.SetActive(true);
             _minimapIcon.SwitchMeshMaterial(_closedGateIconMaterial);
+
+            if (_unknownGateIcon != null)
+            {
+                _unknownGateIcon.SetActive(false);
+                _unknownGateIcon.transform.parent = _minimapIcon.transform;
+            }
         }
 
         public virtual void OpenGate()
         {
             _barrier.SetActive(false);
             _gateAnimator.Play("Open");
-            _minimapIcon.SwitchMeshMaterial(_openGateIconMaterial);
+
+            if (ConnectedRoom != null)
+            {
+                if (ConnectedRoom.WasVisited || ConnectedRoom.RoomType == RoomType.Boss)
+                {
+                    _minimapIcon.gameObject.SetActive(true);
+                    _minimapIcon.SwitchMeshMaterial(_openGateIconMaterial);
+
+                    if (_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(false);
+                        _unknownGateIcon.transform.parent = _minimapIcon.transform;
+                    }
+                }
+                else
+                {
+                    _minimapIcon.gameObject.SetActive(false);
+
+                    if (_unknownGateIcon != null)
+                    {
+                        _unknownGateIcon.SetActive(true);
+                        _unknownGateIcon.transform.parent = null;
+                        _unknownGateIcon.transform.rotation = Quaternion.Euler(_unknownGateIconRotation);
+                        _unknownGateIcon.transform.localScale = _unknownGateIconScale;
+                    }
+                }
+            }
         }
         #endregion
 

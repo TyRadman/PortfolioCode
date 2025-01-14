@@ -77,10 +77,6 @@ namespace TankLike.UI
                 return;
             }
 
-            ///PARENT CHECKING///
-            // we set this cell as the last selected cell right before turning it off
-            ParentCell.SetLastCell(this);
-
             // if the next cell is a group, then perfrom movement through the group
             if (selectedSelectable.Type == SelectableType.Group)
             {

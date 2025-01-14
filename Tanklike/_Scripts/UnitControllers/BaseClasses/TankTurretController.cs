@@ -7,20 +7,24 @@ namespace TankLike.UnitControllers
     {
         [Header("Turret")]
         [SerializeField] protected float _rotationSpeed = 50f;
-
-        protected const float ROTATION_CORRECTION_THRESHOLD = 0.1f;
         [SerializeField] private float _minimumThreshold = 0.8f;
-        
-
-        protected bool _canRotate = true;
-
-        protected Transform _turret;
-        protected Transform Body;
 
         public bool IsActive { get; protected set; }
+        
+        protected Transform _turret;
+        protected Transform Body;
+        protected bool _canRotate = true;
 
-        public void SetUp(TankComponents components)
+        protected const float ROTATION_CORRECTION_THRESHOLD = 0.1f;
+
+        public void SetUp(IController controller)
         {
+            if (controller is not TankComponents components)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
             TankBodyParts parts = components.TankBodyParts;
 
             _turret = parts.GetBodyPartOfType(BodyPartType.Turret).transform;
@@ -28,6 +32,12 @@ namespace TankLike.UnitControllers
 
         public virtual void HandleTurretRotation(Transform crosshair)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"IController {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             Vector3 direction = (crosshair.position - _turret.position).normalized;
             Vector3 tankForward = _turret.forward.normalized;
             Vector3 crossDot = Vector3.Cross(tankForward, direction);
@@ -71,6 +81,12 @@ namespace TankLike.UnitControllers
 
         public virtual void HandleTurretRotation(Vector3 crosshair)
         {
+            if (!IsActive)
+            {
+                Debug.LogError($"IController {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
             Vector3 direction = (crosshair - _turret.position).normalized;
             Vector3 tankForward = _turret.forward.normalized;
             Vector3 crossDot = Vector3.Cross(tankForward, direction);
@@ -112,31 +128,6 @@ namespace TankLike.UnitControllers
             _turret.Rotate(_rotationSpeed * rotationAmount * Time.deltaTime * Vector3.up);
         }
 
-        protected void RotateTank(float rotationSpeed)
-        {
-            if (!_canRotate)
-            {
-                return;
-            }
-
-            transform.RotateAround(transform.position, transform.up, Time.deltaTime * rotationSpeed);
-        }
-
-        protected void RotateTurret(float rotationSpeed)
-        {
-            if (!_canRotate)
-            {
-                return;
-            }
-
-            _turret.RotateAround(transform.position, transform.up, Time.deltaTime * rotationSpeed);
-        }
-
-        public void EnableRotation(bool canRotate)
-        {
-            _canRotate = canRotate;
-        }
-
         #region IController
         public virtual void Activate()
         {
@@ -150,7 +141,7 @@ namespace TankLike.UnitControllers
 
         public virtual void Restart()
         {
-            IsActive = false;
+
         }
 
         public virtual void Dispose()

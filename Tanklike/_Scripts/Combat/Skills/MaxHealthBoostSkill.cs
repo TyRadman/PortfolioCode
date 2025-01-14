@@ -1,22 +1,34 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.Combat
 {
+    using Combat.SkillTree;
+    using UnitControllers;
+
     [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "MaxHealthBoost", menuName = MENU_ROOT + "Max Health Boost")]
     public class MaxHealthBoostSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private int _healthPoints = 100;
 
-        // what the skill does when it is added to the tank 
-        public override void SetUp(TankComponents components)
+        public override void ApplyStats(TankComponents components)
         {
-            base.SetUp(components);
             components.Health.AddToMaxHealth(_healthPoints);
         }
 
+        public override void PopulateStatProperties()
+        {
+            SkillProperties speedIncrement = new SkillProperties()
+            {
+                Name = "Health to add",
+                Value = _healthPoints.ToString(),
+                DisplayColor = Colors.Green,
+                UnitString = PropertyUnits.POINTS
+            };
+
+            StatProperties.Add(speedIncrement);
+        }
     }
 }

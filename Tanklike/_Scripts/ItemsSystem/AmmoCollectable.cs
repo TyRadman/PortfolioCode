@@ -7,9 +7,9 @@ namespace TankLike.ItemsSystem
 {
     public class AmmoCollectable : Collectable
     {
-        public override void OnCollected(PlayerComponents player)
+        public override void OnCollected(IPlayerController player)
         {
-            player.Overheat.FillBars();
+            //player.Overheat.FillBars();
 
             base.OnCollected(player);
         }

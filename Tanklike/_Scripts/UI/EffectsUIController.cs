@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace TankLike.UI
 {
-    public class EffectsUIController : MonoBehaviour
+    public class EffectsUIController : MonoBehaviour, IManager
     {
         [SerializeField] private ParticleSystem  _speedLinesParticles;
 
@@ -15,24 +15,56 @@ namespace TankLike.UI
         [SerializeField] private Animation _levelNameAnimation;
         [SerializeField] private AnimationClip _showAnimationClip;
         [SerializeField] private AnimationClip _hideAnimationClip;
-        
+
+        public bool IsActive { get; private set; }
+
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             _levelNameParent.SetActive(false);
         }
 
+        public void Dispose()
+        {
+            IsActive = false;
+
+            StopAllCoroutines();
+            _levelNameParent.SetActive(false);
+        }
+        #endregion
+
         public void PlaySpeedLinesEffect()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             _speedLinesParticles.Play();
         }
 
         public void StopSpeedLinesEffect()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             _speedLinesParticles.Stop();
         }
 
         public void ShowLevelName()
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             StartCoroutine(ShowLevelNameProcess());
         }
 

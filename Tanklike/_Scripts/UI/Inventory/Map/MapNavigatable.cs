@@ -19,8 +19,12 @@ namespace TankLike.UI.Inventory
         [SerializeField] private LevelMapDisplayer _mapDisplayer;
         
         private Vector2 _movementDirection;
-        
-        private const float MAP_LIMIT = 400f;
+        private Coroutine _movementCoroutine;
+
+        private const float MAP_LIMIT_UP = 400f;
+        private const float MAP_LIMIT_DOWN = -400f;
+        private const float MAP_LIMIT_LEFT = -400f;
+        private const float MAP_LIMIT_RIGHT = 400f;
 
         private void Start()
         {
@@ -35,7 +39,11 @@ namespace TankLike.UI.Inventory
             SetUpInput(playerIndex);
             _mapDisplayer.OnMapOpened();
             _movementDirection = Vector2.zero;
-            StartCoroutine(MovementProcess());
+
+
+            this.StopCoroutineSafe(_movementCoroutine);
+
+            _movementCoroutine = StartCoroutine(MovementProcess());
         }
 
         public override void Close(int playerIndex)
@@ -43,6 +51,8 @@ namespace TankLike.UI.Inventory
             base.Close(playerIndex);
             DisposeInput(playerIndex);
             SetPlayerIndex(-1);
+
+            this.StopCoroutineSafe(_movementCoroutine);
         }
         #endregion
 
@@ -77,7 +87,7 @@ namespace TankLike.UI.Inventory
             UIMap.FindAction(c.UI.Navigate_Down.name).canceled -= CancelNavigationDown;
         }
 
-        #region Repetitive methods
+        #region Input Methods
         public override void NavigateLeft(InputAction.CallbackContext _)
         {
             base.NavigateLeft(_);
@@ -125,9 +135,9 @@ namespace TankLike.UI.Inventory
 
         private IEnumerator MovementProcess()
         {
-            while (IsActive)
+            while (IsOpened)
             {
-                _mapBody.localPosition += new Vector3(_movementDirection.x, _movementDirection.y, 0f) * Time.deltaTime;
+                _mapBody.localPosition += new Vector3(_movementDirection.x, _movementDirection.y, 0f) * Time.unscaledDeltaTime;
                 ClampCameraPosition();
                 yield return null;
             }
@@ -135,14 +145,17 @@ namespace TankLike.UI.Inventory
 
         private void ClampCameraPosition()
         {
-            float x = Mathf.Clamp(_mapBody.localPosition.x, -MAP_LIMIT, MAP_LIMIT);
-            float y = Mathf.Clamp(_mapBody.localPosition.y, -MAP_LIMIT, MAP_LIMIT);
+            float x = Mathf.Clamp(_mapBody.localPosition.x, MAP_LIMIT_LEFT, MAP_LIMIT_RIGHT);
+            float y = Mathf.Clamp(_mapBody.localPosition.y, MAP_LIMIT_DOWN, MAP_LIMIT_UP);
             _mapBody.localPosition = new Vector3(x, y, 0);
         }
 
         public override void Navigate(Direction direction)
         {
-            if (!IsActive) return;
+            if (!IsOpened)
+            {
+                return;
+            }
 
             base.Navigate(direction);
 
@@ -151,7 +164,10 @@ namespace TankLike.UI.Inventory
 
         private void StopNavigation(Direction direction)
         {
-            if (!IsActive) return;
+            if (!IsOpened)
+            {
+                return;
+            }
 
             ChangeMovementDirection(direction, -1f);
         }

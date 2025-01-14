@@ -16,8 +16,15 @@ namespace TankLike.Environment.MapMaker
 
         public virtual void PlaceTile(ref TileData[,] tiles, int x, int y)
         {
-            if (tiles[x, y] == null) Debug.LogError($"No tiles at {x}, {y}");
-            if (tiles[x, y].Arranger == null) Debug.LogError($"No arrange at tile {x}, {y}");
+            if (tiles[x, y] == null)
+            {
+                Debug.LogError($"No tiles at {x}, {y}");
+            }
+
+            if (tiles[x, y].Arranger == null)
+            {
+                Debug.LogError($"No arrange at tile {x}, {y}");
+            }
 
             // remove the tile that exists on the same axis
             tiles[x, y].Arranger.RemoveTile(ref tiles, x, y);

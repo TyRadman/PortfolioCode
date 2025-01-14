@@ -1,18 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike.ItemsSystem
 {
+    using UnitControllers;
+
     public class BossRoomKey_Collectable : Collectable
     {
-        public override void OnCollected(PlayerComponents player)
+        public override void OnCollected(IPlayerController player)
         {
             base.OnCollected(player);
+
             // increment the count
             GameManager.Instance.BossKeysManager.OnKeyCollected();
-            //GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, player.PlayerIndex);
         }
 
         public override void DisableCollectable()

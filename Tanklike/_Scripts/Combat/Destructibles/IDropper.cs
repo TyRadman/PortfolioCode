@@ -1,14 +1,17 @@
-using System.Collections;
-using System.Collections.Generic;
-using TankLike.Environment.LevelGeneration;
-using UnityEngine;
-
 namespace TankLike.Combat.Destructible
 {
+    using Environment.LevelGeneration;
+
     public interface IDropper
     {
-        List<DropChance> CollecatblesToSpawn { set; get; }
-        DestructableTag Tag { get; }
+        DropperTag DropperTag { get; }
         void SetCollectablesToSpawn(DestructibleDrop collectables);
+    }
+
+    public enum DropperTag
+    {
+        Crate = 0,
+        Stone = 1,
+        None = 1000,
     }
 }

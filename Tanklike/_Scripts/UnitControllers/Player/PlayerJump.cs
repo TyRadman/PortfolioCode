@@ -1,25 +1,32 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Sound;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using System;
 
 namespace TankLike.UnitControllers
 {
-    public class PlayerJump : MonoBehaviour, IController
+    using Utils;
+    using Sound;
+
+    public class PlayerJump : MonoBehaviour, IController, IConstraintedComponent
     {
+        public bool IsActive { get; private set; }
+        public bool IsJumping { get; private set; }
+        public Action OnJumped { get; internal set; }
+        public bool IsConstrained { get; set; }
+
         [Header("Jump Settings")]
         [SerializeField] private float _jumpMaxHeight;
+        [SerializeField] private float _failedJumpMaxHeight = 0.3f;
         [SerializeField] private AnimationCurve _JumpCurve;
         [SerializeField] private AnimationCurve _fallCurve;
         [SerializeField] private float _jumpDuration;
         [SerializeField] private float _flyDuration;
         [SerializeField] private float _fallDuration;
-        //[SerializeField] private float _jumpCooldown = 1f;
         [Tooltip("The point during the fall process at which the player becames vulnerable."), Range(0f, 1f)]
         [SerializeField] private float _invincibilityEndTime = 0f;
+        [SerializeField] private Light _jumpLight;
 
         [Header("Fuel Settings")]
         [SerializeField] private float _jumpFuelConsumptionPerSecond = 20f;
@@ -29,51 +36,56 @@ namespace TankLike.UnitControllers
         [Header("Other Settings")]
         [SerializeField] private AbilityConstraint _constraints;
         [SerializeField] private Audio _thrusterAudio;
+        [SerializeField] private Wiggle _onJumpWiggle;
         [SerializeField] private Wiggle _onBoostingWiggle;
+        [SerializeField] private Wiggle _onFailedJumpWiggle;
 
         [Header("References")]
         [SerializeField] private Transform _playerRenderer;
         [SerializeField] private JumpBar _UIBar;
 
-        [SerializeField] private bool _canJump;
-
-        private PlayerComponents _components;
+        private PlayerComponents _playerComponents;
         private PlayerFuel _fuel;
         private List<ParticleSystem> _thrusters;
         private List<ParticleSystem> _tracks;
         private ParticleSystem _landParticles;
 
-        private bool _isJumpPressed;
-        private bool _isflying;
-        private bool _isUsingFuel;
-        private bool _isCooldown;
-        private Vector3 _rendererGroundedPosition;
         private Coroutine _jumpCoroutine;
         private Coroutine _flyCoroutine;
         private Coroutine _fallCoroutine;
         private Coroutine _cooldownCoroutine;
+        private Vector3 _rendererGroundedPosition;
+        private bool _isJumpPressed;
+        private bool _isflying;
+        private bool _isUsingFuel;
+        private bool _isCooldown;
+        private bool _isFailedJumpBeingPerformed = false;
 
         private const int JUMP_LAYER = 22;
         private const int PLAYER_DAMAGEABLE_LAYER = 23;
 
-        public bool IsActive { get; private set; }
-        public bool IsJumping { get; private set; }
-        public Action OnJumped { get; internal set; }
-
-        public void SetUp(PlayerComponents components)
+        public void SetUp(IController controller)
         {
-            TankBodyParts parts = components.TankBodyParts;
+            if (controller is not PlayerComponents playerComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
 
-            _components = components;
-            _fuel = components.Fuel;
+            _playerComponents = playerComponents;
+            _fuel = _playerComponents.Fuel;
 
-            var carrier = (TankCarrier)parts.GetBodyPartOfType(BodyPartType.Carrier);
-            var body = (TankBody)parts.GetBodyPartOfType(BodyPartType.Body);
+            TankBodyParts parts = _playerComponents.TankBodyParts;
+
+            TankCarrier carrier = (TankCarrier)parts.GetBodyPartOfType(BodyPartType.Carrier);
+            TankBody body = (TankBody)parts.GetBodyPartOfType(BodyPartType.Body);
 
             _thrusters = carrier.ThrustersParticles;
             _tracks = carrier.TracksParticles;
             _landParticles = body.LandParticles;
             _rendererGroundedPosition = _playerRenderer.localPosition;
+
+            _jumpLight.enabled = false;
         }
 
         #region Input
@@ -96,17 +108,29 @@ namespace TankLike.UnitControllers
 
         public void OnJumpInputDown(InputAction.CallbackContext context)
         {
-            if (!IsActive || !_canJump || _isCooldown)
+            bool unableToJump = !IsActive || _isCooldown || IsConstrained;
+
+            if (unableToJump)
             {
                 return;
             }
 
-            if (_fuel.HasEnoughFuel(_jumpFuelInitialConsumption))
+            PerformJump();
+        }
+
+        private void PerformJump()
+        {
+            if (_fuel.HasEnoughFuel(_jumpFuelInitialConsumption) && !_isFailedJumpBeingPerformed)
             {
                 OnJumpStarted();
                 OnJumped?.Invoke();
                 _jumpCoroutine = StartCoroutine(JumpRoutine());
                 StartCoroutine(FuelConsumptionRoutine());
+                _jumpLight.enabled = true;
+            }
+            else
+            {
+                PerformFailedJump();
             }
         }
 
@@ -127,11 +151,12 @@ namespace TankLike.UnitControllers
             PerformForwardWiggle();
 
             IsJumping = true;
-            _components.Constraints.ApplyConstraints(true, _constraints);
+            _playerComponents.AimAssist.SaveLastInputState();
+            _playerComponents.Constraints.ApplyConstraints(true, _constraints);
             _thrusters.ForEach(e => e.Play());
             _tracks.ForEach(e => e.Stop());
             GameManager.Instance.AudioManager.Play(_thrusterAudio);
-            _components.Health.SwitchDamageDetectorsLayer(JUMP_LAYER); //dirty
+            _playerComponents.Health.SetDamageDetectorsLayer(JUMP_LAYER); //dirty
 
             _UIBar.PlayShowAnimation();
             _UIBar.SetAmount(1f);
@@ -140,12 +165,14 @@ namespace TankLike.UnitControllers
 
         private void PerformForwardWiggle()
         {
-            if (!_components.PlayerBoost.IsBoosting)
+            if (!_playerComponents.PlayerBoost.IsBoosting)
             {
-                return;
+                _playerComponents.TankWiggler.WiggleBody(_onJumpWiggle);
             }
-
-            _components.TankWiggler.WiggleBody(_onBoostingWiggle);
+            else
+            {
+                _playerComponents.TankWiggler.WiggleBody(_onBoostingWiggle);
+            }
         }
 
         private IEnumerator JumpRoutine()
@@ -159,7 +186,7 @@ namespace TankLike.UnitControllers
                 float progress = timer / _jumpDuration;
                 _playerRenderer.localPosition = _rendererGroundedPosition + new Vector3(0f, _JumpCurve.Evaluate(progress) * _jumpMaxHeight, 0f);
 
-                _components.Animation.AnimateMovement(true, 1, 0, 0); // dirty
+                _playerComponents.Animation.AnimateMovement(true, 1, 0, 0); // dirty
 
                 yield return null;
             }
@@ -179,7 +206,7 @@ namespace TankLike.UnitControllers
                     break;
                 }
 
-                _components.Animation.AnimateMovement(true, 1, 0, 0); // dirty
+                _playerComponents.Animation.AnimateMovement(true, 1, 0, 0); // dirty
                 timer += Time.deltaTime;
                 _UIBar.SetAmount(1 - timer / _flyDuration);
                 yield return null;
@@ -187,7 +214,7 @@ namespace TankLike.UnitControllers
 
             _isUsingFuel = false;
             _isflying = false;
-            _thrusters.ForEach(e => e.Stop());
+            StopThrusters();
             _fallCoroutine = StartCoroutine(FallRoutine());
         }
 
@@ -205,11 +232,11 @@ namespace TankLike.UnitControllers
                 progress = timer / _fallDuration;
                 _playerRenderer.localPosition = _rendererGroundedPosition + new Vector3(0f, _fallCurve.Evaluate(progress) * _jumpMaxHeight, 0f);
 
-                _components.Animation.AnimateMovement(true, 1, 0, 0); // dirty
+                _playerComponents.Animation.AnimateMovement(true, 1, 0, 0); // dirty
 
                 if(progress >= _invincibilityEndTime && !isVulnerable)
                 {
-                    _components.Health.SwitchDamageDetectorsLayer(PLAYER_DAMAGEABLE_LAYER);
+                    _playerComponents.Health.SetDamageDetectorsLayer(PLAYER_DAMAGEABLE_LAYER);
                     isVulnerable = true;
                 }
 
@@ -219,13 +246,12 @@ namespace TankLike.UnitControllers
 
             _playerRenderer.localPosition = _rendererGroundedPosition;
 
+            _jumpLight.enabled = false;
             IsJumping = false;
-            _components.Constraints.ApplyConstraints(false, _constraints);
-            //_components.Health.SetInvincible(false);
-            //gameObject.layer = PLAYER_LAYER;
-            _tracks.ForEach(e => e.Play());
+            _playerComponents.Constraints.ApplyConstraints(false, _constraints);
+            _playerComponents.AimAssist.RecoverLastInput();
             _landParticles.Play();
-
+            _tracks.ForEach(e => e.Play());
             _isCooldown = false;
 
         }
@@ -251,12 +277,12 @@ namespace TankLike.UnitControllers
             _isUsingFuel = false;
             _isflying = false;
 
-            _components.Constraints.ApplyConstraints(false, _constraints);
-            _components.Health.SwitchDamageDetectorsLayer(PLAYER_DAMAGEABLE_LAYER);
-                                                                                   
-            _thrusters.ForEach(e => e.Stop());
+            _playerComponents.Constraints.ApplyConstraints(false, _constraints);
+            _playerComponents.Health.SetDamageDetectorsLayer(PLAYER_DAMAGEABLE_LAYER);
 
-            _UIBar.PlayHideAnimation();
+            StopThrusters();
+
+            //_UIBar.PlayHideAnimation();
         }
 
         private void StopAllJumpCoroutines()
@@ -290,17 +316,83 @@ namespace TankLike.UnitControllers
             }
         }
 
-        public void EnableJump(bool value)
+        #region Thrusters
+        private void PlayThrusters()
         {
-            _canJump = value;
+            _thrusters.ForEach(t => t.Play());
+
+            _jumpLight.enabled = true;
         }
+
+        private void StopThrusters()
+        {
+            _thrusters.ForEach(t => t.Stop());
+
+            _jumpLight.enabled = false;
+        }
+        #endregion
+
+        #region Failed Jump
+        private void PerformFailedJump()
+        {
+            if(_isFailedJumpBeingPerformed)
+            {
+                return;
+            }
+
+            _playerComponents.TankWiggler.WiggleBody(_onFailedJumpWiggle);
+            StartCoroutine(FailedJumpRoutine());
+        }
+
+        private IEnumerator FailedJumpRoutine()
+        {
+            float timer = 0f;
+            float duration = _onFailedJumpWiggle.Duration * 0.7f;
+
+            _isFailedJumpBeingPerformed = true;
+
+            PlayThrusters();
+
+            while (timer < duration)
+            {
+                timer += Time.deltaTime;
+                float progress = timer / duration;
+                _playerRenderer.localPosition = _rendererGroundedPosition + new Vector3(0f, _JumpCurve.Evaluate(progress) * _failedJumpMaxHeight, 0f);
+
+                yield return null;
+            }
+
+            timer = 0f;
+            float fallDuration = _onFailedJumpWiggle.Duration - duration;
+
+            while (timer < fallDuration)
+            {
+                timer += Time.deltaTime;
+                float progress = 1f - timer / fallDuration;
+                _playerRenderer.localPosition = _rendererGroundedPosition + new Vector3(0f, _JumpCurve.Evaluate(progress) * _failedJumpMaxHeight, 0f);
+
+                yield return null;
+            }
+
+            _isFailedJumpBeingPerformed = false;
+            StopThrusters();
+        }
+        #endregion
+
+        #region Constraints
+        public void ApplyConstraint(AbilityConstraint constraints)
+        {
+            bool canJump = (constraints & AbilityConstraint.Jump) == 0;
+            IsConstrained = !canJump;
+        }
+        #endregion
 
         #region IController
         public void Activate()
         {
             IsActive = true;
-            EnableJump(true);
-            SetUpInput(_components.PlayerIndex);
+            // Hide it so it won't be visible after switching rooms
+            _UIBar.ForceHide();
         }
 
         public void Deactivate()
@@ -311,14 +403,13 @@ namespace TankLike.UnitControllers
 
         public void Restart()
         {
-            IsActive = false;
-            DisposeInput(_components.PlayerIndex);
-
-            StopAllJumpCoroutines();
+            SetUpInput(_playerComponents.PlayerIndex);
         }
 
         public void Dispose()
         {
+            DisposeInput(_playerComponents.PlayerIndex);
+            StopAllJumpCoroutines();
         }
         #endregion
     }

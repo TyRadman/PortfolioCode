@@ -14,6 +14,7 @@ namespace TankLike.Tutorial
         private PlayerComponents _currentPlayer;
         [SerializeField] private ProjectileDetector _detector;
         private ProjectileDetector _currentDetector;
+        public System.Action<int, int> OnPlayerJumpedEvent { get; set; }
 
         public override bool IsAchieved()
         {
@@ -23,11 +24,14 @@ namespace TankLike.Tutorial
         public override void SetUp(WaypointMarker marker)
         {
             base.SetUp(marker);
+
             _successfulJumpsCount = 0;
+            
+            OnPlayerJumpedEvent?.Invoke(_successfulJumpsCount, _requiredJumps);
+
             _currentPlayer = GameManager.Instance.PlayersManager.GetPlayer(0);
             SubscribeOnHitEvent();
             _currentPlayer.OnPlayerRevived += SubscribeOnHitEvent;
-            //_currentPlayer.Jump.OnJumped += OnPlayerJumped;
 
             _currentDetector = Instantiate(_detector, _currentPlayer.transform.position, Quaternion.identity);
             _currentDetector.OnProjectileDetected += OnPlayerJumped;
@@ -41,13 +45,15 @@ namespace TankLike.Tutorial
         private void OnPlayerHit()
         {
             _successfulJumpsCount = 0;
+            OnPlayerJumpedEvent?.Invoke(_successfulJumpsCount, _requiredJumps);
         }
 
         private void OnPlayerJumped()
         {
             _successfulJumpsCount++;
+            OnPlayerJumpedEvent?.Invoke(_successfulJumpsCount, _requiredJumps);
 
-            if(IsAchieved())
+            if (IsAchieved())
             {
                 OnAchievementCompleted?.Invoke();
                 _currentDetector.OnProjectileDetected -= OnPlayerJumped;

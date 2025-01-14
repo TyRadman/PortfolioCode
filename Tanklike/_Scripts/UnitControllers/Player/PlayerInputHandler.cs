@@ -13,85 +13,83 @@ namespace TankLike.UnitControllers
         [SerializeField] private PlayerTempInfoSaver _playersInfoSaver;
         private InputActionMap _lobbyActionMap;
         private bool _isSetUp = false;
+        public int PlayerIndex;
 
-        public void SetUp()
-        {
-            _isSetUp = true;
-            Controls = new PlayerInputActions();
+        //public void SetUp()
+        //{
+        //    _isSetUp = true;
+        //    Controls = new PlayerInputActions();
 
-            _lobbyActionMap = Playerinputs.actions.FindActionMap(Controls.Lobby.Get().name);
-            _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed += ConfirmSelection;
-            _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed += ReturnButton;
-            MaxConfirmationNumber++;
+        //    _lobbyActionMap = Playerinputs.actions.FindActionMap(Controls.Lobby.Get().name);
+        //    _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed += ConfirmSelection;
+        //    _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed += ReturnButton;
+        //    MaxConfirmationNumber++;
 
-            if (MaxConfirmationNumber == 2)
-            {
-                FindObjectOfType<PlayerInputManager>().DisableJoining();
-            }
+        //    if (MaxConfirmationNumber == 2)
+        //    {
+        //        FindObjectOfType<PlayerInputManager>().DisableJoining();
+        //    }
 
-            _playersInfoSaver.AddPlayerInputHandler(this);
-        }
+        //    _playersInfoSaver.AddPlayerInputHandler(this);
+        //}
 
-        public void ReturnButton(InputAction.CallbackContext _)
-        {
-            if (_confirmed)
-            {
-                Deconfirm();
-            }
-            else
-            {
-                Disconnect();
-            }
-        }
+        //public void ReturnButton(InputAction.CallbackContext _)
+        //{
+        //    if (_confirmed)
+        //    {
+        //        Deconfirm();
+        //    }
+        //    else
+        //    {
+        //        Disconnect();
+        //    }
+        //}
 
-        public void Disconnect()
-        {
-            if (MaxConfirmationNumber < 2)
-            {
-                FindObjectOfType<PlayerInputManager>().EnableJoining();
-            }
+        //public void Disconnect()
+        //{
+        //    if (MaxConfirmationNumber < 2)
+        //    {
+        //        FindObjectOfType<PlayerInputManager>().EnableJoining();
+        //    }
 
-            _playersInfoSaver.RemovePlayerInputHandler(this);
-            MaxConfirmationNumber--;
-            Destroy(gameObject);
-        }
+        //    _playersInfoSaver.RemovePlayerInputHandler(this);
+        //    MaxConfirmationNumber--;
+        //    Destroy(gameObject);
+        //}
 
-        private void Deconfirm()
-        {
-            ConfirmationNumber--;
-            FindObjectOfType<PlayerJoinManager>().EnableConfirmedButton(Playerinputs.playerIndex, false);
-            _confirmed = false;
-        }
+        //private void Deconfirm()
+        //{
+        //    ConfirmationNumber--;
+        //    _confirmed = false;
+        //}
 
-        public void ConfirmSelection(InputAction.CallbackContext _)
-        {
-            if (_confirmed)
-            {
-                return;
-            }
+        //public void ConfirmSelection(InputAction.CallbackContext _)
+        //{
+        //    if (_confirmed)
+        //    {
+        //        return;
+        //    }
 
-            ConfirmationNumber++;
-            FindObjectOfType<PlayerJoinManager>().EnableConfirmedButton(Playerinputs.playerIndex, true);
-            _confirmed = true;
-            print($"Confirmation: {ConfirmationNumber}. Max: {MaxConfirmationNumber}");
+        //    ConfirmationNumber++;
+        //    _confirmed = true;
+        //    //print($"Confirmation: {ConfirmationNumber}. Max: {MaxConfirmationNumber}");
 
-            if (ConfirmationNumber == MaxConfirmationNumber)
-            {
-                _playersInfoSaver.DisableAllInputs();
-                FindObjectOfType<PlayerJoinManager>().LoadGameplayScene();
-            }
-        }
+        //    if (ConfirmationNumber == MaxConfirmationNumber)
+        //    {
+        //        _playersInfoSaver.DisableAllInputs();
+        //    }
+        //}
 
-        private void OnDestroy()
-        {
-            if(_lobbyActionMap == null || !_isSetUp)
-            {
-                return;
-            }
+        //private void OnDestroy()
+        //{
+        //    if(_lobbyActionMap == null || !_isSetUp)
+        //    {
+        //        return;
+        //    }
 
-            _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed -= ConfirmSelection;
-            _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed -= ReturnButton;
-        }
+        //    _lobbyActionMap.FindAction(Controls.Lobby.Submit.name).performed -= ConfirmSelection;
+        //    _lobbyActionMap.FindAction(Controls.Lobby.Cancel.name).performed -= ReturnButton;
+        //}
     }
 }
 

@@ -1,13 +1,11 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Text;
-using TankLike.UI;
-using TankLike.Utils;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace TankLike.UnitControllers
 {
+    using Combat;
+    using TankLike.UI;
+    using TankLike.Utils;
+
     public class EnemyHealth : TankHealth
     {
         [Header("Health Bar")]
@@ -16,50 +14,67 @@ namespace TankLike.UnitControllers
         [SerializeField] private HealthBar _healthBar;
 
         public int PlayerIndex { get; protected set; } = -1;
-        private EnemyComponents _enemyComponents;
 
-        public override void SetUp(TankComponents components)
+        protected EnemyComponents _enemyComponents;
+
+        public override void SetUp(IController controller)
         {
-            base.SetUp(components);
+            EnemyComponents components = controller as EnemyComponents;
 
-            if (components is EnemyComponents enemyComponents)
+            // TODO: dirty, clean it
+            if (controller is null or not EnemyComponents and not BossComponents)
             {
-                _enemyComponents = enemyComponents;
+                Helper.LogWrongComponentsType(GetType());
+                return;
             }
 
-            if(_healthBarCanvas != null)
+            _enemyComponents = components;
+
+            // TODO: Dirty and I hate it :'). Recommended solution: base.SetUp(controller);
+            if (controller is not BossComponents)
             {
-                if (_enableHealthBar)
-                {
-                    _healthBarCanvas.SetActive(true);
-                    _healthBar.SetupHealthBar();
-                }
-                else
-                {
-                    _healthBarCanvas.SetActive(false);
-                }
-            }         
+                base.SetUp(_enemyComponents);
+            }
+            else
+            {
+                BossComponents bossComponents = (BossComponents)controller;
+                base.SetUp(bossComponents);
+            }
         }
 
-        public override void TakeDamage(int damage, Vector3 direction, TankComponents shooter, Vector3 bulletPosition)
+        public override void TakeDamage(int damage, Vector3 direction, UnitComponents shooter, Vector3 bulletPosition, Ammunition damageDealer = null)
         {
             if (IsDead)
             {
                 return;
             }
 
-            base.TakeDamage(damage, direction, shooter, bulletPosition);
-
-            if (shooter != null)
+            if (shooter is PlayerComponents playerComponents)
             {
-                PlayerIndex = ((PlayerComponents)shooter).PlayerIndex;
+                PlayerIndex = playerComponents.PlayerIndex;
+            }
+
+            base.TakeDamage(damage, direction, shooter, bulletPosition, damageDealer);
+
+            // Checking for the boss
+            if (_enemyComponents != null)
+            {
+                _enemyComponents.VisualEffects.PlayOnHitEffect();
             }
 
             if (shooter != null)
             {
-                shooter.Shooter.OnTargetHit?.Invoke();
+                shooter.GetShooter().OnTargetHit?.Invoke();
             }
 
+            if (_currentHealth > 0)
+            {
+                UpdateHealthBar();
+            }
+        }
+
+        protected void UpdateHealthBar()
+        {
             if (_healthBar != null)
             {
                 _healthBar.UpdateHealthBar(_currentHealth, _maxHealth);
@@ -70,23 +85,78 @@ namespace TankLike.UnitControllers
         {
             base.Die();
 
-            if (IsDead)
-            {
-                return;
-            }
+            ReportDeath();
 
-            EnemyData enemyStats = (EnemyData)_stats;
-            _components.TankBodyParts.HandlePartsExplosion((EnemyData)_stats);      
             _enemyComponents.ItemDrop.DropItem();
-            GameManager.Instance.ReportManager.ReportEnemyKill(enemyStats, PlayerIndex);
+        }
+
+        /// <summary>
+        /// Reports the death of the enemy to the enemies manager and the report manager.
+        /// </summary>
+        protected void ReportDeath()
+        {
+            EnemyData enemyStats = (EnemyData)_stats;
+
+            EntityEliminationReport report = new EntityEliminationReport()
+            {
+                Target = _enemyComponents,
+                PlayerIndex = PlayerIndex,
+                Position = PopUpAnchor.Anchor
+            };
+
+            GameManager.Instance.ReportManager.ReportEnemyElimination(report);
             GameManager.Instance.EnemiesManager.RemoveEnemy(_enemyComponents);
         }
 
-        public void Explode()
+        public override void RestoreFullHealth()
         {
-            base.Die();
-            _components.TankBodyParts.HandlePartsExplosion((EnemyData)_stats);
-            GameManager.Instance.EnemiesManager.RemoveEnemy(_enemyComponents);
+            base.RestoreFullHealth();
+
+            UpdateHealthBar();
         }
+
+        #region IController
+        public override void Activate()
+        {
+            base.Activate();
+
+            if (_healthBarCanvas != null)
+            {
+                if (_enableHealthBar)
+                {
+                    _healthBarCanvas.SetActive(true);
+                    _healthBar.SetupHealthBar();
+                }
+                else
+                {
+                    _healthBarCanvas.SetActive(false);
+                }
+            }
+        }
+
+        public override void Deactivate()
+        {
+            base.Deactivate();
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            _currentHealth = 0;
+            UpdateHealthBar();
+
+            OnDeath -= _enemyComponents.OnDeathHandler;
+        }
+
+        public override void Restart()
+        {
+            base.Restart();
+
+            RestoreFullHealth();
+            
+            OnDeath += _enemyComponents.OnDeathHandler;
+        }
+        #endregion
     }
 }

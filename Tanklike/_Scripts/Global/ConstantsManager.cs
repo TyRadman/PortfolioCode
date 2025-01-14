@@ -9,6 +9,8 @@ using UnityEngine;
 
 namespace TankLike
 {
+    using UI.Notifications;
+
     /// <summary>
     /// Holds values that different class will need across the project
     /// </summary>
@@ -35,6 +37,9 @@ namespace TankLike
         public List<EnemyType> NotKeyHolderEnemyTags;
         public ScreenFreezeData EnemyDeathFreezeData;
         public Audios Audios;
+
+        [Header("Notifications")]
+        public NotificationBarSettings_SO CoinsNotificationSettings;
     }
 
     [System.Serializable]
@@ -64,7 +69,7 @@ namespace TankLike
         public TankAlignment Alignment;
         public LayerMask LayerMask;
         public int LayerNumber;
-        public string Tag;
+        //public string Tag;
     }
 
     public enum GameTags

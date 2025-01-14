@@ -12,28 +12,24 @@ namespace TankLike
 
         public override void SetUp()
         {
-            // If the S_MainMeny scene is the active scene (the game started in the normal sequence), set up the scene
-            Scene currentScene = SceneManager.GetActiveScene();
-            string sceneName = currentScene.name;
-
-            if (sceneName == MAIN_MENU_SCENE)
-            {
-                Debug.Log("SETUP ABILITY SELECTION SCENE");
-                StartCoroutine(SetupRoutine(ABILITY_SELECTION_SCENE));
-            }
-        }
-
-        public override void StarterSetUp()
-        {
-            Debug.Log("STARTER SETUP ABILITY SELECTION SCENE");
+            Debug.Log("SETUP ABILITY SELECTION SCENE");
             StartCoroutine(SetupRoutine(ABILITY_SELECTION_SCENE));
         }
 
         protected override void SetUpManagers()
         {
+            // Set current scene controller
+            GameManager.Instance.SetCurrentSceneController(this);
+
             GameManager.Instance.ResultsUIController.gameObject.SetActive(false);
             GameManager.Instance.EffectsUIController.gameObject.SetActive(false);
             GameManager.Instance.HUDController.gameObject.SetActive(false);
+            GameManager.Instance.WorkshopController.WorkshopUI.gameObject.SetActive(false);
+        }
+
+        public override void Dispose()
+        {
+            Debug.Log("DISPOSE ABILITY SELECTION SCENE");
         }
     }
 }

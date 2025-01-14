@@ -12,13 +12,6 @@ namespace TankLike.Environment.LevelGeneration
     /// </summary>
     public class RoomsBuilder : MonoBehaviour
     {
-        [SerializeField] private int _roomsToCreateCount = 1;
-        private int _currectRoomsLeftToCreate;
-        [Header("References")]
-        [SerializeField] private LevelData _levelData;
-        [SerializeField] private Room _roomPrefab;
-        [SerializeField] private Room _bossRoomPrefab;
-
         [System.Serializable]
         public class RoomAndGate
         {
@@ -26,20 +19,33 @@ namespace TankLike.Environment.LevelGeneration
             public GateInfo Gate;
         }
 
+        [field: SerializeField] public RoomType StartRoomType { get; set; }
+        [SerializeField] private int _roomsToCreateCount = 1;
+
+        [Header("References")]
+        [SerializeField] private LevelData _levelData;
+        public LevelData LevelData => _levelData;
+        [SerializeField] private Room _roomPrefab;
+        [SerializeField] private Room _bossRoomPrefab;
+
+
+        [Header("Debug")]
+        [SerializeField] private bool DisplayMap = false;
+        [SerializeField] private bool OffsetRooms = true;
+        [SerializeField] private List<Room> _createdRooms = new List<Room>();
+
+        private Transform _levelParent;
+        private int _currectRoomsLeftToCreate;
         private List<RoomAndGate> _roomsToConnect = new List<RoomAndGate>();
         private const int GRID_SIZE = 51;
         private const int STARTING_INDEX = 25;
         private Room[,] _roomsGrid = new Room[GRID_SIZE, GRID_SIZE];
-        [Header("Debug")]
-        [SerializeField] private bool DisplayMap = false;
-        [SerializeField] private bool OffsetRooms = true;
-        private Transform _levelParent;
-        [SerializeField] private List<Room> _createdRooms = new List<Room>();
-        [field: SerializeField] public RoomType StartRoomType { get; set; }
+        private RoomsManager _roomsManager;
 
         public void SetUp()
         {
-            StartRoomType = GameManager.Instance.PlayersTempInfoSaver.StartRoomType;
+            StartRoomType = GameManager.Instance.GameData.StartRoomType;
+            _roomsManager = GameManager.Instance.RoomsManager; ;
         }
 
         public void BuildRandomRooms()
@@ -59,15 +65,16 @@ namespace TankLike.Environment.LevelGeneration
             _currectRoomsLeftToCreate = _roomsToCreateCount;
             _roomsToConnect = new List<RoomAndGate>();
             _roomsGrid = new Room[GRID_SIZE, GRID_SIZE];
-            GameManager.Instance.RoomsManager.Rooms.Clear();
+            _roomsManager.Rooms.Clear();
             CreateLevel();
-            GameManager.Instance.RoomsManager.SetupRooms();
+            _roomsManager.SetupRooms();
         }
 
         private void CreateLevel()
         {
             // build the boss room first, because this will guarantee a south facing gate
-            BossRoom bossRoom = (BossRoom)CreateRoom(_levelData.BossRoom, _bossRoomPrefab);
+            BossRoom bossRoom = (BossRoom)CreateRoom(_levelData.BossRoom, _bossRoomPrefab, Vector3.zero);
+            GameManager.Instance.GameplayRoomGenerator.SetLevelCameraLimits(_levelData.BossRoom, bossRoom);
             bossRoom.name = "Boss Room";
             bossRoom.SetRoomType(RoomType.Boss);
             _roomsGrid[STARTING_INDEX, STARTING_INDEX] = bossRoom;
@@ -81,14 +88,13 @@ namespace TankLike.Environment.LevelGeneration
             CreateRoomBranch(gateInfo, bossRoom, new Vector2Int(2, 4));
             // replace the gate with the boss gate
             GateInfo bossGate = _roomsToConnect[0].Room.GatesInfo.Gates.Find(g => g.IsConnected);
-            GameManager.Instance.GameplayRoomGenerator.ReplaceGateWithBossGate(
-                _levelData.BossGate, bossGate, _roomsToConnect[0].Room);
+            GameManager.Instance.GameplayRoomGenerator.ReplaceGateWithBossGate(_levelData.BossGate, bossGate, _roomsToConnect[0].Room);
             _roomsToConnect[0].Room.SetRoomType(RoomType.BossGate);
 
             // the next room will be based on the direction of the first room created
             CreateRooms();
 
-            GameManager.Instance.RoomsManager.OpenAllRooms();
+            _roomsManager.OpenAllRooms();
             // change the current room to another room that has a dead end
             SetShopRoom();
             SetStartRoom();
@@ -97,17 +103,24 @@ namespace TankLike.Environment.LevelGeneration
 
         private int count;
 
-        private Room CreateRoom(MapTiles_SO mapToCreate, Room roomPrefab)
+        private Room CreateRoom(MapTiles_SO mapToCreate, Room roomPrefab, Vector3 roomPosition)
         {
             // create an empty room
             Room room = Instantiate(roomPrefab, _levelParent);
             room.transform.position = Vector3.zero;
-            GameManager.Instance.RoomsManager.AddRoom(room);
+
+            if (OffsetRooms)
+            {
+                room.transform.position = roomPosition;
+            }
+
+            _roomsManager.AddRoom(room);
             // load a map into it
             GameManager.Instance.GameplayRoomGenerator.BuildRoom(mapToCreate, _levelData, room);
             room.BakeRoom();
             room.gameObject.SetActive(DisplayMap);
             _createdRooms.Add(room);
+
             return room;
         }
 
@@ -166,7 +179,7 @@ namespace TankLike.Environment.LevelGeneration
         {
             this.Log($"Creation by {previousGate.LocalDirection} of {previousRoom.name}. Gates limit: {gatesRange.x}, {gatesRange.y}", CD.DebugType.LevelGeneration);
            ///// SELECT A MAP OF TILES CONSIDERING THE SURROUNDING ALREADY EXISTING MAPS /////
-            MapTiles_SO map;
+            MapTiles_SO map = null;
             Vector2Int location = previousRoom.Location;
 
             location += previousGate.Direction == GateDirection.North ? Vector2Int.up :
@@ -183,6 +196,7 @@ namespace TankLike.Environment.LevelGeneration
             {
                 createdRoom = (NormalRoom)_roomsGrid[location.x, location.y];
                 roomName = createdRoom.name;
+
                 // if the room already exists, then it should've taken the previous gate into account, so we set the opposite gate as the gate index
                 gateIndex = ((int)previousGate.Direction / 90 + 2) % 4;
                 this.Log($"{previousRoom.name} >>> {previousGate.Direction} >>> {roomName}".Color(Color.red), CD.DebugType.LevelGeneration);
@@ -237,7 +251,12 @@ namespace TankLike.Environment.LevelGeneration
                 map = acceptedMaps[randomIndex];
                 gateIndex = gateIndicesList[randomIndex];
                 rotation = rotationList[randomIndex];
-                createdRoom = (NormalRoom)CreateRoom(map, _roomPrefab);
+
+                Vector3 roomPosition = new Vector3((location.x - STARTING_INDEX) * 62, 0f, (location.y - STARTING_INDEX) * 62);
+
+                // WE CREATE THE ROOM HERE
+                createdRoom = (NormalRoom)CreateRoom(map, _roomPrefab, roomPosition);
+                
                 createdRoom.SetHasEnemies(true);
             }
 
@@ -245,12 +264,6 @@ namespace TankLike.Environment.LevelGeneration
             // assign a location for the room in the grid
             _roomsGrid[location.x, location.y] = createdRoom;
             createdRoom.Location = location;
-
-            // to be removed
-            if (OffsetRooms)
-            {
-                createdRoom.transform.position = new Vector3((location.x - STARTING_INDEX) * 62, 0f, (location.y - STARTING_INDEX) * 62);
-            }
 
             GateInfo selectedGate = createdRoom.GatesInfo.Gates.Find(g => (int)g.Direction / 90 == gateIndex);
 
@@ -261,6 +274,13 @@ namespace TankLike.Environment.LevelGeneration
             }
 
             createdRoom.transform.eulerAngles += Vector3.up * rotation;
+
+            // set the camera limits
+            if (map != null)
+            {
+                GameManager.Instance.GameplayRoomGenerator.SetLevelCameraLimits(map, createdRoom);
+            }
+
             selectedGate.SetDirection(AddDirections((int)selectedGate.Direction, -rotation));
 
             // connect the gate of the new room to the gate of the previous room
@@ -379,17 +399,19 @@ namespace TankLike.Environment.LevelGeneration
 
         private void SetShopRoom()
         {
-            Room shopRoom = GameManager.Instance.RoomsManager.Rooms.
-                FindAll(room => room.RoomType == RoomType.Normal).RandomItem();
-            shopRoom.SetRoomType(RoomType.Shop);
+            if(GameManager.Instance.LevelGenerator.ShopsBuilder.IsBuildShops())
+            {
+                Room shopRoom = _roomsManager.Rooms.FindAll(room => room.RoomType == RoomType.Normal).RandomItem();
+                shopRoom.SetRoomType(RoomType.Shop);
+            }
         }
 
         private void SetStartRoom()
         {
-            Room bossRoom = GameManager.Instance.RoomsManager.Rooms[0];
+            Room bossRoom = _roomsManager.Rooms[0];
             // cache the furthest room from the boss room with the gate count of one
             Room startingRoom = null;
-            startingRoom = GameManager.Instance.RoomsManager.Rooms
+            startingRoom = _roomsManager.Rooms
                     .Where(room => room.GatesInfo.Gates.Count(g => g.IsConnected) == 1 && room.RoomType != RoomType.Shop)
                     .OrderByDescending(r => (r.Location - bossRoom.Location).sqrMagnitude).FirstOrDefault();
             // disable enemies spawning
@@ -415,16 +437,20 @@ namespace TankLike.Environment.LevelGeneration
                     }
             }
 
-            GameManager.Instance.RoomsManager.SetCurrentRoom(tempRoomToStartFrom);
-            GameManager.Instance.RoomsManager.CurrentRoom.LoadRoom();
+            _roomsManager.SetCurrentRoom(tempRoomToStartFrom);
+            _roomsManager.CurrentRoom.LoadRoom();
         }
 
         private void RemoveEnemiesFromSpecialRooms()
         {
             NormalRoom startRoom = (NormalRoom)_createdRooms.Find(r => r.RoomType == RoomType.Start);
             startRoom.SetHasEnemies(false);
-            NormalRoom shopRoom = (NormalRoom)_createdRooms.Find(r => r.RoomType == RoomType.Shop);
-            shopRoom.SetHasEnemies(false);
+
+            if (GameManager.Instance.LevelGenerator.ShopsBuilder.IsBuildShops())
+            {
+                NormalRoom shopRoom = (NormalRoom)_createdRooms.Find(r => r.RoomType == RoomType.Shop);
+                shopRoom.SetHasEnemies(false);
+            }
         }
 
         public Room[,] GetRoomsGrid()

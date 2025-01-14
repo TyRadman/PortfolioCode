@@ -6,7 +6,7 @@ using static TankLike.UI.Notifications.QuestNotificationBar;
 
 namespace TankLike.UI.Notifications
 {
-    public class NotificationsManager : MonoBehaviour
+    public class NotificationsManager : MonoBehaviour, IManager
     {
 
         [System.Serializable]
@@ -27,26 +27,57 @@ namespace TankLike.UI.Notifications
         [SerializeField] private List<PlayerNotificationController> _playerNotifications;
         [SerializeField] private List<QuestTask> _questTasks = new List<QuestTask>();
 
-        private void Awake()
+        public bool IsActive { get; private set; }
+
+        public void SetReferences()
         {
             _questShortWait = new WaitForSeconds(QUEST_ON_DISPLAY_SHORT_DURATION);
             _questLongWait = new WaitForSeconds(QUEST_ON_DISPLAY_LONG_DURATION);
             _questHideWait = new WaitForSeconds(QUEST_HIDING_DURATION);
         }
 
+        #region IManager
         public void SetUp()
         {
+            IsActive = true;
+
             _playerNotifications.ForEach(p => p.SetUp());
         }
 
-        public void PushCollectionNotification(NotificationBarSettings_SO settings, int amount, int playerIndex, string extraText = "")
+        public void Dispose()
         {
-            _playerNotifications[playerIndex].PushCollectionNotification(amount, settings, extraText);
+            IsActive = false;
+
+            StopAllCoroutines();
+
+            _questBar.Hide();
+
+            _playerNotifications.ForEach(p => p.Dispose());
+            _questTasks.Clear();
+        }
+        #endregion
+
+
+        public void PushCollectionNotification(NotificationBarSettings_SO settings, int amount, int playerIndex)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
+            _playerNotifications[playerIndex].PushCollectionNotification(amount, settings);
         }
 
         #region Quest Notification
         public void PushQuestNotification(string _message, QuestState type)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             QuestTask task = new QuestTask() { Message = _message, State = type };
             _questTasks.Add(task);
 
@@ -83,10 +114,5 @@ namespace TankLike.UI.Notifications
             }
         }
         #endregion
-    }
-
-    public enum NotificationType
-    {
-        Coins = 0, Gems = 1, Tool = 2, NewQuest = 3, CompletedQuest = 4, Ammo = 5, Health = 6, BossKey
     }
 }

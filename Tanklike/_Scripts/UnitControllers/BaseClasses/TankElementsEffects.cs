@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TankLike.Elements;
+using TankLike.Utils;
 
 namespace TankLike.UnitControllers
 {
@@ -21,7 +22,7 @@ namespace TankLike.UnitControllers
         }
 
         private WaitForSeconds _waitingTime;
-        protected TankComponents _components;
+        private TankComponents _components;
         private List<Effect> _effects = new List<Effect>();
         [SerializeField] protected bool _canGetEffects = true;
 
@@ -31,8 +32,14 @@ namespace TankLike.UnitControllers
 
         public bool IsActive { get; set; }
 
-        public void Setup(TankComponents components)
+        public void SetUp(IController controller)
         {
+            if (controller is not TankComponents components)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
             _components = components;
             _waitingTime = new WaitForSeconds(1f);
         }
@@ -174,7 +181,7 @@ namespace TankLike.UnitControllers
 
         public virtual void Restart()
         {
-            foreach (var effect in _effects)
+            foreach (Effect effect in _effects)
             {
                 effect.ElementEffect.StopEffect(_components);
 
@@ -190,14 +197,20 @@ namespace TankLike.UnitControllers
 
                 if (effect.ElementEffect.GetEffectMaterial(ref _tankMaterial))
                 {
-                    if (effect.ElementEffect.AdditiveMaterial) _components.Visuals.RemoveMaterial();
-                    else _components.Visuals.RestoreOriginalMaterial();
+                    if (effect.ElementEffect.AdditiveMaterial)
+                    {
+                        _components.Visuals.RemoveMaterial();
+                    }
+                    else
+                    {
+                        _components.Visuals.RestoreOriginalMaterial();
+                    }
                 }
 
                 if (effect.PrcoessCoroutine != null)
+                {
                     StopCoroutine(effect.PrcoessCoroutine);
-
-                effect.Active = false;
+                }
             }
 
             _effects.Clear();
@@ -205,8 +218,7 @@ namespace TankLike.UnitControllers
 
         public virtual void Dispose()
         {
-            //this.Log($"Disposed", Color.blue, CD.DebugType.Elements);
-            //_effects.ForEach(e => StopCoroutine(e.PrcoessCoroutine));
+
         }
         #endregion
     }

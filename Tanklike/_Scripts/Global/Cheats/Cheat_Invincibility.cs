@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Cheats;
-using TankLike.UnitControllers;
 using UnityEngine;
 
 namespace TankLike
 {
-	[CreateAssetMenu(fileName = NAME + "Invincibility", menuName = ROOT + "Invincibility")]
+    using Cheats;
+    using UnitControllers;
+
+    [CreateAssetMenu(fileName = NAME + "Invincibility", menuName = ROOT + "Invincibility")]
 	public class Cheat_Invincibility : Cheat
     {
         [SerializeField] private AbilityConstraint _constaint;

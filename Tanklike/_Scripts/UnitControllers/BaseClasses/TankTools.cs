@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TankLike.Combat;
+using TankLike.Utils;
 
 namespace TankLike.UnitControllers
 {
@@ -16,9 +17,21 @@ namespace TankLike.UnitControllers
 
         [SerializeField] protected List<ToolPack> _tools = new List<ToolPack>();
         [SerializeField] protected ToolPack _currentTool = new ToolPack();
-        [SerializeField] protected TankComponents _components;
 
+        protected TankComponents _components;
+        
         public bool IsActive { get; protected set; }
+
+        public virtual void SetUp(IController controller)
+        {
+            if (controller == null || controller is not TankComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _components = (TankComponents)controller;
+        }
 
         public virtual void AddTool(ToolInfo toolInfo, int count)
         {

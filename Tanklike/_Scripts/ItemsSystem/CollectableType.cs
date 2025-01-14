@@ -8,10 +8,8 @@ namespace TankLike.ItemsSystem
     {
         None = 0,
         Empty = 1,
-        Health = 2,
+        Energy = 2,
         Coin = 3,
-        Gem = 4,
-        Ammo = 5,
         BossKey = 6,
     }
 }

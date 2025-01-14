@@ -5,14 +5,11 @@ namespace TankLike
 {
     using Environment;
     using UI;
-    using UI.Workshop;
     using UI.InGame;
-    using TankLike.Utils;
 
     public class InteractableAreasManager : MonoBehaviour, IManager
     {
         [Header("Areas Screens")]
-        [SerializeField] private WorkShopTabsNavigatable _workshop;
         [SerializeField] private ToolsNavigator _toolsShop;
         [SerializeField] private InteractableTextBox _textBoxPrefab;
         [SerializeField] private InteractableMenuNavigatable _interactableMenuPrefab;
@@ -39,11 +36,17 @@ namespace TankLike
         {
             IsActive = false;
 
-            Destroy(_textBox.gameObject);
-            Destroy(_interactableMenu.gameObject);
+            if (_textBox != null)
+            {
+                Destroy(_textBox.gameObject);
+                _textBox = null;
+            }
 
-            _textBox = null;
-            _interactableMenu = null;
+            if (_interactableMenu != null)
+            {
+                Destroy(_interactableMenu.gameObject);
+                _interactableMenu = null;
+            }
         }
         #endregion
 
@@ -102,7 +105,7 @@ namespace TankLike
                 return;
             }
 
-            _workshop.Open(playerIndex);
+            GameManager.Instance.WorkshopController.WorkshopUI.Open(playerIndex);
         }
 
         public InteractableMenuNavigatable GetInteractableMenu()

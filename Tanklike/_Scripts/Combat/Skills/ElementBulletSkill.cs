@@ -1,24 +1,27 @@
-using TankLike.Elements;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TankLike.UnitControllers;
 
 namespace TankLike.Combat
 {
+    using UnitControllers;
+    using Elements;
+    using Combat.SkillTree;
+
     [CreateAssetMenu(fileName = FILE_NAME_PREFIX + "BulletElement", menuName = MENU_ROOT + "Bullet Element")]
     public class ElementBulletSkill : Skill
     {
         [Header("Special Values")]
         [SerializeField] private ElementEffect _element;
 
-        // what the skill does when it is added to the tank 
-        public override void SetUp(TankComponents components)
+        public override void ApplyStats(TankComponents components)
         {
-            base.SetUp(components);
-
-            components.Shooter.SetElement(_element);
+            //components.Shooter.SetElement(_element);
         }
 
+        public override void PopulateStatProperties()
+        {
+            
+        }
     }
 }

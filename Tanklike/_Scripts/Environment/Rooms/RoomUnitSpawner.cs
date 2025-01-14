@@ -1,38 +1,72 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Sound;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.Environment
 {
+    using Sound;
+    using System.Linq;
+    using TMPro;
+    using UnitControllers;
+    using Utils;
+    using static TankLike.Environment.RoomSpawnPoints;
+
     public class RoomUnitSpawner : MonoBehaviour
     {
-        public List<EnemyAIController> CurrentlySpawnedEnemies { get; private set; }
-        [SerializeField] private Vector2 _spawningDelaysRange;
-        private int _currentWaveIndex = 0;
         [field: SerializeField] public RoomSpawnPoints SpawnPoints { get; private set; }
-        [SerializeField] private List<EnemyWave> _enemyWaves = new List<EnemyWave>();
-        [SerializeField] private Room _room;
-        [SerializeField] private Audio _spawnAudio;
-        private WaitForSeconds _particleWait;
+        public List<EnemyComponents> CurrentlySpawnedEnemies { get; private set; }
+        public bool HasKey { get; internal set; } = false;
 
-        private void Start()
+        [SerializeField] private Vector2 _spawningDelaysRange;
+        [SerializeField] private List<EnemyWave> _enemyWaves = new List<EnemyWave>();
+        [SerializeField] private Audio _spawnAudio;
+
+        private Room _room;
+        private Transform[] _playerSpawnPoints = new Transform[2];
+        private WaitForSeconds _particleWait;
+        private int _currentWaveIndex = 0;
+
+        public void SetUp(Room room)
         {
-            if(GameManager.Instance == null)
+            if(room == null)
             {
+                Debug.LogError("Room is null");
                 return;
             }
 
-            Invoke(nameof(SetParticleWait), 0.5f);
+            _room = room;
+
+            if (_room is not BossRoom)
+            {
+                SetPlayerSpawnPoints();
+            }
         }
 
-        // TODO: Roomts shouldn't set themselves up on start, otherwise, things will break when we have a room already spawned
-        private void SetParticleWait()
+        public void SetParticleWait(float time)
         {
-            _particleWait = new WaitForSeconds(GameManager.Instance.VisualEffectsManager.Misc.EnemySpawning.Particles.main.startLifetime.constant / 2);
+            _particleWait = new WaitForSeconds(time / 2);
+        }
 
+        public void CheckAndAddKeyHolder()
+        {
+            if (HasKey)
+            {
+                // cache all the waves that don't have an enemy holding a key and have at least one enemy that can hold keys
+                // TODO: should there be waves that can't have keys?
+                //List<EnemyWave> noKeyWaves = _enemyWaves.FindAll(w => w.Enemies.Exists(e => e.CanHaveKey));
+                //GameManager.Instance.BossKeysManager.DistributeKeysAcrossRemainingRooms()
+
+                if(_enemyWaves.Count == 0)
+                {
+                    Debug.LogError("No waves to check for key holders");
+                    return;
+                }
+
+                EnemySpawnProfile enemy = _enemyWaves.RandomItem().Enemies.Find(e => !e.HasKey);
+
+                // if all the waves are have an enemy holding a key in them, then selected an enemy that doesn't hold a key at least
+                enemy.HasKey = true;
+            }
         }
 
         public void ActivateSpawnedEnemies()
@@ -42,21 +76,76 @@ namespace TankLike.Environment
                 return;
             }
 
-            SpawnWave(_enemyWaves[_currentWaveIndex]);
+            SpawnWave();
         }
 
-        private void SpawnWave(EnemyWave wave)
+        private void SpawnWave()
         {
             // reset the list to start counting down the enemies again to know when to trigger the next wave or stop the waves if this is the last wave
-            CurrentlySpawnedEnemies = new List<EnemyAIController>();
+            CurrentlySpawnedEnemies = new List<EnemyComponents>();
+            EnemyWave wave = _enemyWaves[_currentWaveIndex];
 
-            foreach (var enemy in wave.Enemies)
+            Vector3 playerPosition = GameManager.Instance.PlayersManager.GetPlayer(0).transform.position;
+            int spawnPointsCount = Mathf.CeilToInt(Mathf.Max((float)SpawnPoints.Points.Count * 0.2f, (float)wave.Enemies.Count * 1.5f));
+            List<Transform> spawnPoints = SpawnPoints.GetFurthestSpawnPointsFromPosition(playerPosition, spawnPointsCount);
+
+            foreach (EnemySpawnProfile enemy in wave.Enemies)
             {
-                StartCoroutine(SpawnEnemy(enemy));
+                //Vector3 spawnPosition = SpawnPoints.GetFurthestSpawnPointFromPosition(GameManager.Instance.PlayersManager.GetPlayer(0).transform.position).position;
+                Transform spawnPoint = spawnPoints.RandomItem();
+                spawnPoints.Remove(spawnPoint);
+
+                if(enemy == null)
+                {
+                    Debug.LogError("Enemy is null");
+                    continue;
+                }
+
+                if(spawnPoint == null)
+                {
+                    Debug.LogError("Spawn point is null");
+                    continue;
+                }
+
+                StartCoroutine(SpawnEnemy(enemy, spawnPoint.position));
             }
         }
 
-        public void OnEnemyDeathHandler(EnemyAIController enemy)
+        private IEnumerator SpawnEnemy(EnemySpawnProfile enemy, Vector3 spawnPoint)
+        {
+            // perform slight delay before the enemy spawns (for variety)
+            yield return new WaitForSeconds(_spawningDelaysRange.RandomValue());
+
+
+            // play the effect (Should be called from the pooling system later)
+            GameManager.Instance.VisualEffectsManager.Misc.PlayEnemySpawnVFX(spawnPoint);
+            GameManager.Instance.AudioManager.Play(_spawnAudio);
+
+            yield return _particleWait;
+
+            EnemyComponents spawnedEnemy = GameManager.Instance.EnemiesManager.RequestEnemy(enemy.Enemy);
+
+            spawnedEnemy.transform.position = spawnPoint;
+
+            spawnedEnemy.gameObject.SetActive(true);
+
+            spawnedEnemy.Restart();
+
+            spawnedEnemy.OnEnemyDeath += OnEnemyDeathHandler;
+
+            // add the enemy to the currently spawned enemies list
+            CurrentlySpawnedEnemies.Add(spawnedEnemy);
+
+            spawnedEnemy.Activate();
+
+            // assign this enemy as a key holder if it was chosen to be one
+            if (enemy.HasKey)
+            {
+                spawnedEnemy.ItemDrop.SetAsKeyHolder();
+            }
+        }
+
+        public void OnEnemyDeathHandler(EnemyComponents enemy)
         {
             // remove the enemy if it's a part of the currently spawned enemies
             if (CurrentlySpawnedEnemies.Contains(enemy))
@@ -68,85 +157,82 @@ namespace TankLike.Environment
             // if there are no enemies left, check for the next wave or open the room
             if (CurrentlySpawnedEnemies.Count <= 0)
             {
-                CheckForNewWave();
+                OnRoomCleared();
             }
         }
 
-        private IEnumerator SpawnEnemy(EnemySpawnProfile enemy)
-        {
-            // perform slight delay before the enemy spawns (for variety)
-            yield return new WaitForSeconds(_spawningDelaysRange.RandomValue());
-            Vector3 pos = SpawnPoints.GetRandomSpawnPoint().position;
-
-            // play the effect (Should be called from the pooling system later)
-            GameManager.Instance.VisualEffectsManager.Misc.PlayEnemySpawnVFX(pos);
-            GameManager.Instance.AudioManager.Play(_spawnAudio);
-            yield return _particleWait;
-
-            EnemyAIController spawnedEnemy = GameManager.Instance.EnemiesManager.SpawnEnemyAtPoint(enemy.Enemy, pos);
-
-            spawnedEnemy.OnEnemyDeath += OnEnemyDeathHandler;
-
-            // add the enemy to the currently spawned enemies list
-            CurrentlySpawnedEnemies.Add(spawnedEnemy);
-            spawnedEnemy.Activate();
-
-            // assign this enemy as a key holder if it was chosen to be one
-            if (enemy.HasKey)
-            {
-                spawnedEnemy.Components.ItemDrop.SetAsKeyHolder();
-            }
-        }
-
-        public void CheckForNewWave()
+        #region On Room Cleared
+        public void OnRoomCleared()
         {
             // check if there are any waves left
             if (_currentWaveIndex < _enemyWaves.Count - 1)
             {
-                _currentWaveIndex++;
-                SpawnWave(_enemyWaves[_currentWaveIndex]);
-                // set all the points to not taken
-                SpawnPoints.SetAllPointsAsNotTaken();
+                OnSpawnNextWave();
             }
             else
             {
-                _room.GatesInfo.Gates.ForEach(g => g.Gate.OpenGate());
-                _room.PlayOpenGateAudio();
-                GameManager.Instance.CameraManager.Zoom.SetToNormalZoom();
-                GameManager.Instance.EnemiesManager.SetFightActivated(false);
+                OnLastWaveCleared();
             }
         }
+
+        private void OnSpawnNextWave()
+        {
+            _currentWaveIndex++;
+            SpawnWave();
+            // set all the points to not taken
+            SpawnPoints.SetAllPointsAsNotTaken();
+        }
+
+        private void OnLastWaveCleared()
+        {
+            _room.GatesInfo.Gates.ForEach(g => g.Gate.OpenGate());
+            _room.PlayOpenGateAudio();
+            GameManager.Instance.CameraManager.Zoom.SetToNormalZoom();
+            GameManager.Instance.EnemiesManager.SetFightActivated(false);
+
+            GameManager.Instance.WorkshopController.SpawnWorkshopInRoom();
+        }
+        #endregion
 
         public void SetRoomEnemyWaves(List<EnemyWave> waves)
         {
             _enemyWaves = waves;
         }
 
-        public void AddKeyHolder()
-        {
-            // cache all the waves that don't have an enemy holding a key and have at least one enemy that can hold keys
-            List<EnemyWave> noKeyWaves = _enemyWaves.FindAll(w => /*w.Enemies.TrueForAll(e => !e.HasKey) &&*/ w.Enemies.Exists(e => e.CanHaveKey));
-
-            if (noKeyWaves.Count > 0)
-            {
-                // select a random enemy in a random available wave to hold the key
-                noKeyWaves.RandomItem().Enemies.FindAll(e => e.CanHaveKey).RandomItem().HasKey = true;
-            }
-            else
-            {
-                // if all the waves are have an enemy holding a key in them, then selected an enemy that doesn't hold a key at least
-                _enemyWaves.RandomItem().Enemies.Find(e => !e.HasKey).HasKey = true;
-            }
-        }
-
-        public bool CanHaveKeys()
-        {
-            return _enemyWaves.Exists(w => w.HasKey);
-        }
-
         public bool HasEnemies()
         {
             return _enemyWaves.Count > 0;
+        }
+
+        private void SetPlayerSpawnPoints()
+        {
+            if(_room == null)
+            {
+                Debug.LogError("Current room is null");
+                return;
+            }
+
+            List<SpawnPoint> spawnPoints = SpawnPoints.Points.ToList();
+            Vector3 lastPosition = _room.transform.position;
+
+            if(spawnPoints.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < 2; i++)
+            {
+                SpawnPoint selectedSpawnPoint = spawnPoints.FindAll(s => !s.Taken).OrderBy(s =>
+                (s.Point.position - lastPosition).sqrMagnitude).FirstOrDefault();
+                selectedSpawnPoint.Taken = true;
+
+                _playerSpawnPoints[i] = selectedSpawnPoint.Point;
+            }
+        }
+
+        public Vector3 GetPlayerSpawnPoint(int playerIndex)
+        {
+            return _playerSpawnPoints[playerIndex].position;
         }
     }
 }

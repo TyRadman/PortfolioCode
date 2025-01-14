@@ -6,11 +6,9 @@ namespace TankLike
 {
     using UI;
     using Utils;
-    using UI.Styles;
     using UI.Notifications;
     using Combat;
     using Minimap;
-    using LevelGeneration;
     using Environment.LevelGeneration;
     using UI.Map;
     using Sound;
@@ -19,19 +17,17 @@ namespace TankLike
     using UI.PauseMenu;
     using UI.DamagePopUp;
     using UI.Inventory;
-    using UI.HUD;
-    using SkillTree;
+    using Combat.SkillTree;
     using Cam;
-    using UI.Workshop;
-    using UnityEngine.SceneManagement;
-    using TankLike.UI.MainMenu;
+    using Environment.Shops;
+    using Attributes;
 
     public class GameManager : Singleton<GameManager>
     {
         #region Managers
         [SerializeField] private UnityEvent _onGameStarted;
         [field: SerializeField, Header("Managers")] public PoolingManager PoolingManager { get; private set; }
-        [field: SerializeField] public PlayersManager PlayersManager { get; private set; }
+        [field: SerializeField, InChildren] public PlayersManager PlayersManager { get; private set; }
         [field: SerializeField] public ReportManager ReportManager { get; private set; }
         [field: SerializeField] public CollectableManager CollectableManager { get; private set; }
         [field: SerializeField] public CameraManager CameraManager { get; private set; }
@@ -40,7 +36,6 @@ namespace TankLike
         [field: SerializeField] public DebugManager DebugManager { get; private set; }
         [field: SerializeField] public VisualEffectsManager VisualEffectsManager { get; private set; }
         [field: SerializeField] public EnemiesManager EnemiesManager { get; private set; }
-        [field: SerializeField] public StylesManager StylesManager { get; private set; }
         [field: SerializeField] public QuestsManager QuestsManager { get; private set; }
         [field: SerializeField] public RoomsManager RoomsManager { get; private set; }
         [field: SerializeField] public BossKeysManager BossKeysManager { get; private set; }
@@ -53,12 +48,12 @@ namespace TankLike
         [field: SerializeField] public GameplayRoomGenerator GameplayRoomGenerator { get; private set; }
         [field: SerializeField] public AudioManager AudioManager { get; private set; }
         [field: SerializeField] public ScreenFreezer ScreenFreezer { get; private set; }
-        [field: SerializeField] public PauseMenuManager PauseMenuManager { get; private set; }
-        [field: SerializeField] public TankFallingPartsManager FallingPartsManager { get; private set; }
         [field: SerializeField] public DamagePopUpManager DamagePopUpManager { get; private set; }
-        [field: SerializeField] public PlayersOffScreenIndicator OffScreenIndicator{ get; private set; }
         [field: SerializeField] public BossesManager BossesManager { private set; get; }
         [field: SerializeField] public TeleportationManager TeleportationManager { private set; get; }
+        [field: SerializeField] public SceneLoadingManager SceneLoadingManager { private set; get; }
+        [field: SerializeField] public WorkshopController WorkshopController { private set; get; }
+        [field: SerializeField] public CoroutinesManager CoroutineManager { private set; get; }
         #endregion
 
         #region UI Controllers
@@ -70,10 +65,10 @@ namespace TankLike
         [field: SerializeField] public FadeUIController FadeUIController { get; private set; }
         [field: SerializeField] public LevelMapDisplayer LevelMap { get; private set; }
         [field: SerializeField] public ResultsUIController ResultsUIController { get; private set; }
-        [field: SerializeField] public TabsManager Inventory { get; private set; }
+        [field: SerializeField] public InventoryController Inventory { get; private set; }
+        [field: SerializeField] public PauseMenuManager PauseMenuManager { get; private set; }
         [field: SerializeField] public ToolsNavigator ToolShopUI { get; private set; }
         [field: SerializeField] public SkillTreesManager SkillTreesManager { get; private set; }
-        [field: SerializeField] public WorkShopTabsNavigatable WorkShopManager { get; private set; }
         [field: SerializeField] public ConfirmPanel ConfirmPanel { get; private set; }
         #endregion
 
@@ -82,15 +77,17 @@ namespace TankLike
         [field: SerializeField] public AmmunitionDatabase BulletsDatabase { get; private set; }
         [field: SerializeField] public EnemiesDatabase EnemiesDatabase { get; private set; }
         [field: SerializeField] public ConstantsManager Constants { get; private set; }
-        [field: SerializeField] public PlayerTempInfoSaver PlayersTempInfoSaver { get; private set; }
+        [field: SerializeField] public GameEditorData GameData { get; private set; }
         [field: SerializeField] public BossesDatabase BossesDatabase { get; private set; }
         [field: SerializeField] public PlayersDatabase PlayersDatabase { get; private set; }
         [field: SerializeField] public InputIconsDatabase InputIconsDatabase { get; private set; }
+        [field: SerializeField] public StatIconReferenceDB StatIconReferenceDB { get; internal set; }
+        [field: SerializeField] public PlayerStartingSkillsPackage StartingSkillsDB { get; internal set; }
 
         #endregion
 
-        private StateMachine<GameStateType> _stateMachine;
         protected Transform _spawnablesParent;
+        private SceneController _currentSceneController;
 
         [Header("Debug")]
         [SerializeField] private bool _generateLevel;
@@ -101,46 +98,46 @@ namespace TankLike
 
         [HideInInspector] public Dictionary<string, bool> FoldoutStates = new Dictionary<string, bool>();
         // an event that test scripts can subscribe to
-
-        public void SetParentToSpawnables(GameObject obj)
-        {
-            obj.transform.parent = _spawnablesParent;
-        }
-
-        public void SetParentToRoomSpawnables(GameObject obj)
-        {
-            obj.transform.parent = RoomsManager.CurrentRoom.SpawnablesParent;
-        }
-
+        
         private void Awake()
         {
-            // Set managers references
+            SetManagersReferences();
+            SetUIControllersReferences();
+            SetUpGlobalManagers();
+            SetUpCursor();
+
+            Debug.unityLogger.logEnabled = _enableDebug;
+        }
+
+        private void SetUpGlobalManagers()
+        {
+            AudioManager.SetUp();
+            SceneLoadingManager.SetUp();
+            FadeUIController.SetUp();
+        }
+
+        private void SetUIControllersReferences()
+        {
+            PauseMenuManager.SetReferences();
+            NotificationsManager.SetReferences();
+            ResultsUIController.SetReferences();
+            Inventory.SetReferences();
+            ToolShopUI.SetReferences();
+        }
+
+        private void SetManagersReferences()
+        {
             InputManager.SetReferences(InputIconsDatabase);
             VisualEffectsManager.SetReferences(BulletsDatabase);
             EnemiesManager.SetReferences(EnemiesDatabase);
             BossesManager.SetReferences(BossesDatabase);
             PlayersManager.SetReferences(PlayersDatabase);
+            CameraManager.SetReferences();
+            HUDController.SetReferences();
+        }
 
-            // Init game state machine
-            InitStateMachine();
-
-            // TESTING: Load scene using the scene starter when not starting from the bootstrap scene
-            SceneStarter sceneStarter = FindObjectOfType<SceneStarter>();
-
-            if (sceneStarter != null)
-            {
-                sceneStarter.StartScene();
-            }
-            //else
-            //{
-            //    _stateMachine.SetInitialState(GameStateType.SplashScreen);
-            //}
-
-            _spawnablesParent = new GameObject("Spawnables").transform;
-
-            // Debug options
-            Debug.unityLogger.logEnabled = _enableDebug;
-
+        private void SetUpCursor()
+        {
             if (_showCursor)
             {
                 Cursor.visible = true;
@@ -152,81 +149,32 @@ namespace TankLike
             }
         }
 
-        //protected virtual void Start()
-        //{
-        //    Application.targetFrameRate = _frameRate;
-        //    QualitySettings.vSyncCount = 0;
-        //    _onGameStarted?.Invoke();
-
-        //    RoomsManager.SetUp();
-
-        //    if (_generateLevel)
-        //    {
-        //        LevelGenerator.GenerateLevel();
-        //    }
-
-        //    DestructiblesManager.SetUp();
-        //    NotificationsManager.SetUp();
-        //    AudioManager.SetUp();
-        //    InputManager.SetUp();
-        //    DamagePopUpManager.SetUp();
-        //    VisualEffectsManager.SetUp();
-
-        //    PlayersManager.SetUp();
-        //    EnemiesManager.SetUp();
-        //    BossesManager.SetUp();
-
-        //    if (!_testingScene)
-        //    {
-        //        PlayerSpawner.SpawnPlayers();
-        //    }
-
-        //    CameraManager.SetUp(_testingScene);
-        //    ObstaclesVanisher.SetUp();
-        //    //PoolingManager.Setup(_spawnablesParent);
-        //    InteractableAreasManager.SetUp();
-        //    CollectableManager.SetUp();
-
-        //    BossKeysManager.SetUp();
-        //    ShopsManager.SetUp();
-        //    QuestsManager.SetUp();
-
-        //    InputManager.EnablePlayerInput();
-        //    OffScreenIndicator.SetUp();
-        //    PauseMenuManager.SetUp();
-        //    HUDController.SetUp();
-        //    EffectsUIController.SetUp();
-        //}
-
-        private void InitStateMachine()
+        public void SetCurrentSceneController(SceneController sceneController)
         {
-            _stateMachine = new StateMachine<GameStateType>();
-            Dictionary<GameStateType, IState> states = new Dictionary<GameStateType, IState>();
-
-            var splashScreenState = new SplashScreenGameState(_stateMachine);
-            states.Add(GameStateType.SplashScreen, splashScreenState); 
-            
-            var mainMenuState = new MainMenuGameState(_stateMachine);
-            states.Add(GameStateType.MainMenu, mainMenuState);
-
-            var abilitySelectionState = new AbilitySelectionGameState(_stateMachine);
-            states.Add(GameStateType.AbilitySelection, abilitySelectionState);
-
-            var lobbyState = new LobbyGameState(_stateMachine);
-            states.Add(GameStateType.Lobby, lobbyState);
-
-            var gameplayState = new GameplayGameState(_stateMachine);
-            states.Add(GameStateType.Gameplay, gameplayState);
-
-            var bossesTestState = new BossesTestGameState(_stateMachine);
-            states.Add(GameStateType.BossesTest, bossesTestState);      
-
-            _stateMachine.Init(states);
+            _currentSceneController = sceneController;
         }
 
-        public void ChangeGameState(GameStateType state)
+        public void DisposeCurrentSceneController()
         {
-            _stateMachine.ChangeState(state);
+            if (_currentSceneController != null)
+            {
+                _currentSceneController.Dispose();
+            }
+        }
+
+        public void SetSpawanblesParent(Transform spawnablesParent)
+        {
+            _spawnablesParent = spawnablesParent;
+        }
+
+        public void SetParentToSpawnables(GameObject obj)
+        {
+            obj.transform.parent = _spawnablesParent;
+        }
+
+        public void SetParentToRoomSpawnables(GameObject obj)
+        {
+            obj.transform.parent = RoomsManager.CurrentRoom.Spawnables.SpawnablesParent;
         }
 
         [SerializeField] private TMPro.TextMeshProUGUI _debugText;
@@ -235,6 +183,7 @@ namespace TankLike
         {
             ResultsUIController.DisplayGameoverScreen();
             CameraManager.PlayerCameraFollow.StopCameraFollowProcess();
+            Inventory.Close();
         }
     }
 

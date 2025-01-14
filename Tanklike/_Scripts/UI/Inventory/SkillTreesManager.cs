@@ -1,33 +1,64 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UI;
 using UnityEngine;
 
-namespace TankLike.SkillTree
+namespace TankLike.Combat.SkillTree
 {
-    public class SkillTreesManager : Navigatable
-    {
-        [SerializeField] private Transform _skillTreesParent;
-        [SerializeField] private List<SkillTreeHolder> _skillTrees = new List<SkillTreeHolder>();
+    using UnitControllers;
+    using UI;
 
+    public class SkillTreesManager : Navigatable, IManager
+    {
+        [SerializeField] private List<SkillTreeHolder> _skillTrees = new List<SkillTreeHolder>();
+        [SerializeField] private Transform _skillTreeParent;
+
+        #region IManager
         public override void SetUp()
         {
+            IsActive = true;
+
             for (int i = 0; i < PlayersManager.PlayersCount; i++)
             {
-                SkillTreeHolder skillTreePrefab = GameManager.Instance.PlayersManager.GetPlayer(i).Upgrades.GetSkillTree();
-                SkillTreeHolder newSkillTree = Instantiate(skillTreePrefab, _skillTreesParent);
+                PlayerComponents player = GameManager.Instance.PlayersManager.GetPlayer(i);
+                SkillTreeHolder skillTreePrefab = player.SkillsController.GetSkillTree();
+                SkillTreeHolder newSkillTree = Instantiate(skillTreePrefab, _skillTreeParent);
+                newSkillTree.gameObject.name = $"Skill Tree {player.PlayerIndex}";
                 _skillTrees.Add(newSkillTree);
-                newSkillTree.SetPlayerIndex(i);
+                newSkillTree.SetPlayer(player);
                 newSkillTree.SetUp();
             }
         }
 
+        public override void Dispose()
+        {
+            IsActive = false;
+
+            _skillTrees.ForEach(st => st.Dispose());
+            _skillTrees.ForEach(st => Destroy(st.gameObject));
+            _skillTrees.Clear();
+        }
+        #endregion
+
+
         public override void Open(int playerIndex)
         {
+            if (!IsActive)
+            {
+                Debug.LogError("Manager " + GetType().Name + " is not active, and you're trying to use it!");
+                return;
+            }
+
             base.Open(playerIndex);
             _skillTrees.ForEach(s => s.gameObject.SetActive(false));
             _skillTrees[playerIndex].gameObject.SetActive(true);
             _skillTrees[playerIndex].Open(playerIndex);
+        }
+
+        public override void Close(int playerIndex)
+        {
+            base.Close(playerIndex);
+
+            _skillTrees[playerIndex].Close(playerIndex);
         }
     }
 }

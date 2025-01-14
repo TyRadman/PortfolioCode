@@ -8,8 +8,9 @@ using UnityEngine.SceneManagement;
 namespace TankLike.UI
 {
     using UnitControllers;
+    using Utils;
 
-    public class ResultsUIController : MonoBehaviour
+    public class ResultsUIController : MonoBehaviour, IManager
     {
         [SerializeField] private GameObject _gameoverScreen;
         [SerializeField] private MenuSelectable _firstSelectedItem;
@@ -18,12 +19,32 @@ namespace TankLike.UI
 
         private MenuSelectable _currentSelectable;
 
+        public bool IsActive { get; private set; }
+
         private const float START_DELAY = 2f;
 
-        private void Awake()
+        public void SetReferences()
         {
             _gameoverScreen.SetActive(false);
         }
+
+        #region IManager
+        public void SetUp()
+        {
+            IsActive = true;
+        }
+
+        public void Dispose()
+        {
+            IsActive = false;
+            _gameoverScreen.SetActive(false);
+
+            if (_currentSelectable != null)
+            {
+                _currentSelectable.Highlight(false);
+            }
+        }
+        #endregion
 
         public void DisplayGameoverScreen()
         {
@@ -51,10 +72,10 @@ namespace TankLike.UI
 
             // show the pause menu content 
             _gameoverScreen.SetActive(true);
-            // disable player input and enable UI input
-            GameManager.Instance.InputManager.EnableUIInput();
+
             // highlight the first button in the list (the resume button)
             _currentSelectable = _firstSelectedItem;
+
             _currentSelectable.Highlight(true);
         }
 
@@ -63,6 +84,9 @@ namespace TankLike.UI
         {
             PlayerInputActions c = InputManager.Controls;
             InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
+
+            GameManager.Instance.InputManager.EnableUIInput();
+
             // for the UI
             UIMap.FindAction(c.UI.Submit.name).performed += Select;
      
@@ -70,6 +94,19 @@ namespace TankLike.UI
             UIMap.FindAction(c.UI.Navigate_Right.name).performed += NavigateRight;
             UIMap.FindAction(c.UI.Navigate_Up.name).performed += NavigateUp;
             UIMap.FindAction(c.UI.Navigate_Down.name).performed += NavigateDown;
+        }
+
+        public void DisposeInput(int playerIndex)
+        {
+            PlayerInputActions c = InputManager.Controls;
+            InputActionMap UIMap = InputManager.GetMap(playerIndex, ActionMap.UI);
+
+            UIMap.FindAction(c.UI.Submit.name).performed -= Select;
+
+            UIMap.FindAction(c.UI.Navigate_Left.name).performed -= NavigateLeft;
+            UIMap.FindAction(c.UI.Navigate_Right.name).performed -= NavigateRight;
+            UIMap.FindAction(c.UI.Navigate_Up.name).performed -= NavigateUp;
+            UIMap.FindAction(c.UI.Navigate_Down.name).performed -= NavigateDown;
         }
 
         public void Select(InputAction.CallbackContext _)
@@ -103,8 +140,10 @@ namespace TankLike.UI
         {
             // dehighlight the previous cell
             _currentSelectable.Highlight(false);
+
             // set the new cell and highlight it
             _currentSelectable = cell;
+
             cell.Highlight(true);
         }
 
@@ -115,47 +154,38 @@ namespace TankLike.UI
 
         public void Restart()
         {
+            //Debug.Log("Called");
+            Helper.CheckForManagerActivity(IsActive, GetType());
+
             for (int i = 0; i < PlayersManager.PlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Restart();
+                DisposeInput(i);
             }
 
-            if (DontDestroy.i != null)
-            {
-                DontDestroy.i.ResetInputParent();
-            }
-
-            SceneManager.LoadScene(2);
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(SceneManager.GetActiveScene().name, Scenes.GAMEPLAY, true);
         }
 
         public void LoadMainMenu()
         {
             for (int i = 0; i < PlayersManager.PlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Restart();
+                DisposeInput(i);
             }
 
-            if (DontDestroy.i != null)
-            {
-                DontDestroy.i.ResetInputParent();
-            }
-
-            SceneManager.LoadScene(0);
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(SceneManager.GetActiveScene().name, Scenes.MAIN_MENU);
         }
 
         public void LoadLobby()
         {
             for (int i = 0; i < PlayersManager.PlayersCount; i++)
             {
-                GameManager.Instance.PlayersManager.GetPlayer(i).Restart();
+                DisposeInput(i);
             }
 
-            if (DontDestroy.i != null)
-            {
-                DontDestroy.i.ResetInputParent();
-            }
-
-            SceneManager.LoadScene(1);
+            GameManager.Instance.DisposeCurrentSceneController();
+            GameManager.Instance.SceneLoadingManager.SwitchScene(SceneManager.GetActiveScene().name, Scenes.LOBBY);
         }
 
         public void Quit()

@@ -1,76 +1,96 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.Environment.LevelGeneration;
-using TankLike.Sound;
-using TankLike.UI.DamagePopUp;
-using TankLike.UnitControllers;
-using TankLike.Utils;
 using UnityEngine;
+using System;
 
 namespace TankLike.Combat.Destructible
 {
+    using Environment.LevelGeneration;
+    using Sound;
+    using UI.DamagePopUp;
+    using UnitControllers;
+    using ItemsSystem;
+    using Environment;
+
     [RequireComponent(typeof(DamagePopUpAnchor))]
-    public class DestructibleDropper : MonoBehaviour, IDamageable, IDropper
+    public class DestructibleDropper : MonoBehaviour, IDamageable, IDropper, IAimAssistTarget
     {
+        [field: SerializeField] public DropperTag DropperTag { get; private set; }
+        [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { get; private set; }
+        public Transform Transform => transform;
+        public bool IsInvincible { get; set; }
+        public bool IsDead { get; private set; } = false;
+        public Action<Transform> OnTargetDestroyed { get; set; }
+
         [Header("Stats")]
         [SerializeField] private int _maxHealth = 100;
         [SerializeField] private int _currentHealth;
-        [field: SerializeField] public DestructableTag Tag { get; private set; }
-        [field: SerializeField] public List<DropChance> CollecatblesToSpawn { set; get; } = new List<DropChance>();
+        [SerializeField] protected CollectablesDropSettings _dropSettings;
+        
         [Header("Audio")]
         [SerializeField] protected Audio _destructionAudio;
-        [field: SerializeField] public DamagePopUpAnchor PopUpAnchor { get; private set; }
-
-        public Transform Transform => transform;
-        public bool IsInvincible { get; set; }
+        
+        protected DestructibleDrop _drops;
 
         private void Awake()
         {
             _currentHealth = _maxHealth;
         }
 
-        #region IDamagable
-        public void Die()
+        public void AssignAsTarget(Room room)
         {
+            if (room == null)
+            {
+                Debug.LogError("Room is null");
+                return;
+            }
 
+            room.Spawnables.AddDropper(transform);
+            OnTargetDestroyed += room.Spawnables.RemoveDropper;
         }
 
-        public void TakeDamage(int damage, Vector3 direction, TankComponents tank, Vector3 bulletPosition)
+        #region IDamagable
+
+        public void TakeDamage(int damage, Vector3 direction, UnitComponents tank, Vector3 bulletPosition, Ammunition damageDealer = null)
         {
+            if (IsDead)
+            {
+                return;
+            }
+
             _currentHealth -= damage;
-            GameManager.Instance.DamagePopUpManager.DisplayPopUp(
-                DamagePopUpType.Damage, damage, PopUpAnchor.Anchor);
+
+            GameManager.Instance.DamagePopUpManager.DisplayPopUp(DamagePopUpType.Damage, damage, PopUpAnchor.Anchor);
 
             if (_currentHealth <= 0)
             {
-                OnDeath(tank);
+                Die();
+                OnDestructibleDeath(tank);
             }
         }
 
-        protected virtual void OnDeath(TankComponents tank)
+        public void Die()
+        {
+            IsDead = true;
+
+            OnTargetDestroyed?.Invoke(transform);
+            OnTargetDestroyed = null;
+        }
+
+        protected virtual void OnDestructibleDeath(UnitComponents tank)
         {
             GameManager.Instance.AudioManager.Play(_destructionAudio);
-            GameManager.Instance.RoomsManager.CurrentRoom.RemoveDropper(transform);
         }
         #endregion
 
         public void SetCollectablesToSpawn(DestructibleDrop drops)
         {
-            int dropsCount = drops.DropsCountRange.RandomValue();
+            _drops = drops;
+        }
 
-            for (int i = 0; i < dropsCount; i++)
-            {
-                float chance = Random.value;
-                List<DropChance> tags = new List<DropChance>();
-                drops.Drops.FindAll(c => c.OriginalChance > chance).ForEach(d => tags.Add(d));
-
-                if (tags.Count == 0)
-                {
-                    tags.Add(drops.Drops.FindAll(d => d.OriginalChance > 0).RandomItem());
-                }
-
-                CollecatblesToSpawn.Add(tags.RandomItem());
-            }
+        public void SetDropSettings(CollectablesDropSettings settings)
+        {
+            _dropSettings = settings;
         }
     }
 }

@@ -1,19 +1,19 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.UnitControllers;
 using UnityEngine;
-using TankLike.ItemsSystem;
-using TankLike.Environment;
-using TankLike.Combat.Destructible;
 
 namespace TankLike
 {
+    using UnitControllers;
+    using ItemsSystem;
+    using Combat.Destructible;
+
     public class ReportManager : MonoBehaviour, IManager
     {
-        public System.Action<Collectable, int> OnCollectableCollected;
-        public System.Action<DestructableTag, int> OnObjectDestroyed;
-        public System.Action<BossData, int> OnBossKill;
-
+        public System.Action<Collectable, int> OnCollectableCollected { get; set; }
+        public System.Action<DropperTag, int> OnObjectDestroyed;
+        public System.Action<BossData, int> OnBossKill { get; set; }
+        public System.Action<EntityEliminationReport> OnEnemyEliminated { get; set; }
         public System.Action<EnemyData, int> OnEnemyKill { get; set; }
 
         public bool IsActive { get; private set; }
@@ -32,18 +32,6 @@ namespace TankLike
         #endregion
 
         #region Reports
-
-        public void ReportEnemyKill(EnemyData data, int playerIndex)
-        {
-            if (!IsActive)
-            {
-                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
-                return;
-            }
-
-            OnEnemyKill?.Invoke(data, playerIndex);
-        }
-
         public void ReportCollection(Collectable collectable, int playerIndex)
         {
             if (!IsActive)
@@ -55,7 +43,18 @@ namespace TankLike
             OnCollectableCollected?.Invoke(collectable, playerIndex);
         }
 
-        public void ReportDestroyingObject(DestructableTag tag, int playerIndex)
+        public void ReportEnemyElimination(EntityEliminationReport report)
+        {
+            if (!IsActive)
+            {
+                Debug.LogError($"Manager {GetType().Name} is not active, and you're trying to use it!");
+                return;
+            }
+
+            OnEnemyEliminated?.Invoke(report);
+        }
+
+        public void ReportDestroyingObject(DropperTag tag, int playerIndex)
         {
             if (!IsActive)
             {

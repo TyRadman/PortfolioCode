@@ -17,6 +17,7 @@ namespace TankLike.Environment
 
         private void OnTriggerEnter(Collider other)
         {
+            // TODO: use layers instead
             if (other.CompareTag("Player"))
             {
                 OnTriggerEnterEvent?.Invoke();
@@ -25,6 +26,7 @@ namespace TankLike.Environment
 
         private void OnTriggerExit(Collider other)
         {
+            // TODO: use layers instead
             if (other.CompareTag("Player"))
             {
                 OnTriggerExitEvent?.Invoke();

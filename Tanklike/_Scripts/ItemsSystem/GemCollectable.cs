@@ -9,7 +9,7 @@ namespace TankLike.ItemsSystem
     public class GemCollectable : Collectable
     {
 
-        public override void OnCollected(PlayerComponents player)
+        public override void OnCollected(IPlayerController player)
         {
             GameManager.Instance.NotificationsManager.PushCollectionNotification(_notificationSettings, 1, player.PlayerIndex);
 

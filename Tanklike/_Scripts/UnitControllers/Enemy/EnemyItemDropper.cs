@@ -1,26 +1,48 @@
 using System.Collections;
 using System.Collections.Generic;
-using TankLike.ItemsSystem;
-using TankLike.Utils;
 using UnityEngine;
 
 namespace TankLike.UnitControllers
 {
-    public class EnemyItemDropper : MonoBehaviour
-    {
-        // to be set from the enemy data
-        private float _dropChance = 0.5f;
-        [SerializeField] private List<CollectableType> _droppedCollectables;
-        private List<CollectableType> _collectablesToDrop;
+    using ItemsSystem;
+    using Utils;
 
-        private void OnEnable()
+    /// <summary>
+    /// Component that is attached to enemies that is resposnsible for dropping collectables that the players can collect.
+    /// </summary>
+    public class EnemyItemDropper : MonoBehaviour, IController
+    {
+        public bool IsActive { get; private set; }
+
+        // to be set from the enemy data
+        [SerializeField] private List<CollectableType> _droppedCollectables;
+
+        private EnemyComponents _enemyComponents;
+        private List<CollectableType> _collectablesToDrop;
+        private float _dropChance = 0.5f;
+        private bool _dropItemsOnDeath = true;
+
+        public void SetUp(IController controller)
         {
-            _collectablesToDrop = _droppedCollectables;
+            if (controller is not EnemyComponents enemyComponents)
+            {
+                Helper.LogWrongComponentsType(GetType());
+                return;
+            }
+
+            _enemyComponents = enemyComponents;
         }
 
         public void DropItem()
         {
-            GameManager.Instance.CollectableManager.SpawnRandomCollectables(_dropChance, transform.position, _collectablesToDrop.RandomItem()); 
+            if (!_dropItemsOnDeath)
+            {
+                return;
+            }
+
+            GameManager.Instance.CollectableManager.SpawnRandomCollectables(_dropChance, transform.position, _collectablesToDrop.RandomItem());
+
+            _enemyComponents.TankBodyParts.HandlePartsExplosion();
         }
 
         public void SetAsKeyHolder()
@@ -30,9 +52,43 @@ namespace TankLike.UnitControllers
             _dropChance = 1f;
         }
 
+        /// <summary>
+        /// The enemy won't drop any collectables upon death.
+        /// </summary>
+        public void DisableDrops()
+        {
+            _dropItemsOnDeath = false;
+        }
+
+        /// <summary>
+        /// The enemy will drop any collectables upon death.
+        /// </summary>
+        public void EnableDrops()
+        {
+            _dropItemsOnDeath = true;
+        }
+
+
+        #region IController
+        public void Activate()
+        {
+            IsActive = true;
+        }
+
+        public void Deactivate()
+        {
+            IsActive = false;
+        }
+
+        public void Restart()
+        {
+            _collectablesToDrop = _droppedCollectables;
+            _dropItemsOnDeath = true;
+        }
+
         public void Dispose()
         {
-            _collectablesToDrop.Clear();
         }
+        #endregion
     }
 }
